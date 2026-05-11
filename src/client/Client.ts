@@ -116,6 +116,7 @@ export class Client extends GameShell {
         '#ffffff', '#ffffff', // unused (STAT18/STAT19)
         '#ccccff', // Runecrafting
     ];
+    static readonly XP_DROP_HEIGHT: number = 16; // height of each XP drop text (bold 11px Arial)
     static readbit = new Int32Array(32);
 
     static nodeId: number = 10;
@@ -7059,7 +7060,14 @@ export class Client extends GameShell {
                     // Real gain during play — update tracker and optionally show XP drop.
                     this.updateXpTrackerGlobal();
                     if ((window as any).XP_DROPS_ENABLED !== false) {
-                        this.xpDrops.push({ skill: stat, amount: xp - prevXP, y: 60, timer: 100 });
+                        let dropY: number = 60;
+                        // Stack drops vertically to avoid overlap
+                        for (const existingDrop of this.xpDrops) {
+                            if (existingDrop.y > dropY - Client.XP_DROP_HEIGHT) {
+                                dropY = existingDrop.y + Client.XP_DROP_HEIGHT;
+                            }
+                        }
+                        this.xpDrops.push({ skill: stat, amount: xp - prevXP, y: dropY, timer: 100 });
                     }
                 }
 
