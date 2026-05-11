@@ -65,6 +65,13 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
                     'progressPct',
                     'xpToNext',
 
+                    // world map panel: playerMapPos + postMessage fields
+                    'playerMapPos',
+                    'tileX',
+                    'tileZ',
+                    'type',
+                    'playerPos',
+
                     // stdlib
                     'willReadFrequently',
                     'usedJSHeapSize',
@@ -153,5 +160,13 @@ for (const file of entrypoints) {
 
         fs.writeFileSync(`out/${output}`, script.source);
         fs.writeFileSync(`out/${output}.map`, script.sourcemap);
+
+        if (output === 'mapview.js') {
+            fs.writeFileSync('lostcity-client/frontend/dist/mapview.js', script.source);
+        }
+
+        if (output === 'client.js') {
+            fs.writeFileSync('lostcity-client/frontend/dist/client.js', script.source);
+        }
     }
 }

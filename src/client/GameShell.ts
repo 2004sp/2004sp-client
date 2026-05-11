@@ -1,4 +1,3 @@
-import { Client } from '#/client/Client.js';
 import InputTracking from '#/client/InputTracking.js';
 import { CanvasEnabledKeys, KeyCodes } from '#/client/KeyCodes.js';
 
@@ -9,6 +8,7 @@ import PixMap from '#/graphics/PixMap.js';
 import { sleep } from '#/util/JsUtil.js';
 
 export default abstract class GameShell {
+    static cameraZoom: number = 1;
     protected state: number = 0;
     protected deltime: number = 20;
     protected mindel: number = 1;
@@ -304,9 +304,9 @@ const MIN_ZOOM = 0;
 const MAX_ZOOM = 3.0;
 
 if (e.deltaY > 0) {
-    Client.cameraZoom = Math.min(MAX_ZOOM, Client.cameraZoom + ZOOM_STEP);
+    GameShell.cameraZoom = Math.min(MAX_ZOOM, GameShell.cameraZoom + ZOOM_STEP);
 } else {
-    Client.cameraZoom = Math.max(MIN_ZOOM, Client.cameraZoom - ZOOM_STEP);
+    GameShell.cameraZoom = Math.max(MIN_ZOOM, GameShell.cameraZoom - ZOOM_STEP);
 }
 }
 

@@ -83,7 +83,7 @@ const SCROLLBAR_GRIP_HIGHLIGHT = 0x766654;
 const SCROLLBAR_GRIP_LOWLIGHT = 0x332d25;
 
 export class Client extends GameShell {
-    static cameraZoom: number = 1;
+
     static levelExperience: number[] = [];
 
     // Skill names indexed by PlayerStat enum (0=Attack … 20=Runecraft)
@@ -5120,6 +5120,16 @@ export class Client extends GameShell {
 
     private drawXpDrops(): void {
         if (!this.ingame) return;
+
+        if (this.localPlayer) {
+            const tileX: number = this.mapBuildBaseX + (this.localPlayer.x >> 7);
+            const tileZ: number = this.mapBuildBaseZ + (this.localPlayer.z >> 7);
+            const prev: { tileX: number; tileZ: number } | undefined = (window as any).playerMapPos;
+            if (!prev || prev.tileX !== tileX || prev.tileZ !== tileZ) {
+                (window as any).playerMapPos = { tileX, tileZ };
+                window.dispatchEvent(new CustomEvent('playermove'));
+            }
+        }
 
         // Stagger new drops so they don't all start at the same y
         const DROP_X: number = 506;   // right edge of 3D viewport (before sidebar)

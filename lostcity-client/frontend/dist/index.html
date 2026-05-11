@@ -342,6 +342,63 @@
                 letter-spacing: 1px;
             }
 
+            /* World map panel */
+            #worldmap-panel { width: 600px; }
+            #worldmap-panel.open { max-width: 600px; }
+            #worldmap-panel.maximized {
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                width: 100%; max-width: none;
+                z-index: 200;
+                border-left: none;
+                transition: none;
+            }
+
+            .wm-header {
+                display: flex;
+                align-items: center;
+                padding: 11px 12px 10px;
+                border-bottom: 1px solid #1e1e1e;
+                flex-shrink: 0;
+            }
+
+            .wm-title {
+                font-size: 11px;
+                font-weight: bold;
+                color: #ffd700;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+            }
+
+            .wm-max-btn {
+                margin-left: auto;
+                cursor: pointer;
+                color: #555;
+                font-size: 16px;
+                line-height: 1;
+                user-select: none;
+                padding: 2px 4px;
+                border-radius: 3px;
+            }
+            .wm-max-btn:hover { color: #ccc; background: #222; }
+
+            .wm-body {
+                flex: 1 1 0;
+                min-height: 0;
+                position: relative;
+                overflow: hidden;
+                background: #000;
+            }
+
+            #worldmap-frame {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                border: none;
+            }
+
             /* Debug console */
             #debug-console {
                 display: none;
@@ -406,10 +463,21 @@
                 </div>
             </div>
 
+            <div id="worldmap-panel" class="side-panel">
+                <div class="wm-header">
+                    <span class="wm-title">World Map</span>
+                    <span id="btn-wm-max" class="wm-max-btn" title="Maximize">&#9633;</span>
+                </div>
+                <div class="wm-body">
+                    <iframe id="worldmap-frame" title="World Map"></iframe>
+                </div>
+            </div>
+
             <div id="toolbar">
                 <div class="tool-btn" id="btn-hiscores" title="Hiscores">&#9813;</div>
                 <div class="tool-btn" id="btn-xpdrops" title="XP Drops">XP</div>
                 <div class="tool-btn" id="btn-xptracker" title="XP Tracker">&#128200;</div>
+                <div class="tool-btn" id="btn-worldmap" title="World Map">&#128506;</div>
             </div>
         </div>
 
@@ -594,6 +662,58 @@
                     btnEl.classList.toggle('active', isOpen);
                     panelEl.classList.toggle('open', isOpen);
                     if (isOpen) renderTracker();
+                });
+            })();
+
+            // World Map panel
+            (function () {
+                var btn    = document.getElementById('btn-worldmap');
+                var panel  = document.getElementById('worldmap-panel');
+                var frame  = document.getElementById('worldmap-frame');
+                var maxBtn = document.getElementById('btn-wm-max');
+                var isOpen = false;
+                var loaded = false;
+                var isMaximized = false;
+
+                function sendPlayerPos() {
+                    var pos = window.playerMapPos;
+                    if (frame && frame.contentWindow && pos) {
+                        frame.contentWindow.postMessage({ type: 'playerPos', tileX: pos.tileX, tileZ: pos.tileZ }, '*');
+                    }
+                }
+
+                window.addEventListener('playermove', function () {
+                    if (isOpen) sendPlayerPos();
+                });
+
+                window.addEventListener('message', function (e) {
+                    if (e.data && e.data.type === 'mapviewReady' && isOpen) sendPlayerPos();
+                });
+
+                maxBtn.addEventListener('click', function () {
+                    isMaximized = !isMaximized;
+                    panel.classList.toggle('maximized', isMaximized);
+                    maxBtn.textContent = isMaximized ? '⊟' : '□';
+                    maxBtn.title = isMaximized ? 'Restore' : 'Maximize';
+                });
+
+                btn.addEventListener('click', function () {
+                    isOpen = !isOpen;
+                    btn.classList.toggle('active', isOpen);
+                    panel.classList.toggle('open', isOpen);
+                    if (!isOpen && isMaximized) {
+                        isMaximized = false;
+                        panel.classList.remove('maximized');
+                        maxBtn.textContent = '□';
+                        maxBtn.title = 'Maximize';
+                    }
+                    if (isOpen) {
+                        if (!loaded) {
+                            loaded = true;
+                            frame.src = 'mapview.html?nolabels';
+                        }
+                        sendPlayerPos();
+                    }
                 });
             })();
         </script>

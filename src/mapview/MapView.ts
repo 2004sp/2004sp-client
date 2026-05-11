@@ -31,6 +31,7 @@ export class MapView extends GameShell {
 
     // custom:
     mapArea: number = 0;
+    hasPlayerPos: boolean = false;
 
     readonly maxLabelCount: number = 1000;
     mapLabelCount: number = 0;
@@ -179,7 +180,7 @@ export class MapView extends GameShell {
     ];
 
     constructor() {
-        super();
+        super(true);
 
         this.run();
     }
@@ -315,6 +316,46 @@ export class MapView extends GameShell {
         Pix2D.drawRect(1, 1, this.overviewWidth - 2, this.overviewHeight - 2, this.INACTIVE_BORDER_TL);
 
         this.drawArea?.setPixels();
+
+        // URL-param driven clean export: open MapView with ?nolabels&noborders&autoexport
+        const _params = new URLSearchParams(window.location.search);
+        if (_params.has('nolabels'))  MapView.shouldDrawLabels  = false;
+        if (_params.has('noborders')) MapView.shouldDrawBorders = false;
+        if (_params.has('autoexport')) {
+            const _w = this.mapWidth * 2;
+            const _h = this.mapHeight * 2;
+            const _buf = new Pix32(_w, _h);
+            _buf.setPixels();
+            this.renderWorldMap(0, 0, this.mapWidth, this.mapHeight, 0, 0, _w, _h);
+            const _c = document.createElement('canvas') as HTMLCanvasElement;
+            _c.width = _w; _c.height = _h;
+            const _ctx = _c.getContext('2d')!;
+            const _pm = new PixMap(_w, _h, _ctx);
+            _pm.setPixels();
+            _buf.quickPlotSprite(0, 0);
+            _pm.draw(0, 0);
+            this.drawArea?.setPixels();
+            const _url = _c.toDataURL('image/png').replace(/^data:image\/[^;]/, 'data:application/octet-stream');
+            saveDataURL(_url, 'map-254-clean.png');
+        }
+
+        // Resize canvas to fill the iframe whenever the panel is resized (e.g. maximized)
+        window.addEventListener('resize', (): void => {
+            this.resize(window.innerWidth, window.innerHeight);
+            this.redraw = true;
+        });
+
+        // Re-center on player when parent frame sends position via postMessage
+        window.addEventListener('message', (e: MessageEvent): void => {
+            if (!e.data || e.data.type !== 'playerPos') return;
+            this.focusX = (e.data.tileX | 0) - this.mapOriginX;
+            this.focusZ = (this.mapOriginZ + this.mapHeight) - (e.data.tileZ | 0);
+            this.hasPlayerPos = true;
+            this.redraw = true;
+        });
+
+        // Signal parent that MapView is ready to receive player position
+        window.parent.postMessage({ type: 'mapviewReady' }, '*');
     }
 
     override async maindraw(): Promise<void> {
@@ -425,6 +466,19 @@ export class MapView extends GameShell {
         if (this.redrawTimer <= 0) {
             this.drawArea?.draw(0, 0);
             this.redrawTimer = 50;
+
+            if (this.hasPlayerPos) {
+                const ctx2d: CanvasRenderingContext2D = canvas.getContext('2d')!;
+                const cx: number = (this.sWid / 2) | 0;
+                const cy: number = (this.sHei / 2) | 0;
+                ctx2d.beginPath();
+                ctx2d.arc(cx, cy, 8, 0, Math.PI * 2);
+                ctx2d.fillStyle = '#0055ff';
+                ctx2d.fill();
+                ctx2d.lineWidth = 2;
+                ctx2d.strokeStyle = '#ffffff';
+                ctx2d.stroke();
+            }
         }
     }
 
@@ -1958,3 +2012,11 @@ export class MapView extends GameShell {
         }
     }
 }
+
+setTimeout((): void => {
+    try {
+        new MapView();
+    } catch (e) {
+        console.error('MapView auto-start failed:', e);
+    }
+}, 100);
