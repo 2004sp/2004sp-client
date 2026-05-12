@@ -434,6 +434,7 @@ export class Client extends GameShell {
     private midDragActive: boolean = false;
     private midDragLastX: number = 0;
     private midDragLastY: number = 0;
+    private shiftClick: boolean = false;
 
     private oneMouseButton: number = 0;
     private isMenuOpen: boolean = false;
@@ -2649,8 +2650,9 @@ export class Client extends GameShell {
 
         await this.handleInputKey();
 
-        if (now - this.idleTimer > 90_000) {
-            // no input in 90s, notify the server
+        const _afkMs: number = ((window as any).afkTimerMs as number) ?? 90_000;
+        if (_afkMs > 0 && now - this.idleTimer > _afkMs) {
+            // no input for configured duration, notify the server
             this.logoutTimer = 250;
             this.idleTimer += 10_000; // 10s backoff
 
@@ -8732,7 +8734,7 @@ export class Client extends GameShell {
                 }
             }
         } else {
-            if (button === 1 && this.menuNumEntries > 0) {
+            if (button === 1 && this.menuNumEntries > 0 && !this.shiftClick) {
                 const action: number = this.menuAction[this.menuNumEntries - 1];
 
                 if (
@@ -8779,8 +8781,9 @@ export class Client extends GameShell {
                 button = 2;
             }
 
+            (window as any)._ml = { button, menuNum: this.menuNumEntries, shiftClick: this.shiftClick, objDrag: this.objDragArea };
             if (button === 1 && this.menuNumEntries > 0) {
-                this.doAction(this.menuNumEntries - 1);
+                this.doAction(this.getShiftActionIdx());
             } else if (button == 2 && this.menuNumEntries > 0) {
                 this.openMenu();
             }
@@ -8951,6 +8954,31 @@ export class Client extends GameShell {
         }
 
         return action === MiniMenuAction.FRIENDLIST_ADD;
+    }
+
+    private getShiftActionIdx(): number {
+        const defaultIdx: number = this.menuNumEntries - 1;
+        if (!this.shiftClick) return defaultIdx;
+        const prefs: Record<string, boolean> | undefined = (window as any).shiftClickPrefs;
+        const opts: string[] = [];
+        for (let i: number = 0; i < this.menuNumEntries; i++) opts.push(this.menuOption[i]);
+        (window as any)._sd = { shiftClick: this.shiftClick, prefs, menu: opts, defaultIdx, returned: -99 };
+        if (!prefs) { (window as any)._sd.returned = defaultIdx; return defaultIdx; }
+        const KEYS: string[] = ['drop', 'take', 'attack', 'pickpocket', 'bank', 'usequickly', 'examine'];
+        const PFXS: string[] = ['drop ', 'take ', 'attack ', 'pickpocket ', 'bank ', 'use-quickly ', 'examine '];
+        for (let k: number = 0; k < KEYS.length; k++) {
+            if (!prefs[KEYS[k]]) continue;
+            const pfx: string = PFXS[k];
+            for (let i: number = this.menuNumEntries - 1; i >= 0; i--) {
+                if (this.menuOption[i].toLowerCase().startsWith(pfx)) {
+                    (window as any)._sd.returned = i;
+                    (window as any)._sd.matched = this.menuOption[i];
+                    return i;
+                }
+            }
+        }
+        (window as any)._sd.returned = defaultIdx;
+        return defaultIdx;
     }
 
     private doAction(optionId: number): void {
@@ -12045,6 +12073,7 @@ export class Client extends GameShell {
     }
 
     override mouseDown(x: number, y: number, e: MouseEvent) {
+        this.shiftClick = e.shiftKey;
         if (e.button === 1) {
             // Middle mouse: start camera drag, do not pass to game logic
             this.midDragActive = true;
@@ -12218,29 +12247,18 @@ export class Client extends GameShell {
                 InputTracking.mouseMoved(x, y, e.pointerType);
             }
 
-            // Middle mouse camera drag — emulate arrow keys like the mobile panning code
+            // Middle mouse camera drag — apply proportional yaw/pitch directly
             if (this.midDragActive) {
                 const dx: number = x - this.midDragLastX;
                 const dy: number = y - this.midDragLastY;
-
-                if (dx > 1) {
-                    this.keyHeld[2] = 1; this.keyHeld[1] = 0;
-                } else if (dx < -1) {
-                    this.keyHeld[1] = 1; this.keyHeld[2] = 0;
-                } else {
-                    this.keyHeld[1] = 0; this.keyHeld[2] = 0;
-                }
-
-                if (dy > 1) {
-                    this.keyHeld[4] = 1; this.keyHeld[3] = 0;
-                } else if (dy < -1) {
-                    this.keyHeld[3] = 1; this.keyHeld[4] = 0;
-                } else {
-                    this.keyHeld[3] = 0; this.keyHeld[4] = 0;
-                }
-
                 this.midDragLastX = x;
                 this.midDragLastY = y;
+                if (dx !== 0) {
+                    this.orbitCameraYaw = ((this.orbitCameraYaw - dx * 3) | 0) & 0x7ff;
+                }
+                if (dy !== 0) {
+                    this.orbitCameraPitch = Math.max(128, Math.min(383, this.orbitCameraPitch + dy * 2));
+                }
             }
         } else {
             // custom: touchscreen support

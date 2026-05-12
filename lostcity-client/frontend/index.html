@@ -382,6 +382,81 @@
             }
             .wm-max-btn:hover { color: #ccc; background: #222; }
 
+            /* Settings panel */
+            #settings-panel { width: 280px; }
+            #settings-panel.open { max-width: 280px; }
+
+            .st-header {
+                display: flex;
+                align-items: center;
+                padding: 11px 12px 10px;
+                border-bottom: 1px solid #1e1e1e;
+                flex-shrink: 0;
+            }
+
+            .st-title {
+                font-size: 11px;
+                font-weight: bold;
+                color: #ffd700;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+            }
+
+            .st-body {
+                flex: 1 1 0;
+                min-height: 0;
+                overflow-y: auto;
+                padding: 12px;
+                scrollbar-width: thin;
+                scrollbar-color: #2a2a2a #0c0c0c;
+            }
+
+            .st-section {
+                margin-bottom: 18px;
+            }
+
+            .st-section-title {
+                font-size: 10px;
+                font-weight: bold;
+                color: #888;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+                margin-bottom: 8px;
+            }
+
+            .st-select {
+                width: 100%;
+                background: #141414;
+                border: 1px solid #2e2e2e;
+                border-radius: 4px;
+                color: #ccc;
+                font-size: 11px;
+                padding: 5px 7px;
+                cursor: pointer;
+            }
+
+            .st-select:focus { outline: none; border-color: #555; }
+
+            .st-check-row {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 4px 0;
+                font-size: 11px;
+                color: #aaa;
+                cursor: pointer;
+            }
+
+            .st-check-row input[type="checkbox"] {
+                accent-color: #ffd700;
+                width: 13px;
+                height: 13px;
+                cursor: pointer;
+                flex-shrink: 0;
+            }
+
+            .st-check-row:hover { color: #ccc; }
+
             .wm-body {
                 flex: 1 1 0;
                 min-height: 0;
@@ -473,11 +548,39 @@
                 </div>
             </div>
 
+            <div id="settings-panel" class="side-panel">
+                <div class="st-header"><span class="st-title">Settings</span></div>
+                <div class="st-body">
+                    <div class="st-section">
+                        <div class="st-section-title">AFK Timer</div>
+                        <select id="afk-select" class="st-select">
+                            <option value="90000">90 seconds (default)</option>
+                            <option value="120000">2 minutes</option>
+                            <option value="300000">5 minutes</option>
+                            <option value="600000">10 minutes</option>
+                            <option value="1800000">30 minutes</option>
+                            <option value="0">Never</option>
+                        </select>
+                    </div>
+                    <div class="st-section">
+                        <div class="st-section-title">Shift-Click Actions</div>
+                        <label class="st-check-row"><input type="checkbox" id="sc-drop" checked> Drop (inventory items)</label>
+                        <label class="st-check-row"><input type="checkbox" id="sc-take" checked> Take (ground items)</label>
+                        <label class="st-check-row"><input type="checkbox" id="sc-attack"> Attack (NPCs)</label>
+                        <label class="st-check-row"><input type="checkbox" id="sc-pickpocket" checked> Pickpocket (NPCs)</label>
+                        <label class="st-check-row"><input type="checkbox" id="sc-bank" checked> Bank (bank NPCs)</label>
+                        <label class="st-check-row"><input type="checkbox" id="sc-usequickly" checked> Use-quickly (bank booths)</label>
+                        <label class="st-check-row"><input type="checkbox" id="sc-examine"> Examine (anything)</label>
+                    </div>
+                </div>
+            </div>
+
             <div id="toolbar">
                 <div class="tool-btn" id="btn-hiscores" title="Hiscores">&#9813;</div>
                 <div class="tool-btn" id="btn-xpdrops" title="XP Drops">XP</div>
                 <div class="tool-btn" id="btn-xptracker" title="XP Tracker">&#128200;</div>
                 <div class="tool-btn" id="btn-worldmap" title="World Map">&#128506;</div>
+                <div class="tool-btn" id="btn-settings" title="Settings">&#9881;</div>
             </div>
         </div>
 
@@ -665,6 +768,65 @@
                 });
             })();
 
+            // Settings panel
+            (function () {
+                var btn    = document.getElementById('btn-settings');
+                var panel  = document.getElementById('settings-panel');
+                var afkSel = document.getElementById('afk-select');
+                var isOpen = false;
+
+                var SC_IDS = ['drop', 'take', 'attack', 'pickpocket', 'bank', 'usequickly', 'examine'];
+
+                function loadPrefs() {
+                    var saved = localStorage.getItem('afkTimerMs');
+                    var ms = saved !== null ? parseInt(saved, 10) : 90000;
+                    window.afkTimerMs = ms;
+                    afkSel.value = String(ms);
+
+                    var scSaved = localStorage.getItem('shiftClickPrefs');
+                    var defaultPrefs = { drop: true, take: true, pickpocket: true, bank: true, usequickly: true };
+                    var prefs = Object.assign({}, defaultPrefs, scSaved ? JSON.parse(scSaved) : {});
+                    SC_IDS.forEach(function (id) {
+                        var el = document.getElementById('sc-' + id);
+                        if (el) el.checked = !!prefs[id];
+                    });
+                    applyShiftPrefs(prefs);
+                }
+
+                function applyShiftPrefs(prefs) {
+                    window.shiftClickPrefs = prefs;
+                }
+
+                function saveShiftPrefs() {
+                    var prefs = {};
+                    SC_IDS.forEach(function (id) {
+                        var el = document.getElementById('sc-' + id);
+                        prefs[id] = el ? el.checked : false;
+                    });
+                    localStorage.setItem('shiftClickPrefs', JSON.stringify(prefs));
+                    applyShiftPrefs(prefs);
+                }
+
+                afkSel.addEventListener('change', function () {
+                    var ms = parseInt(afkSel.value, 10);
+                    window.afkTimerMs = ms;
+                    localStorage.setItem('afkTimerMs', String(ms));
+                });
+
+                SC_IDS.forEach(function (id) {
+                    var el = document.getElementById('sc-' + id);
+                    if (el) el.addEventListener('change', saveShiftPrefs);
+                });
+
+                btn.addEventListener('click', function () {
+                    isOpen = !isOpen;
+                    btn.classList.toggle('active', isOpen);
+                    panel.classList.toggle('open', isOpen);
+                });
+
+                loadPrefs();
+            })();
+
             // World Map panel
             (function () {
                 var btn    = document.getElementById('btn-worldmap');
@@ -715,6 +877,18 @@
                         sendPlayerPos();
                     }
                 });
+            })();
+        </script>
+
+        <!-- Shift-click debug watcher: logs window._ml and window._sd to the backtick console whenever they change -->
+        <script>
+            (function () {
+                var lastMl, lastSd;
+                setInterval(function () {
+                    var ml = window._ml, sd = window._sd;
+                    if (ml !== lastMl) { lastMl = ml; console.log('[_ml]', JSON.stringify(ml)); }
+                    if (sd !== lastSd) { lastSd = sd; console.log('[_sd]', JSON.stringify(sd)); }
+                }, 200);
             })();
         </script>
 
