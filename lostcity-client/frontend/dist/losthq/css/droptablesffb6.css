@@ -1,0 +1,624 @@
+/* Clue Tables specific */
+.search-result-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+    cursor: pointer;
+}
+
+.search-result-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+
+.search-item-img {
+    flex-shrink: 0;
+}
+
+.search-item-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Styles from index.html */
+select,
+#searchInput {
+    width: 180px;
+    height: 25px;
+    padding: 2px 5px;
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+    background-color: #474747;
+    color: white;
+    border: 1px solid #666;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    position: relative;
+}
+
+select {
+    padding-right: 20px;
+    background-image: url('data:image/svg+xml;utf8,<svg fill="white" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 2px center;
+    background-size: 16px;
+    cursor: pointer;
+}
+
+select::-ms-expand {
+    display: none;
+}
+
+#searchInput {
+    background-image: none;
+}
+
+#searchInput::placeholder {
+    color: #999;
+}
+
+/* Update dropdown styles to match search results */
+select option {
+    background-color: #474747;
+    color: white;
+    padding: 8px 12px;
+}
+
+select:focus {
+    outline: none;
+    border-color: #90c040;
+}
+
+/* Style the dropdown when opened */
+select:hover {
+    border-color: #90c040;
+}
+
+.clickable-item {
+    color: #90c040;
+    text-decoration: underline;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.clickable-item:hover {
+    color: #a8d050;
+}
+
+.close {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    color: #90c040;
+}
+
+.close:hover {
+    color: #a8d050;
+}
+
+.modal-header {
+    position: relative;
+    padding: 0;
+    border-bottom: none;
+}
+
+.search-results {
+    position: absolute;
+    background-color: #474747;
+    border: 1px solid #666;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+    width: 180px;
+    -webkit-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    -moz-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    top: 70px;
+    left: 50%;
+    -webkit-transform: translateX(-50%);
+    -moz-transform: translateX(-50%);
+    transform: translateX(-50%);
+    border-radius: 4px;
+    margin-top: 5px;
+    scrollbar-width: thin;
+    scrollbar-color: #90c040 #474747;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+.search-result-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    color: white;
+    -webkit-transition: background-color 0.2s;
+    -moz-transition: background-color 0.2s;
+    transition: background-color 0.2s;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 13px;
+}
+
+.search-result-item:hover {
+    background-color: #666;
+}
+
+.search-result-item:active {
+    background-color: #90c040;
+}
+
+.highlight {
+    background-color: rgba(144, 192, 64, 0.2);
+}
+
+.members {
+    color: #ffd700;
+    font-size: 0.8em;
+    margin-left: 4px;
+    font-style: italic;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.loader {
+    border: 6px solid rgba(243, 243, 243, 0.3);
+    border-top: 6px solid #90c040;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    -webkit-animation: spin 1s linear infinite;
+    -moz-animation: spin 1s linear infinite;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+    display: block;
+}
+
+.loading-text {
+    color: #90c040;
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    margin-bottom: 20px;
+    display: block;
+}
+
+.hidden {
+    display: none !important;
+}
+
+@-webkit-keyframes spin {
+    0% {
+        -webkit-transform: rotate(0deg);
+    }
+
+    100% {
+        -webkit-transform: rotate(360deg);
+    }
+}
+
+@-moz-keyframes spin {
+    0% {
+        -moz-transform: rotate(0deg);
+    }
+
+    100% {
+        -moz-transform: rotate(360deg);
+    }
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    display: -webkit-flex;
+    display: -moz-flex;
+    display: flex;
+    -webkit-justify-content: center;
+    -moz-justify-content: center;
+    justify-content: center;
+    -webkit-align-items: center;
+    -moz-align-items: center;
+    align-items: center;
+}
+
+.modal-content {
+    background-color: black;
+    border: 2px solid #382418;
+    max-width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    -webkit-transform: translateX(-50%);
+    -moz-transform: translateX(-50%);
+    transform: translateX(-50%);
+}
+
+.modal-body {
+    padding: 0;
+}
+
+.monster-name {
+    font-size: 14px;
+    margin-bottom: 2px;
+}
+
+.monster-info {
+    font-size: 11px;
+    color: #999;
+}
+
+#dropTable img {
+    vertical-align: middle;
+}
+
+/* RuneScape 2004 Theme for Dropdown and Search Bar */
+.search-bar input {
+    padding: 5px;
+    font-size: 14px;
+    font-family: Arial, Helvetica, sans-serif;
+    background-color: #382418;
+    color: white;
+    border: 2px solid #570700;
+    border-radius: 4px;
+    width: 100%;
+    max-width: 180px;
+}
+
+.dropdown select {
+    padding: 5px;
+    font-size: 14px;
+    font-family: Arial, Helvetica, sans-serif;
+    background-color: #382418;
+    color: white;
+    border: 2px solid #570700;
+    border-radius: 4px;
+    width: 100%;
+    max-width: 180px;
+}
+
+.rare-drop-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0;
+    background-color: black;
+}
+
+.rare-drop-table th,
+.rare-drop-table td {
+    border: none;
+    padding: 8px;
+    text-align: left;
+    vertical-align: middle;
+    background-color: black;
+}
+
+.rare-drop-table th {
+    color: white;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.rare-drop-table tr:hover {
+    background-color: #0a0a0a;
+}
+
+.rare-drop-table img {
+    vertical-align: middle;
+    margin-right: 5px;
+    background-color: #000;
+}
+
+/* Update the clickable items in the main table */
+#dropTable td[onclick] {
+    cursor: pointer;
+    text-decoration: underline;
+    color: #90c040;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+#dropTable td[onclick]:hover {
+    color: #fff;
+}
+
+/* Toggle Switch Styles */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 32px;
+    height: 15px;
+    vertical-align: middle;
+    margin: 0 2px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #2a2a2a;
+    -webkit-transition: .4s;
+    -moz-transition: .4s;
+    transition: .4s;
+    border: 1px solid #474747;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 11px;
+    width: 11px;
+    left: 2px;
+    bottom: 1px;
+    background-color: #90c040;
+    -webkit-transition: .4s;
+    -moz-transition: .4s;
+    transition: .4s;
+}
+
+input:checked+.slider {
+    background-color: #2a2a2a;
+    border-color: #90c040;
+}
+
+input:checked+.slider:before {
+    -webkit-transform: translateX(17px);
+    -moz-transform: translateX(17px);
+    transform: translateX(17px);
+}
+
+.slider.round {
+    border-radius: 15px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+.toggle-label {
+    color: #90c040;
+    font-size: 11px;
+    vertical-align: middle;
+    font-family: Arial, Helvetica, sans-serif;
+    display: inline-block;
+    margin-left: 3px;
+}
+
+.toggle-green {
+    color: #90c040;
+    text-decoration: none;
+}
+
+.toggle-green:hover {
+    text-decoration: underline;
+}
+
+.modal-content table td.e {
+    border: none;
+}
+
+/* Ensure proper text rendering */
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+/* Fix for Chrome's default focus styles */
+select:focus,
+input:focus {
+    outline: none;
+    border-color: #90c040;
+}
+
+/* Scrollbar Styles - Updated for consistency */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #474747;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #90c040;
+    border-radius: 4px;
+    border: 2px solid #474747;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a8d050;
+}
+
+/* Firefox Scrollbar Styles */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #90c040 #474747;
+}
+
+/* Custom Scrollbar Styles */
+select::-webkit-scrollbar {
+    width: 16px;
+    background-color: #474747;
+}
+
+select::-webkit-scrollbar-thumb {
+    background-color: #666;
+    border: 4px solid #474747;
+    border-radius: 8px;
+}
+
+select::-webkit-scrollbar-button {
+    display: block;
+    height: 16px;
+    background-color: #474747;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 8px;
+}
+
+select::-webkit-scrollbar-button:vertical:start {
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%23666" height="8" viewBox="0 0 24 24" width="8" xmlns="http://www.w3.org/2000/svg"><path d="M7 14l5-5 5 5z"/></svg>');
+}
+
+select::-webkit-scrollbar-button:vertical:end {
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%23666" height="8" viewBox="0 0 24 24" width="8" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+}
+
+/* Custom Scrollbar Styles for both select and search results */
+select::-webkit-scrollbar,
+.search-results::-webkit-scrollbar {
+    width: 16px;
+    background-color: #474747;
+}
+
+select::-webkit-scrollbar-thumb,
+.search-results::-webkit-scrollbar-thumb {
+    background-color: #90c040;
+    border: 4px solid #474747;
+    border-radius: 8px;
+}
+
+select::-webkit-scrollbar-track,
+.search-results::-webkit-scrollbar-track {
+    background-color: #474747;
+    border-radius: 8px;
+}
+
+select::-webkit-scrollbar-button,
+.search-results::-webkit-scrollbar-button {
+    display: block;
+    height: 16px;
+    background-color: #474747;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 8px;
+}
+
+select::-webkit-scrollbar-button:vertical:start,
+.search-results::-webkit-scrollbar-button:vertical:start {
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%2390c040" height="8" viewBox="0 0 24 24" width="8" xmlns="http://www.w3.org/2000/svg"><path d="M7 14l5-5 5 5z"/></svg>');
+}
+
+select::-webkit-scrollbar-button:vertical:end,
+.search-results::-webkit-scrollbar-button:vertical:end {
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%2390c040" height="8" viewBox="0 0 24 24" width="8" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
+}
+
+/* Firefox scrollbar styles */
+select,
+.search-results {
+    scrollbar-width: thin;
+    scrollbar-color: #90c040 #474747;
+}
+
+/* Ensure proper text rendering */
+.search-results {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+/* Remove all previous scrollbar styles first */
+select::-webkit-scrollbar,
+.search-results::-webkit-scrollbar,
+select::-webkit-scrollbar-thumb,
+.search-results::-webkit-scrollbar-thumb,
+select::-webkit-scrollbar-track,
+.search-results::-webkit-scrollbar-track,
+select::-webkit-scrollbar-button,
+.search-results::-webkit-scrollbar-button {
+    all: unset;
+}
+
+/* Add new consistent scrollbar styles */
+select::-webkit-scrollbar,
+.search-results::-webkit-scrollbar {
+    width: 16px !important;
+    background-color: #474747 !important;
+}
+
+select::-webkit-scrollbar-thumb,
+.search-results::-webkit-scrollbar-thumb {
+    background-color: #90c040 !important;
+    border: 4px solid #474747 !important;
+    border-radius: 8px !important;
+    min-height: 40px !important;
+}
+
+select::-webkit-scrollbar-track,
+.search-results::-webkit-scrollbar-track {
+    background-color: #474747 !important;
+}
+
+select::-webkit-scrollbar-button:vertical:start,
+.search-results::-webkit-scrollbar-button:vertical:start {
+    display: block !important;
+    height: 16px !important;
+    width: 16px !important;
+    background-color: #474747 !important;
+    border: 1px solid #666 !important;
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%2390c040" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 14l5-5 5 5z"/></svg>') !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 12px !important;
+}
+
+select::-webkit-scrollbar-button:vertical:end,
+.search-results::-webkit-scrollbar-button:vertical:end {
+    display: block !important;
+    height: 16px !important;
+    width: 16px !important;
+    background-color: #474747 !important;
+    border: 1px solid #666 !important;
+    background-image: url('data:image/svg+xml;utf8,<svg fill="%2390c040" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>') !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 12px !important;
+}
+
+select::-webkit-scrollbar-button:hover,
+.search-results::-webkit-scrollbar-button:hover {
+    background-color: #525252 !important;
+}
+
+/* Firefox scrollbar styles */
+select,
+.search-results {
+    scrollbar-width: auto !important;
+    scrollbar-color: #90c040 #474747 !important;
+}
+
+#dropTable th {
+    font-size: 13px;
+}

@@ -1,0 +1,162 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+
+<!-- Mirrored from 2004.losthq.rs/?p=calculators&calc=prayer_duration by HTTrack Website Copier/3.x [XR&CO'2014], Wed, 13 May 2026 16:49:20 GMT -->
+<!-- Added by HTTrack --><meta http-equiv="content-type" content="text/html;charset=UTF-8" /><!-- /Added by HTTrack -->
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="color-scheme" content="light only">
+    <meta property="og:title" content="LostHQ > Calculators > Prayer Duration">
+    <meta property="og:description" content="A RuneHQ inspired website made for Lost City 2004.">
+    <meta property="og:url" content="index01d7.html?p=calculators&amp;calc=prayer_duration">
+    <meta property="og:image" content="img/skillicons/prayer.webp">
+    <meta property="og:type" content="article:2004scape">
+    <title>LostHQ > Calculators > Prayer Duration</title>
+    <link rel="icon" type="image/x-icon" href="img/sword.png">
+    <link rel="stylesheet" type="text/css" href="css/main99a7.css?v=1773006669"><script type="text/javascript" src="js/mainb50c.js?v=1773006670"></script><script type="text/javascript" src="js/fonts6dde.js?v=1767755923"></script><script type="text/javascript" src="js/site_options784b.js?v=1767405754"></script><script type="text/javascript" src="js/floor_selectoreb30.js?v=1767144130"></script><script type="text/javascript" src="js/sprite_loaderd9fe.js?v=1773006671"></script><link rel="stylesheet" type="text/css" href="css/calculators867d.css?v=1767672550"><script type="text/javascript" src="js/equipment_interface6646.js?v=1768024621"></script><script type="text/javascript" src="js/calculators01e4.js?v=1768685664"></script></head><body class="bg2" >
+    <div class="body">
+                
+        <div class="main-menu e">
+    <a href="indexd41d.html?">LostHQ</a> &gt; <a href="indexe8c6.html?p=calculators">Calculators</a> &gt; <a href="index01d7.html?p=calculators&amp;calc=prayer_duration">Prayer Duration</a>
+        <div class="main-content">
+            <div class="left-border"></div>
+<h2>Prayer Duration Calculator</h2>
+<div class="container">
+    <div class="input-group">
+        <label>Username:</label>
+        <input type="text" id="username">
+        <button onclick="fetchPrayerLevel()">Fetch Level</button>
+    </div>
+    <div class="input-group">
+        <label>Prayer Level:</label>
+        <input type="number" id="prayerLevel" min="1" max="99" value="1">
+    </div>
+    <div id="monasteryBonus">
+        <div class="input-group">
+            <label for="monasteryAltar">Monastery Altar:</label>
+            <select id="monasteryAltar" onchange="runCalc()">
+                <option value="0">No</option>
+                <option value="2">Yes (+2 to prayer)</option>
+            </select>
+        </div>
+    </div>
+    <h3>Prayer Bonus</h3>
+    <div class="input-group">
+        <label>Necklace:</label>
+        <select id="necklace">
+            <option value="0">None</option>
+            <option value="1">Amulet of Power (+1)</option>
+            <option value="3">Amulet of Glory (+3)</option>
+            <option value="8">Holy Symbol (+8)</option>
+            <option value="8">Unholy Symbol (+8)</option>
+        </select>
+        <label>Weapon:</label>
+        <select id="weapon">
+            <option value="0">None</option>
+            <option value="1">Bronze Mace (+1)</option>
+            <option value="1">Iron Mace (+1)</option>
+            <option value="2">Steel Mace (+2)</option>
+            <option value="2">Black Mace (+2)</option>
+            <option value="3">Mithril Mace (+3)</option>
+            <option value="3">Adamant Mace (+3)</option>
+            <option value="4">Rune Mace (+4)</option>
+            <option value="5">Dragon Mace (+5)</option>
+        </select>
+    </div>
+    <div class="input-group">
+        <label>Body:</label>
+        <select id="body">
+            <option value="0">None</option>
+            <option value="3">Priest Gown (+3)</option>
+            <option value="3">Zamorak Monk Top (+3)</option>
+            <option value="4">Druid's Robe Top (+4)</option>
+            <option value="5">Shade Robe Top (+5)</option>
+            <option value="6">Monk's Robe Top (+6)</option>
+        </select>
+        <label>Legs:</label>
+        <select id="legs">
+            <option value="0">None</option>
+            <option value="3">Priest Gown (+3)</option>
+            <option value="3">Zamorak Monk Bottom (+3)</option>
+            <option value="4">Druid's Robe (+4)</option>
+            <option value="4">Shade Robe (+4)</option>
+            <option value="5">Monk's Robe Bottom (+5)</option>
+        </select>
+    </div>
+    <div class="input-group">
+        <label>Prayer Bonus:</label>
+        <input type="number" id="prayerBonus" min="0" max="24" value="0">
+    </div>
+    <h3>Click on the prayers you want to activate:</h3>
+    <div class="prayer-grid-container">
+        <div class="prayer-grid"></div>
+    </div>
+    <br><br>
+    <div class="input-group justify-center">
+        <button onclick="runCalc()">Calculate!</button>
+    </div>
+    <hr>
+    <h2>Prayer will last: <span id="prayerDuration" class="gold-text"></span></h2>
+    <!-- Special message for Rapid Heal -->
+    <div id="rapidHealDiv" style="display: none">
+        <h2>Rapid Heal HP restored: <span id="rapidHealText" class="gold-text"></span></h2>
+        <h2>Total HP restored: <span id="totalHpRestoredText" class="gold-text"></span></h2>
+    </div>
+</div><script type="text/javascript" src="js/calculators/prayer_duration99a7.js?v=1773006669"></script>                <div class="right-border"></div>
+            </div>
+            <div class="bottom-border"></div>
+            <div style="text-align:center;font-family:Arial,Helvetica,sans-serif; font-size:12px;height:40px;">
+                <div id="site-options-container" data-style="default" data-usuk="US" data-gamever="2004">
+                <div style="height:7px;"></div>
+                <button class="site-footer" onclick="location.href='indexd1d9.html?p=changelog'" type="button">Credits and Changelog</button>
+                -
+                <button class="site-footer" id="site-options-toggle">Site Options</button>
+                <div id="site-options-backdrop" hidden></div>
+                <div id="site-options-modal" hidden>
+                    <div id="site-options-content">
+                    <h2>LostHQ Website Options</h2>
+                    <label>Menu Styles:<br>
+                        <select id="style-select">
+                        <option value="default">Modern (RS Look)</option>
+                        <option value="oldschool">Oldschool (RuneHQ Look)</option>
+                        </select>
+                    </label>
+                    <br><br>
+                    <label>Floor Labels:<br>
+                        <select id="usuk-select">
+                        <option value="US">United States (1st Floor, 2nd Floor, etc)</option>
+                        <option value="UK">United Kingdom (Ground Floor, 1st Floor, etc)</option>
+                        </select>
+                    </label>
+                    <br><br>
+                    <label>Game Version:<br>
+                        <select id="gamever-select">
+                        <option value="254">2004 (rev. 254 latest)</option>
+                        <option disabled>2005 (tbd)</option>
+                        <option disabled>2006 (tbd)</option>
+                        <option disabled>2007 (tbd)</option>
+                        <option disabled>2008 (tbd)</option>
+                        <option disabled>2009 (tbd)</option>
+                        </select>
+                    </label>
+                    <br><br>
+                    <button id="site-options-close">Close</button>
+                    </div>
+                </div>
+                </div>
+            </div>
+        </div>
+        <div id="scrollToTop" style="display:none; cursor:pointer;">
+            <img src="img/scroll_icon.png" width="19" height="67" alt="Scroll to top">
+            <div style="font-size:12px; color:white;">Scroll to Top</div>
+        </div>
+        <div class="img-modal" id="imgModal">
+            <span class="close-btn" id="closeModal">&times;</span>
+            <img src="#" alt="Preview" id="modalImage">
+        </div>
+    </div>
+    <script type="text/javascript" src="js/end6646.js?v=1768024621"></script></body>
+
+<!-- Mirrored from 2004.losthq.rs/?p=calculators&calc=prayer_duration by HTTrack Website Copier/3.x [XR&CO'2014], Wed, 13 May 2026 16:49:21 GMT -->
+</html>
