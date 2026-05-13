@@ -342,6 +342,62 @@
                 letter-spacing: 1px;
             }
 
+            /* LostHQ wiki panel */
+            #losthq-panel { width: 860px; }
+            #losthq-panel.open { max-width: 860px; }
+            #losthq-panel.maximized {
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                width: 100%; max-width: none;
+                z-index: 200;
+                border-left: none;
+                transition: none;
+            }
+
+            .lhq-header {
+                display: flex;
+                align-items: center;
+                padding: 11px 12px 10px;
+                border-bottom: 1px solid #1e1e1e;
+                flex-shrink: 0;
+            }
+
+            .lhq-title {
+                font-size: 11px;
+                font-weight: bold;
+                color: #ffd700;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+            }
+
+            .lhq-max-btn {
+                margin-left: auto;
+                cursor: pointer;
+                color: #555;
+                font-size: 16px;
+                line-height: 1;
+                user-select: none;
+                padding: 2px 4px;
+                border-radius: 3px;
+            }
+
+            .lhq-max-btn:hover { color: #ccc; background: #222; }
+
+            .lhq-body {
+                flex: 1 1 0;
+                min-height: 0;
+                position: relative;
+                overflow: hidden;
+                background: #111;
+            }
+
+            #losthq-frame {
+                position: absolute;
+                top: 0; left: 0;
+                width: 100%; height: 100%;
+                border: none;
+            }
+
             /* World map panel */
             #worldmap-panel { width: 600px; }
             #worldmap-panel.open { max-width: 600px; }
@@ -575,12 +631,23 @@
                 </div>
             </div>
 
+            <div id="losthq-panel" class="side-panel">
+                <div class="lhq-header">
+                    <span class="lhq-title">LostHQ Wiki</span>
+                    <span id="btn-lhq-max" class="lhq-max-btn" title="Maximize">&#9633;</span>
+                </div>
+                <div class="lhq-body">
+                    <iframe id="losthq-frame" title="LostHQ Wiki"></iframe>
+                </div>
+            </div>
+
             <div id="toolbar">
                 <div class="tool-btn" id="btn-hiscores" title="Hiscores">&#9813;</div>
                 <div class="tool-btn" id="btn-xpdrops" title="XP Drops">XP</div>
                 <div class="tool-btn" id="btn-xptracker" title="XP Tracker">&#128200;</div>
                 <div class="tool-btn" id="btn-worldmap" title="World Map">&#128506;</div>
                 <div class="tool-btn" id="btn-settings" title="Settings">&#9881;</div>
+                <div class="tool-btn" id="btn-losthq" title="LostHQ Wiki">&#128212;</div>
             </div>
         </div>
 
@@ -825,6 +892,40 @@
                 });
 
                 loadPrefs();
+            })();
+
+            // LostHQ Wiki panel
+            (function () {
+                var btn    = document.getElementById('btn-losthq');
+                var panel  = document.getElementById('losthq-panel');
+                var frame  = document.getElementById('losthq-frame');
+                var maxBtn = document.getElementById('btn-lhq-max');
+                var isOpen = false;
+                var loaded = false;
+                var isMaximized = false;
+
+                maxBtn.addEventListener('click', function () {
+                    isMaximized = !isMaximized;
+                    panel.classList.toggle('maximized', isMaximized);
+                    maxBtn.textContent = isMaximized ? '⊟' : '□';
+                    maxBtn.title = isMaximized ? 'Restore' : 'Maximize';
+                });
+
+                btn.addEventListener('click', function () {
+                    isOpen = !isOpen;
+                    btn.classList.toggle('active', isOpen);
+                    panel.classList.toggle('open', isOpen);
+                    if (!isOpen && isMaximized) {
+                        isMaximized = false;
+                        panel.classList.remove('maximized');
+                        maxBtn.textContent = '□';
+                        maxBtn.title = 'Maximize';
+                    }
+                    if (isOpen && !loaded) {
+                        loaded = true;
+                        frame.src = '/losthq/index.html';
+                    }
+                });
             })();
 
             // World Map panel
