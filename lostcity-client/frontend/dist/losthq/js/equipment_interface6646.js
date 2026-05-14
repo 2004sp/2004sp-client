@@ -187,7 +187,7 @@ async function loadEquipInterface(targetDiv, allowChange, headItem, capeItem, ne
         } else {
             const placeholder = document.createElement("img");
             const slotNumber = getEquipmentSlotNumber(slotType);
-            placeholder.src = `/img/interfaces/equipment_${slotNumber}.png`;
+            placeholder.src = `img/interfaces/equipment_${slotNumber}.png`;
             placeholder.className = "equipment-placeholder";
             placeholder.alt = `Empty ${slotType} slot`;
             slot.appendChild(placeholder);
