@@ -36,7 +36,7 @@ func init() {
 // from the browser and bridges them to the game server.
 // Running as a separate localhost server sidesteps any WebView2 origin restrictions.
 func startWSProxy() {
-	gameWSURL  := fmt.Sprintf("ws://localhost:%d", cfg.WebPort)
+	gameWSURL  := fmt.Sprintf("ws://%s:%d", cfg.WebHost, cfg.WebPort)
 	proxyAddr  := fmt.Sprintf(":%d", cfg.ProxyPort)
 
 	mux := http.NewServeMux()
@@ -167,7 +167,7 @@ func main() {
 		log.Fatalf("failed to sub embedded FS: %v", err)
 	}
 
-	gameWebURL := fmt.Sprintf("http://localhost:%d", cfg.WebPort)
+	gameWebURL := fmt.Sprintf("http://%s:%d", cfg.WebHost, cfg.WebPort)
 	target, err := url.Parse(gameWebURL)
 	if err != nil {
 		log.Fatalf("invalid game web URL: %v", err)

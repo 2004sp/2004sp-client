@@ -13,9 +13,9 @@ async function fetchClueTables() {
 
     try {
         const [easy, medium, hard] = await Promise.all([
-            fetchJson('/pages/cluetables/easy.json'),
-            fetchJson('/pages/cluetables/medium.json'),
-            fetchJson('/pages/cluetables/hard.json'),
+            fetchJson('pages/cluetables/easy.json'),
+            fetchJson('pages/cluetables/medium.json'),
+            fetchJson('pages/cluetables/hard.json'),
         ]);
 
         const tag = (arr, difficulty) => (arr || []).map((r) => ({ ...r, difficulty }));

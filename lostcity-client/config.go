@@ -14,6 +14,10 @@ type AppConfig struct {
 	// Leave empty to use auto-detection.
 	DbPath string `json:"db_path,omitempty"`
 
+	// WebHost is the hostname or IP address of the game server.
+	// Default: "localhost"
+	WebHost string `json:"web_host,omitempty"`
+
 	// WebPort is the game server's HTTP/WebSocket port (WEB_PORT in server .env).
 	// Default: 80
 	WebPort int `json:"web_port,omitempty"`
@@ -30,6 +34,7 @@ var cfg AppConfig
 // any missing fields, and auto-detects db.sqlite if no path is set.
 func loadConfig() {
 	cfg = AppConfig{
+		WebHost:   "localhost",
 		WebPort:   80,
 		ProxyPort: 43595,
 	}
@@ -43,6 +48,9 @@ func loadConfig() {
 	}
 
 	// Apply defaults for zero values (omitempty fields).
+	if cfg.WebHost == "" {
+		cfg.WebHost = "localhost"
+	}
 	if cfg.WebPort == 0 {
 		cfg.WebPort = 80
 	}
@@ -66,8 +74,8 @@ func loadConfig() {
 		saveConfig()
 	}
 
-	log.Printf("[config] web_port=%d  proxy_port=%d  db=%s",
-		cfg.WebPort, cfg.ProxyPort, cfg.DbPath)
+	log.Printf("[config] web_host=%s  web_port=%d  proxy_port=%d  db=%s",
+		cfg.WebHost, cfg.WebPort, cfg.ProxyPort, cfg.DbPath)
 }
 
 func saveConfig() {
