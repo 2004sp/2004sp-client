@@ -3041,6 +3041,13 @@ export class Client extends GameShell {
             return;
         }
 
+        if (this.isCompassClick(this.mouseClickX, this.mouseClickY)) {
+            this.resetCompassAndCamera();
+            this.mouseClickButton = 0;
+            this.nextMouseClickButton = 0;
+            return;
+        }
+
         let x: number = this.mouseClickX - 25 - 550;
         let y: number = this.mouseClickY - 4 - 4;
 
@@ -3078,6 +3085,24 @@ export class Client extends GameShell {
             this.out.p1(this.tryMoveNearest);
             this.out.p1(63);
         }
+    }
+
+    private isCompassClick(x: number, y: number): boolean {
+        return x >= 500 && x < 620 && y >= 0 && y < 80;
+    }
+
+    private resetCompassAndCamera(): void {
+        this.orbitCameraYaw = 0;
+        this.orbitCameraPitch = 128;
+        this.orbitCameraYawVelocity = 0;
+        this.orbitCameraPitchVelocity = 0;
+        this.macroMinimapAngle = 0;
+        this.macroMinimapZoom = 0;
+        this.keyHeld[1] = 0;
+        this.keyHeld[2] = 0;
+        this.keyHeld[3] = 0;
+        this.keyHeld[4] = 0;
+        this.redrawSidebar = true;
     }
 
     // todo: order
