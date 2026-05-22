@@ -24,12 +24,14 @@ var assets embed.FS
 var appIcon []byte
 
 var hiscoreService *HiscoreService
+var discordService *DiscordService
 
 func init() {
 	loadConfig()
 	application.RegisterEvent[string]("time")
 	hiscoreService = NewHiscoreService()
 	hiscoreService.Init()
+	discordService = &DiscordService{}
 }
 
 // startWSProxy starts a plain HTTP server that accepts WebSocket connections
@@ -118,6 +120,7 @@ func (h *assetProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "window.SERVER_SECURED = false;\n")
 		fmt.Fprintf(w, "window.WASM_BASE_URL = '';\n")
 		fmt.Fprintf(w, "window.AUTO_START_CLIENT = true;\n")
+		fmt.Fprintf(w, "window.DISCORD_APP_ID = '%s';\n", cfg.DiscordAppId)
 		return
 
 	case "/api/hiscores":
@@ -131,6 +134,28 @@ func (h *assetProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fmt.Sscanf(skill, "%d", &skillType)
 			w.Write([]byte(hiscoreService.GetHiscoresByType(skillType)))
 		}
+		return
+
+	case "/api/discord/connect":
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if cfg.DiscordAppId != "" {
+			discordService.Connect(cfg.DiscordAppId)
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+
+	case "/api/discord/update":
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		details := r.URL.Query().Get("details")
+		state := r.URL.Query().Get("state")
+		discordService.UpdateActivity(details, state)
+		w.WriteHeader(http.StatusNoContent)
+		return
+
+	case "/api/discord/disconnect":
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		discordService.Disconnect()
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 

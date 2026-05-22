@@ -26,6 +26,11 @@ type AppConfig struct {
 	// Change this if 43595 conflicts with another process.
 	// Default: 43595
 	ProxyPort int `json:"proxy_port,omitempty"`
+
+	// DiscordAppId is the Discord Application ID used for Rich Presence.
+	// Create one at https://discord.com/developers/applications and paste it here.
+	// Leave empty to disable Discord Rich Presence entirely.
+	DiscordAppId string `json:"discord_app_id,omitempty"`
 }
 
 var cfg AppConfig

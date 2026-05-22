@@ -185,6 +185,11 @@ export class Client extends GameShell {
     private ptype1: number = 0;
     private ptype2: number = 0;
 
+    // Discord Rich Presence — track last sent values so we update on change
+    private discordLastArea: string = '';
+    private discordLastLevel: number = -1;
+    private discordLastUpdate: number = 0; // loopCycle of last fetch
+
     private title: Jagfile | null = null;
     private p11: PixFont | null = null;
     private p12: PixFont | null = null;
@@ -1254,6 +1259,24 @@ export class Client extends GameShell {
 
         this.loopCycle++;
 
+        if (this.ingame && (window as any).DISCORD_RPC_ENABLED && this.localPlayer) {
+            const tileX: number = this.mapBuildBaseX + (this.localPlayer.x >> 7);
+            const tileZ: number = this.mapBuildBaseZ + (this.localPlayer.z >> 7);
+            const area: string = this.getAreaName(tileX, tileZ);
+            const level: number = this.localPlayer.combatLevel;
+            const areaChanged: boolean = area !== this.discordLastArea;
+            const levelChanged: boolean = level !== this.discordLastLevel && this.discordLastLevel !== -1;
+            // Update immediately on level-up or zone change; otherwise every 200 ticks (~4 s).
+            const ticksSinceLast: number = this.loopCycle - this.discordLastUpdate;
+            if (areaChanged || levelChanged || ticksSinceLast >= 200) {
+                this.discordLastArea = area;
+                this.discordLastLevel = level;
+                this.discordLastUpdate = this.loopCycle;
+                const displayName: string = this.localPlayer.name ?? this.loginUser;
+                fetch('/api/discord/update?details=' + encodeURIComponent(displayName + ' (Level ' + level + ')') + '&state=' + encodeURIComponent('in ' + area)).catch(() => {});
+            }
+        }
+
         if (!this.ingame) {
             await this.titleScreenLoop();
         } else {
@@ -2073,6 +2096,10 @@ export class Client extends GameShell {
                 this.focus = true;
                 this.focusIn = true;
                 this.ingame = true;
+                if ((window as any).DISCORD_RPC_ENABLED) {
+                    fetch('/api/discord/connect').catch(() => {});
+                    fetch('/api/discord/update?details=' + encodeURIComponent('Logged in as ' + this.loginUser) + '&state=' + encodeURIComponent('Loading world...')).catch(() => {});
+                }
                 this.out.pos = 0;
                 this.in.pos = 0;
                 this.ptype = -1;
@@ -2211,6 +2238,10 @@ export class Client extends GameShell {
                 this.loginMes2 = 'Please wait 1 minute and try again.';
             } else if (response === 15) {
                 this.ingame = true;
+                if ((window as any).DISCORD_RPC_ENABLED) {
+                    fetch('/api/discord/connect').catch(() => {});
+                    fetch('/api/discord/update?details=' + encodeURIComponent('Logged in as ' + this.loginUser) + '&state=' + encodeURIComponent('Loading world...')).catch(() => {});
+                }
                 this.out.pos = 0;
                 this.in.pos = 0;
                 this.ptype = -1;
@@ -2745,7 +2776,32 @@ export class Client extends GameShell {
         }
     }
 
+    private getAreaName(x: number, z: number): string {
+        if (z >= 3520)                                                       return 'the Wilderness';
+        if (x >= 3216 && x <= 3232 && z >= 3208 && z <= 3232)               return 'Lumbridge';
+        if (x >= 3205 && x <= 3265 && z >= 3180 && z <= 3280)               return 'Lumbridge area';
+        if (x >= 3180 && x <= 3245 && z >= 3400 && z <= 3450)               return 'Varrock';
+        if (x >= 3080 && x <= 3105 && z >= 3480 && z <= 3510)               return 'Edgeville';
+        if (x >= 2946 && x <= 2992 && z >= 3360 && z <= 3400)               return 'Falador';
+        if (x >= 3077 && x <= 3105 && z >= 3415 && z <= 3440)               return 'Barbarian Village';
+        if (x >= 3080 && x <= 3110 && z >= 3240 && z <= 3265)               return 'Draynor Village';
+        if (x >= 3285 && x <= 3310 && z >= 3155 && z <= 3200)               return 'Al Kharid';
+        if (x >= 3012 && x <= 3032 && z >= 3200 && z <= 3232)               return 'Port Sarim';
+        if (x >= 2950 && x <= 2985 && z >= 3195 && z <= 3225)               return 'Rimmington';
+        if (x >= 2840 && x <= 2955 && z >= 3130 && z <= 3180)               return 'Karamja';
+        if (x >= 3100 && x <= 3115 && z >= 3155 && z <= 3172)               return "Wizard's Tower";
+        if (x >= 3000 && x <= 3060 && z >= 3335 && z <= 3365)               return 'Dwarven Mines';
+        if (x >= 3044 && x <= 3062 && z >= 3480 && z <= 3497)               return 'Monastery';
+        if (x >= 3187 && x <= 3200 && z >= 3355 && z <= 3370)               return "Champions' Guild";
+        if (x >= 2925 && x <= 2940 && z >= 3275 && z <= 3295)               return 'Crafting Guild';
+        return 'Gielinor';
+    }
+
     private async logout(): Promise<void> {
+        if ((window as any).DISCORD_RPC_ENABLED) {
+            fetch('/api/discord/disconnect').catch(() => {});
+        }
+
         if (this.stream) {
             this.stream.close();
         }
