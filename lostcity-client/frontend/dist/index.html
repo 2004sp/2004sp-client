@@ -628,6 +628,10 @@
                         <label class="st-check-row"><input type="checkbox" id="sc-usequickly" checked> Use-quickly (bank booths)</label>
                         <label class="st-check-row"><input type="checkbox" id="sc-examine"> Examine (anything)</label>
                     </div>
+                    <div class="st-section">
+                        <div class="st-section-title">Discord</div>
+                        <label class="st-check-row"><input type="checkbox" id="discord-rpc"> Discord Rich Presence</label>
+                    </div>
                 </div>
             </div>
 
@@ -844,6 +848,8 @@
 
                 var SC_IDS = ['drop', 'take', 'attack', 'pickpocket', 'bank', 'usequickly', 'examine'];
 
+                var discordChk = document.getElementById('discord-rpc');
+
                 function loadPrefs() {
                     var saved = localStorage.getItem('afkTimerMs');
                     var ms = saved !== null ? parseInt(saved, 10) : 90000;
@@ -858,6 +864,10 @@
                         if (el) el.checked = !!prefs[id];
                     });
                     applyShiftPrefs(prefs);
+
+                    var discordEnabled = localStorage.getItem('discordRpcEnabled') === 'true';
+                    window.DISCORD_RPC_ENABLED = discordEnabled;
+                    if (discordChk) discordChk.checked = discordEnabled;
                 }
 
                 function applyShiftPrefs(prefs) {
@@ -884,6 +894,19 @@
                     var el = document.getElementById('sc-' + id);
                     if (el) el.addEventListener('change', saveShiftPrefs);
                 });
+
+                if (discordChk) {
+                    discordChk.addEventListener('change', function () {
+                        window.DISCORD_RPC_ENABLED = discordChk.checked;
+                        localStorage.setItem('discordRpcEnabled', discordChk.checked ? 'true' : 'false');
+                        if (discordChk.checked) {
+                            // Connect immediately if already in-game
+                            fetch('/api/discord/connect').catch(function () {});
+                        } else {
+                            fetch('/api/discord/disconnect').catch(function () {});
+                        }
+                    });
+                }
 
                 btn.addEventListener('click', function () {
                     isOpen = !isOpen;

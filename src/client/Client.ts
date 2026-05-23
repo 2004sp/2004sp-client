@@ -185,6 +185,11 @@ export class Client extends GameShell {
     private ptype1: number = 0;
     private ptype2: number = 0;
 
+    // Discord Rich Presence — track last sent values so we update on change
+    private discordLastArea: string = '';
+    private discordLastLevel: number = -1;
+    private discordLastUpdate: number = 0; // loopCycle of last fetch
+
     private title: Jagfile | null = null;
     private p11: PixFont | null = null;
     private p12: PixFont | null = null;
@@ -1254,6 +1259,24 @@ export class Client extends GameShell {
 
         this.loopCycle++;
 
+        if (this.ingame && (window as any).DISCORD_RPC_ENABLED && this.localPlayer) {
+            const tileX: number = this.mapBuildBaseX + (this.localPlayer.x >> 7);
+            const tileZ: number = this.mapBuildBaseZ + (this.localPlayer.z >> 7);
+            const area: string = this.getAreaName(tileX, tileZ);
+            const level: number = this.localPlayer.combatLevel;
+            const areaChanged: boolean = area !== this.discordLastArea;
+            const levelChanged: boolean = level !== this.discordLastLevel && this.discordLastLevel !== -1;
+            // Update immediately on level-up or zone change; otherwise every 200 ticks (~4 s).
+            const ticksSinceLast: number = this.loopCycle - this.discordLastUpdate;
+            if (areaChanged || levelChanged || ticksSinceLast >= 200) {
+                this.discordLastArea = area;
+                this.discordLastLevel = level;
+                this.discordLastUpdate = this.loopCycle;
+                const displayName: string = this.localPlayer.name ?? this.loginUser;
+                fetch('/api/discord/update?details=' + encodeURIComponent(displayName + ' (Level ' + level + ')') + '&state=' + encodeURIComponent('in ' + area)).catch(() => {});
+            }
+        }
+
         if (!this.ingame) {
             await this.titleScreenLoop();
         } else {
@@ -2073,6 +2096,10 @@ export class Client extends GameShell {
                 this.focus = true;
                 this.focusIn = true;
                 this.ingame = true;
+                if ((window as any).DISCORD_RPC_ENABLED) {
+                    fetch('/api/discord/connect').catch(() => {});
+                    fetch('/api/discord/update?details=' + encodeURIComponent('Logged in as ' + this.loginUser) + '&state=' + encodeURIComponent('Loading world...')).catch(() => {});
+                }
                 this.out.pos = 0;
                 this.in.pos = 0;
                 this.ptype = -1;
@@ -2211,6 +2238,10 @@ export class Client extends GameShell {
                 this.loginMes2 = 'Please wait 1 minute and try again.';
             } else if (response === 15) {
                 this.ingame = true;
+                if ((window as any).DISCORD_RPC_ENABLED) {
+                    fetch('/api/discord/connect').catch(() => {});
+                    fetch('/api/discord/update?details=' + encodeURIComponent('Logged in as ' + this.loginUser) + '&state=' + encodeURIComponent('Loading world...')).catch(() => {});
+                }
                 this.out.pos = 0;
                 this.in.pos = 0;
                 this.ptype = -1;
@@ -2745,7 +2776,174 @@ export class Client extends GameShell {
         }
     }
 
+    private getAreaName(x: number, z: number): string {
+        // ── Wilderness (check first — trumps everything) ────────────────────
+        if (z >= 3520) {
+            if (x >= 3012 && x <= 3070 && z >= 3835 && z <= 3870)  return 'Mage Arena';
+            if (x >= 2965 && x <= 3000 && z >= 3810 && z <= 3845)  return 'Frozen Waste Plateau';
+            if (x >= 3050 && x <= 3080 && z >= 3776 && z <= 3810)  return 'Wilderness Volcano';
+            if (x >= 3058 && x <= 3092 && z >= 3750 && z <= 3780)  return 'Wilderness Agility Course';
+            if (x >= 3035 && x <= 3065 && z >= 3724 && z <= 3754)  return "Pirates' Hideout";
+            if (x >= 3062 && x <= 3084 && z >= 3700 && z <= 3726)  return 'Lava Maze';
+            if (x >= 3072 && x <= 3108 && z >= 3652 && z <= 3688)  return 'Demonic Ruins';
+            if (x >= 3228 && x <= 3248 && z >= 3636 && z <= 3660)  return 'Wilderness God Wars';
+            if (x >= 3035 && x <= 3058 && z >= 3628 && z <= 3652)  return 'Chaos Temple';
+            if (x >= 3285 && x <= 3310 && z >= 3600 && z <= 3630)  return 'Wilderness Chaos Altar';
+            if (x >= 3155 && x <= 3180 && z >= 3560 && z <= 3582)  return 'Wilderness Bandit Camp';
+            if (x >= 3095 && x <= 3125 && z >= 3518 && z <= 3544)  return 'Wilderness Edgeville';
+            return 'the Wilderness';
+        }
+
+        // ── Special / off-map planes ────────────────────────────────────────
+        if (x >= 2387 && x <= 2444 && z >= 4363 && z <= 4412)      return 'Zanaris';
+        if (x >= 2082 && x <= 2142 && z >= 3850 && z <= 3910)      return 'Lunar Isle';
+
+        // ── Morytania ───────────────────────────────────────────────────────
+        if (x >= 3544 && x <= 3582 && z >= 3270 && z <= 3308)      return 'Barrows';
+        if (x >= 3486 && x <= 3516 && z >= 3462 && z <= 3508)      return 'Canifis';
+        if (x >= 3419 && x <= 3447 && z >= 3530 && z <= 3568)      return 'Slayer Tower';
+        if (x >= 3395 && x <= 3422 && z >= 3476 && z <= 3500)      return 'Paterdomus';
+        if (x >= 3460 && x <= 3488 && z >= 3266 && z <= 3298)      return "Mort'ton";
+        if (x >= 3484 && x <= 3512 && z >= 3220 && z <= 3248)      return 'Burgh de Rott';
+        if (x >= 3426 && x <= 3462 && z >= 3330 && z <= 3372)      return 'Mort Myre Swamp';
+        if (x >= 3388 && x <= 3426 && z >= 3374 && z <= 3420)      return 'Haunted Woods';
+        if (x >= 3488 && x <= 3512 && z >= 3388 && z <= 3424)      return 'Fenkenstrain\'s Castle';
+        if (x >= 3590 && x <= 3618 && z >= 3336 && z <= 3366)      return 'Meiyerditch';
+        if (x >= 3355 && x <= 3395 && z >= 3460 && z <= 3498)      return 'Silvarea';
+        if (x >= 3360 && x <= 3530 && z >= 3200 && z <= 3530)      return 'Morytania';
+
+        // ── Desert ──────────────────────────────────────────────────────────
+        if (x >= 3309 && x <= 3332 && z >= 2790 && z <= 2810)      return 'Sophanem';
+        if (x >= 3412 && x <= 3438 && z >= 2891 && z <= 2915)      return 'Nardah';
+        if (x >= 3340 && x <= 3368 && z >= 2980 && z <= 3018)      return 'Pollnivneach';
+        if (x >= 3454 && x <= 3480 && z >= 3106 && z <= 3128)      return 'Uzer';
+        if (x >= 3374 && x <= 3398 && z >= 3015 && z <= 3058)      return 'Bandit Camp';
+        if (x >= 3362 && x <= 3390 && z >= 3100 && z <= 3120)      return 'Bedabin Camp';
+        if (x >= 3294 && x <= 3314 && z >= 3109 && z <= 3132)      return 'Shantay Pass';
+        if (x >= 3282 && x <= 3320 && z >= 2850 && z <= 3110)      return 'Kharidian Desert';
+        if (x >= 3320 && x <= 3460 && z >= 2850 && z <= 3110)      return 'Kharidian Desert';
+
+        // ── Fremennik Province ──────────────────────────────────────────────
+        if (x >= 2556 && x <= 2587 && z >= 3820 && z <= 3852)      return 'Miscellania';
+        if (x >= 2508 && x <= 2558 && z >= 3838 && z <= 3873)      return 'Miscellania';
+        if (x >= 2580 && x <= 2612 && z >= 3848 && z <= 3879)      return 'Etceteria';
+        if (x >= 2514 && x <= 2550 && z >= 3750 && z <= 3777)      return 'Waterbirth Island';
+        if (x >= 2614 && x <= 2674 && z >= 3653 && z <= 3696)      return 'Rellekka';
+        if (x >= 2688 && x <= 2728 && z >= 3642 && z <= 3690)      return 'Mountain Camp';
+        if (x >= 2837 && x <= 2878 && z >= 3686 && z <= 3730)      return 'Troll Stronghold';
+        if (x >= 2738 && x <= 2778 && z >= 3586 && z <= 3624)      return 'Trollheim';
+        if (x >= 2878 && x <= 2912 && z >= 3654 && z <= 3692)      return 'Trollheim';
+        if (x >= 2554 && x <= 2590 && z >= 3588 && z <= 3622)      return 'Lighthouse';
+        if (x >= 2695 && x <= 2780 && z >= 3595 && z <= 3660)      return 'Fremennik Province';
+        if (x >= 2600 && x <= 2698 && z >= 3595 && z <= 3658)      return 'Fremennik Province';
+
+        // ── Gnome areas ─────────────────────────────────────────────────────
+        if (x >= 2428 && x <= 2468 && z >= 3468 && z <= 3510)      return 'Tree Gnome Stronghold';
+        if (x >= 2514 && x <= 2544 && z >= 3155 && z <= 3178)      return 'Tree Gnome Village';
+
+        // ── Kandarin (north) ────────────────────────────────────────────────
+        if (x >= 2752 && x <= 2784 && z >= 3478 && z <= 3514)      return 'Camelot';
+        if (x >= 2696 && x <= 2730 && z >= 3457 && z <= 3495)      return "Seers' Village";
+        if (x >= 2798 && x <= 2848 && z >= 3424 && z <= 3466)      return 'Catherby';
+        if (x >= 2836 && x <= 2872 && z >= 3478 && z <= 3516)      return 'White Wolf Mountain';
+        if (x >= 2604 && x <= 2624 && z >= 3382 && z <= 3402)      return 'Fishing Guild';
+        if (x >= 2622 && x <= 2650 && z >= 3436 && z <= 3464)      return 'Hemenster';
+        if (x >= 2649 && x <= 2680 && z >= 3413 && z <= 3434)      return 'McGrubor\'s Wood';
+        if (x >= 2722 && x <= 2756 && z >= 3378 && z <= 3416)      return 'Ranging Guild';
+        if (x >= 2724 && x <= 2754 && z >= 3438 && z <= 3463)      return 'Sinclair Mansion';
+        if (x >= 2658 && x <= 2692 && z >= 3266 && z <= 3308)      return 'East Ardougne';
+        if (x >= 2622 && x <= 2660 && z >= 3278 && z <= 3322)      return 'West Ardougne';
+        if (x >= 2692 && x <= 2724 && z >= 3374 && z <= 3418)      return 'Ardougne Zoo';
+        if (x >= 2630 && x <= 2692 && z >= 3228 && z <= 3265)      return 'Port Khazard';
+        if (x >= 2684 && x <= 2716 && z >= 3155 && z <= 3185)      return 'Necromancer Tower';
+        if (x >= 2710 && x <= 2738 && z >= 3078 && z <= 3108)      return 'Fight Arena';
+        if (x >= 2710 && x <= 2754 && z >= 3108 && z <= 3148)      return 'Witchaven';
+        if (x >= 2591 && x <= 2625 && z >= 3079 && z <= 3112)      return 'Yanille';
+        if (x >= 2541 && x <= 2590 && z >= 3082 && z <= 3117)      return 'Yanille';
+        if (x >= 2543 && x <= 2562 && z >= 3108 && z <= 3128)      return 'Watchtower';
+        if (x >= 2432 && x <= 2456 && z >= 3082 && z <= 3106)      return 'Castle Wars';
+        if (x >= 2500 && x <= 2532 && z >= 3062 && z <= 3090)      return 'Jiggig';
+        if (x >= 2488 && x <= 2524 && z >= 3034 && z <= 3064)      return "Gu'Tanoth";
+        if (x >= 2578 && x <= 2630 && z >= 3037 && z <= 3075)      return 'Ogre City';
+        if (x >= 2490 && x <= 2630 && z >= 2954 && z <= 3040)      return 'Feldip Hills';
+        if (x >= 2630 && x <= 2720 && z >= 2954 && z <= 3040)      return 'Feldip Hills';
+
+        // ── Kandarin (south) ────────────────────────────────────────────────
+        if (x >= 2374 && x <= 2430 && z >= 3148 && z <= 3182)      return 'Oo\'glog';
+        if (x >= 2552 && x <= 2580 && z >= 3219 && z <= 3246)      return 'Legends\' Guild';
+        if (x >= 2558 && x <= 2590 && z >= 3306 && z <= 3340)      return 'Sorcerer\'s Tower';
+        if (x >= 2550 && x <= 2580 && z >= 3260 && z <= 3298)      return 'Clock Tower';
+        if (x >= 2430 && x <= 2460 && z >= 3218 && z <= 3248)      return 'Hazeel Cult area';
+
+        // ── Tirannwn ────────────────────────────────────────────────────────
+        if (x >= 2342 && x <= 2362 && z >= 3158 && z <= 3180)      return 'Lletya';
+        if (x >= 2246 && x <= 2378 && z >= 3130 && z <= 3365)      return 'Isafdar';
+        if (x >= 2172 && x <= 2222 && z >= 3078 && z <= 3110)      return 'Tyras Camp';
+
+        // ── Death Plateau / Burthorpe / Taverley ────────────────────────────
+        if (x >= 2852 && x <= 2896 && z >= 3584 && z <= 3628)      return 'Death Plateau';
+        if (x >= 2888 && x <= 2926 && z >= 3522 && z <= 3560)      return 'Burthorpe';
+        if (x >= 2882 && x <= 2952 && z >= 3448 && z <= 3492)      return 'Taverley';
+
+        // ── Asgarnia ────────────────────────────────────────────────────────
+        if (x >= 2985 && x <= 3010 && z >= 3504 && z <= 3526)      return "Black Knights' Fortress";
+        if (x >= 2948 && x <= 2970 && z >= 3486 && z <= 3508)      return 'Goblin Village';
+        if (x >= 2996 && x <= 3026 && z >= 3470 && z <= 3492)      return 'Ice Mountain';
+        if (x >= 3040 && x <= 3066 && z >= 3475 && z <= 3500)      return 'Monastery';
+        if (x >= 2942 && x <= 2998 && z >= 3352 && z <= 3400)      return 'Falador';
+        if (x >= 2998 && x <= 3044 && z >= 3346 && z <= 3390)      return 'Falador East';
+        if (x >= 3034 && x <= 3074 && z >= 3282 && z <= 3316)      return 'Falador Farm';
+        if (x >= 2916 && x <= 2944 && z >= 3268 && z <= 3299)      return 'Crafting Guild';
+        if (x >= 2946 && x <= 2992 && z >= 3194 && z <= 3232)      return 'Rimmington';
+        if (x >= 3004 && x <= 3040 && z >= 3194 && z <= 3234)      return 'Port Sarim';
+
+        // ── Karamja ─────────────────────────────────────────────────────────
+        if (x >= 2904 && x <= 2960 && z >= 3139 && z <= 3175)      return 'Musa Point';
+        if (x >= 2742 && x <= 2840 && z >= 3168 && z <= 3228)      return 'Brimhaven';
+        if (x >= 2844 && x <= 2896 && z >= 3021 && z <= 3088)      return 'Shilo Village';
+        if (x >= 2755 && x <= 2845 && z >= 3060 && z <= 3170)      return 'Tai Bwo Wannai';
+        if (x >= 2834 && x <= 2960 && z >= 3080 && z <= 3145)      return 'Karamja Jungle';
+        if (x >= 2740 && x <= 2960 && z >= 3120 && z <= 3200)      return 'Karamja';
+
+        // ── Misthalin ────────────────────────────────────────────────────────
+        if (x >= 3078 && x <= 3110 && z >= 3478 && z <= 3516)      return 'Edgeville';
+        if (x >= 3073 && x <= 3110 && z >= 3411 && z <= 3444)      return 'Barbarian Village';
+        if (x >= 3183 && x <= 3202 && z >= 3350 && z <= 3374)      return "Champions' Guild";
+        if (x >= 3140 && x <= 3184 && z >= 3358 && z <= 3400)      return 'Lumber Yard';
+        if (x >= 3316 && x <= 3372 && z >= 3398 && z <= 3452)      return 'Digsite';
+        if (x >= 3350 && x <= 3382 && z >= 3330 && z <= 3360)      return 'Exam Centre';
+        if (x >= 3174 && x <= 3268 && z >= 3378 && z <= 3472)      return 'Varrock';
+        if (x >= 3268 && x <= 3298 && z >= 3330 && z <= 3360)      return 'Silvarea';
+        if (x >= 2994 && x <= 3070 && z >= 3328 && z <= 3368)      return 'Dwarven Mine';
+        if (x >= 3074 && x <= 3116 && z >= 3236 && z <= 3270)      return 'Draynor Village';
+        if (x >= 3096 && x <= 3128 && z >= 3336 && z <= 3368)      return 'Draynor Manor';
+        if (x >= 3098 && x <= 3122 && z >= 3150 && z <= 3174)      return "Wizard's Tower";
+        if (x >= 3124 && x <= 3200 && z >= 3095 && z <= 3175)      return 'Lumbridge Swamp';
+        if (x >= 3207 && x <= 3237 && z >= 3203 && z <= 3240)      return 'Lumbridge';
+        if (x >= 3188 && x <= 3275 && z >= 3175 && z <= 3295)      return 'Lumbridge area';
+        if (x >= 3275 && x <= 3326 && z >= 3150 && z <= 3210)      return 'Al Kharid';
+        if (x >= 3290 && x <= 3316 && z >= 3108 && z <= 3135)      return 'Shantay Pass';
+
+        // ── Al Kharid / Desert border ────────────────────────────────────────
+        if (x >= 3322 && x <= 3395 && z >= 3145 && z <= 3215)      return 'Al Kharid Mine';
+
+        // ── Ape Atoll ───────────────────────────────────────────────────────
+        if (x >= 2750 && x <= 2800 && z >= 2738 && z <= 2788)      return 'Ape Atoll';
+
+        // ── Keldagrim ───────────────────────────────────────────────────────
+        if (x >= 2814 && x <= 2878 && z >= 10196 && z <= 10240)    return 'Keldagrim';
+
+        // ── Underground Pass / Elven lands ──────────────────────────────────
+        if (x >= 2430 && x <= 2510 && z >= 9740 && z <= 9810)      return 'Underground Pass';
+
+        return 'Gielinor';
+    }
+
     private async logout(): Promise<void> {
+        if ((window as any).DISCORD_RPC_ENABLED) {
+            fetch('/api/discord/disconnect').catch(() => {});
+        }
+
         if (this.stream) {
             this.stream.close();
         }
