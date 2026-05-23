@@ -3286,7 +3286,7 @@ export class Client extends GameShell {
     }
 
     private isCompassClick(x: number, y: number): boolean {
-        return x >= 500 && x < 620 && y >= 0 && y < 80;
+        return x >= 548 && x < 586 && y >= 2 && y < 40;
     }
 
     private resetCompassAndCamera(): void {
