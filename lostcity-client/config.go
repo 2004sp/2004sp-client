@@ -35,21 +35,27 @@ type AppConfig struct {
 
 var cfg AppConfig
 
+const defaultDiscordAppId = "1507449981689270283"
+
 // loadConfig reads config.json from next to the exe, applies defaults for
 // any missing fields, and auto-detects db.sqlite if no path is set.
 func loadConfig() {
 	cfg = AppConfig{
-		WebHost:   "localhost",
-		WebPort:   80,
-		ProxyPort: 43595,
+		WebHost:      "localhost",
+		WebPort:      80,
+		ProxyPort:    43595,
+		DiscordAppId: defaultDiscordAppId,
 	}
 
 	configPath := filepath.Join(exeDir(), "config.json")
+	needsSave := false
 	data, err := os.ReadFile(configPath)
 	if err == nil {
 		if err := json.Unmarshal(data, &cfg); err != nil {
 			log.Printf("[config] could not parse config.json: %v", err)
 		}
+	} else if os.IsNotExist(err) {
+		needsSave = true
 	}
 
 	// Apply defaults for zero values (omitempty fields).
@@ -61,6 +67,10 @@ func loadConfig() {
 	}
 	if cfg.ProxyPort == 0 {
 		cfg.ProxyPort = 43595
+	}
+	if cfg.DiscordAppId == "" {
+		cfg.DiscordAppId = defaultDiscordAppId
+		needsSave = true
 	}
 
 	// Auto-detect db.sqlite if not set in config.
@@ -75,7 +85,7 @@ func loadConfig() {
 
 	// Always write config.json next to the exe on first run so users can
 	// find and edit it (e.g. to set db_path manually).
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+	if needsSave {
 		saveConfig()
 	}
 
