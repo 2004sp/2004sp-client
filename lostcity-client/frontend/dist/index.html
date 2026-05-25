@@ -26,7 +26,7 @@
             #canvas-wrap {
                 flex: 1 1 0;
                 min-width: 0;
-                overflow: hidden;
+                overflow: auto;
                 background: #000;
                 display: flex;
                 align-items: center;
@@ -39,6 +39,26 @@
                 height: 100%;
                 max-width: calc(100vh * 765 / 503);
                 max-height: calc(100vw * 503 / 765);
+                image-rendering: pixelated;
+            }
+
+            #layout.app-fullscreen-fill #canvas-wrap,
+            #layout.app-fullscreen-half #canvas-wrap {
+                overflow: hidden;
+            }
+
+            #layout.app-fullscreen-fill #canvas {
+                width: 100% !important;
+                height: 100% !important;
+                max-width: none !important;
+                max-height: none !important;
+            }
+
+            #layout.app-fullscreen-half #canvas {
+                width: auto !important;
+                height: 100% !important;
+                max-width: none !important;
+                max-height: none !important;
             }
 
             /* ── Shared side panel base ── */
@@ -493,6 +513,44 @@
 
             .st-select:focus { outline: none; border-color: #555; }
 
+            .st-field {
+                margin-bottom: 10px;
+            }
+
+            .st-field:last-child {
+                margin-bottom: 0;
+            }
+
+            .st-field-label {
+                display: block;
+                margin-bottom: 4px;
+                font-size: 10px;
+                color: #666;
+                text-transform: uppercase;
+                letter-spacing: 0.6px;
+            }
+
+            .st-action-btn {
+                width: 100%;
+                height: 30px;
+                margin: 10px 0 0;
+                padding: 0 10px;
+                background: #1a1a1a;
+                border: 1px solid #2e2e2e;
+                border-radius: 4px;
+                color: #aaa;
+                cursor: pointer;
+                font-size: 11px;
+                text-align: left;
+                transition: background 0.12s, color 0.12s, border-color 0.12s;
+            }
+
+            .st-action-btn:hover {
+                background: #222;
+                border-color: #444;
+                color: #ccc;
+            }
+
             .st-check-row {
                 display: flex;
                 align-items: center;
@@ -632,6 +690,28 @@
                         <div class="st-section-title">Discord</div>
                         <label class="st-check-row"><input type="checkbox" id="discord-rpc"> Discord Rich Presence</label>
                     </div>
+                    <div class="st-section">
+                        <div class="st-section-title">Client Settings</div>
+                        <div class="st-field">
+                            <label class="st-field-label" for="canvas-filter-select">Scaling</label>
+                            <select id="canvas-filter-select" class="st-select">
+                                <option value="auto">Auto Scaling</option>
+                                <option value="pixelated">Pixel Scaling</option>
+                            </select>
+                        </div>
+                        <div class="st-field">
+                            <label class="st-field-label" for="canvas-size-select">Scale</label>
+                            <select id="canvas-size-select" class="st-select">
+                                <option value="1">1x</option>
+                                <option value="1.5">1.5x</option>
+                                <option value="2">2x</option>
+                            </select>
+                        </div>
+                        <label class="st-check-row"><input type="checkbox" id="low-memory-mode"> Low Memory Mode</label>
+                        <button type="button" id="fullscreen-bars" class="st-action-btn">Fullscreen (Bars)</button>
+                        <button type="button" id="fullscreen-half" class="st-action-btn">Fullscreen (Half-Fill)</button>
+                        <button type="button" id="fullscreen-fill" class="st-action-btn">Fullscreen (Fill)</button>
+                    </div>
                 </div>
             </div>
 
@@ -676,7 +756,9 @@
                     if (e.key === '`') el.classList.toggle('visible');
                 });
             })();
+        </script>
 
+        <script>
             // Hiscores
             (function () {
                 // IDs are hiscore.type = PlayerStat enum index + 1 (server uses stat + 1)
@@ -844,6 +926,13 @@
                 var btn    = document.getElementById('btn-settings');
                 var panel  = document.getElementById('settings-panel');
                 var afkSel = document.getElementById('afk-select');
+                var filterSel = document.getElementById('canvas-filter-select');
+                var sizeSel = document.getElementById('canvas-size-select');
+                var lowMemoryChk = document.getElementById('low-memory-mode');
+                var fullscreenBarsBtn = document.getElementById('fullscreen-bars');
+                var fullscreenHalfBtn = document.getElementById('fullscreen-half');
+                var fullscreenFillBtn = document.getElementById('fullscreen-fill');
+                var canvas = document.getElementById('canvas');
                 var isOpen = false;
 
                 var SC_IDS = ['drop', 'take', 'attack', 'pickpocket', 'bank', 'usequickly', 'examine'];
@@ -868,6 +957,11 @@
                     var discordEnabled = localStorage.getItem('discordRpcEnabled') === 'true';
                     window.DISCORD_RPC_ENABLED = discordEnabled;
                     if (discordChk) discordChk.checked = discordEnabled;
+
+                    var savedCanvasSize = localStorage.getItem('canvasSize');
+                    applyCanvasSize(savedCanvasSize === '1' || savedCanvasSize === '1.5' ? savedCanvasSize : '2');
+                    applyCanvasFilter(localStorage.getItem('filtering') === 'false' ? 'auto' : (localStorage.getItem('canvasFilter') || 'pixelated'));
+                    applyLowMemoryMode(localStorage.getItem('clientLowMemoryMode') === 'true');
                 }
 
                 function applyShiftPrefs(prefs) {
@@ -882,6 +976,185 @@
                     });
                     localStorage.setItem('shiftClickPrefs', JSON.stringify(prefs));
                     applyShiftPrefs(prefs);
+                }
+
+                function applyCanvasSize(size) {
+                    if (!canvas) return;
+                    if (size !== '1' && size !== '1.5' && size !== '2') {
+                        size = '2';
+                    }
+                    var scale = parseFloat(size);
+
+                    canvas.style.width = (765 * scale) + 'px';
+                    canvas.style.height = (503 * scale) + 'px';
+                    canvas.style.maxWidth = 'none';
+                    canvas.style.maxHeight = 'none';
+                    if (sizeSel) sizeSel.value = size;
+                    localStorage.setItem('canvasSize', size);
+                }
+
+                function applyCanvasFilter(filter) {
+                    if (filter !== 'auto' && filter !== 'pixelated') {
+                        filter = 'pixelated';
+                    }
+                    if (canvas) canvas.style.imageRendering = filter;
+                    if (filterSel) filterSel.value = filter;
+                    localStorage.setItem('canvasFilter', filter);
+                    localStorage.setItem('filtering', filter === 'pixelated' ? 'true' : 'false');
+                }
+
+                function applyLowMemoryMode(enabled) {
+                    window.CLIENT_LOW_MEMORY = !!enabled;
+                    if (lowMemoryChk) lowMemoryChk.checked = !!enabled;
+                    localStorage.setItem('clientLowMemoryMode', enabled ? 'true' : 'false');
+
+                    if (typeof window.setClientLowMemoryMode === 'function') {
+                        window.setClientLowMemoryMode(!!enabled);
+                    }
+                }
+
+                function fullscreenElement() {
+                    return document.fullscreenElement ||
+                        document.webkitFullscreenElement ||
+                        document.mozFullScreenElement ||
+                        document.msFullscreenElement;
+                }
+
+                async function callWailsWindow(method) {
+                    var response = await fetch('/wails/runtime', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-wails-client-id': (window._wails && window._wails.clientId) || 'client-settings'
+                        },
+                        body: JSON.stringify({
+                            object: 6,
+                            method: method
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(await response.text());
+                    }
+
+                    var contentType = response.headers.get('Content-Type') || '';
+                    return contentType.indexOf('application/json') !== -1 ? response.json() : response.text();
+                }
+
+                async function fullscreenActive() {
+                    var nativeFullscreen = false;
+                    try {
+                        nativeFullscreen = await callWailsWindow(13);
+                    } catch (_e) {
+                        nativeFullscreen = false;
+                    }
+
+                    return nativeFullscreen || fullscreenElement();
+                }
+
+                async function updateFullscreenButtons() {
+                    if (!fullscreenBarsBtn && !fullscreenHalfBtn && !fullscreenFillBtn) return;
+
+                    var layout = document.getElementById('layout');
+                    var active = await fullscreenActive();
+                    var halfActive = !!(active && layout && layout.classList.contains('app-fullscreen-half'));
+                    var fillActive = !!(active && layout && layout.classList.contains('app-fullscreen-fill'));
+
+                    if (!active && layout) {
+                        layout.classList.remove('app-fullscreen-half', 'app-fullscreen-fill');
+                    }
+                    if (fullscreenBarsBtn) {
+                        fullscreenBarsBtn.textContent = active && !halfActive && !fillActive ? 'Exit Fullscreen (Bars)' : 'Fullscreen (Bars)';
+                    }
+                    if (fullscreenHalfBtn) {
+                        fullscreenHalfBtn.textContent = halfActive ? 'Exit Fullscreen (Half-Fill)' : 'Fullscreen (Half-Fill)';
+                    }
+                    if (fullscreenFillBtn) {
+                        fullscreenFillBtn.textContent = fillActive ? 'Exit Fullscreen (Fill)' : 'Fullscreen (Fill)';
+                    }
+                }
+
+                async function exitLayoutFullscreen() {
+                    var layout = document.getElementById('layout');
+                    if (layout) layout.classList.remove('app-fullscreen-half', 'app-fullscreen-fill');
+
+                    try {
+                        if (await fullscreenActive()) {
+                            await callWailsWindow(38);
+                        }
+                        updateFullscreenButtons();
+                        return;
+                    } catch (_e) {
+                        // Browser previews do not expose the native Wails window runtime.
+                    }
+
+                    if (fullscreenElement()) {
+                        if (document.exitFullscreen) {
+                            await document.exitFullscreen();
+                        } else if (document.webkitExitFullscreen) {
+                            document.webkitExitFullscreen();
+                        } else if (document.mozCancelFullScreen) {
+                            document.mozCancelFullScreen();
+                        } else if (document.msExitFullscreen) {
+                            document.msExitFullscreen();
+                        }
+                    }
+                    updateFullscreenButtons();
+                }
+
+                async function toggleLayoutFullscreen(mode) {
+                    var layout = document.getElementById('layout');
+                    var halfMode = mode === 'half';
+                    var fillMode = mode === 'fill';
+                    var active = await fullscreenActive();
+
+                    if (active) {
+                        var activeMode = 'bars';
+                        if (layout && layout.classList.contains('app-fullscreen-half')) {
+                            activeMode = 'half';
+                        } else if (layout && layout.classList.contains('app-fullscreen-fill')) {
+                            activeMode = 'fill';
+                        }
+                        if (activeMode === mode) {
+                            await exitLayoutFullscreen();
+                            return;
+                        }
+                        if (layout) {
+                            layout.classList.toggle('app-fullscreen-half', halfMode);
+                            layout.classList.toggle('app-fullscreen-fill', fillMode);
+                        }
+                        updateFullscreenButtons();
+                        return;
+                    }
+
+                    if (layout) {
+                        layout.classList.toggle('app-fullscreen-half', halfMode);
+                        layout.classList.toggle('app-fullscreen-fill', fillMode);
+                    }
+
+                    try {
+                        await callWailsWindow(38);
+                        updateFullscreenButtons();
+                        return;
+                    } catch (_e) {
+                        // Browser previews do not expose the native Wails window runtime.
+                    }
+
+                    if (!layout) {
+                        updateFullscreenButtons();
+                        return;
+                    }
+
+                    if (layout.requestFullscreen) {
+                        await layout.requestFullscreen();
+                    } else if (layout.webkitRequestFullscreen) {
+                        layout.webkitRequestFullscreen();
+                    } else if (layout.mozRequestFullScreen) {
+                        layout.mozRequestFullScreen();
+                    } else if (layout.msRequestFullscreen) {
+                        layout.msRequestFullscreen();
+                    }
+                    updateFullscreenButtons();
                 }
 
                 afkSel.addEventListener('change', function () {
@@ -900,12 +1173,55 @@
                         window.DISCORD_RPC_ENABLED = discordChk.checked;
                         localStorage.setItem('discordRpcEnabled', discordChk.checked ? 'true' : 'false');
                         if (discordChk.checked) {
-                            // Connect immediately if already in-game
+                            // Connect immediately if already in-game.
                             fetch('/api/discord/connect').catch(function () {});
                         } else {
                             fetch('/api/discord/disconnect').catch(function () {});
                         }
                     });
+                }
+
+                if (filterSel) {
+                    filterSel.addEventListener('change', function () {
+                        applyCanvasFilter(filterSel.value);
+                    });
+                }
+
+                if (sizeSel) {
+                    sizeSel.addEventListener('change', function () {
+                        applyCanvasSize(sizeSel.value);
+                    });
+                }
+
+                if (lowMemoryChk) {
+                    lowMemoryChk.addEventListener('change', function () {
+                        applyLowMemoryMode(lowMemoryChk.checked);
+                    });
+                }
+
+                if (fullscreenBarsBtn) {
+                    fullscreenBarsBtn.addEventListener('click', function () {
+                        toggleLayoutFullscreen('bars');
+                    });
+                }
+
+                if (fullscreenHalfBtn) {
+                    fullscreenHalfBtn.addEventListener('click', function () {
+                        toggleLayoutFullscreen('half');
+                    });
+                }
+
+                if (fullscreenFillBtn) {
+                    fullscreenFillBtn.addEventListener('click', function () {
+                        toggleLayoutFullscreen('fill');
+                    });
+                }
+
+                if (fullscreenBarsBtn || fullscreenHalfBtn || fullscreenFillBtn) {
+                    document.addEventListener('fullscreenchange', updateFullscreenButtons);
+                    document.addEventListener('webkitfullscreenchange', updateFullscreenButtons);
+                    document.addEventListener('mozfullscreenchange', updateFullscreenButtons);
+                    document.addEventListener('MSFullscreenChange', updateFullscreenButtons);
                 }
 
                 btn.addEventListener('click', function () {

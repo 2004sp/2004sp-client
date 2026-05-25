@@ -636,6 +636,14 @@ export class Client extends GameShell {
             this.updateXpTrackerGlobal();
         };
 
+        (window as any).setClientLowMemoryMode = (enabled: boolean): void => {
+            if (enabled) {
+                Client.setLowMem();
+            } else {
+                Client.setHighMem();
+            }
+        };
+
         Client.nodeId = nodeid;
         Client.memServer = members;
 
@@ -12647,7 +12655,8 @@ if (typeof window !== 'undefined') {
     if (shouldAutoStart) {
         setTimeout(() => {
             try {
-                new Client(10, false, true);
+                const lowMemory = (window as any).CLIENT_LOW_MEMORY === true;
+                new Client(10, lowMemory, true);
             } catch (e) {
                 console.error('Auto-start failed:', e);
             }
