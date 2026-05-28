@@ -1115,8 +1115,15 @@ export default class World {
             // software scene. This pass is now safe because HDRenderer.queueModel has
             // strict distance, face, vertex and per-frame budgets.
             // DevTools emergency switch: window.DISABLE_HD_FAR_MODELS = true
-            if (!HDRenderer.isSafeWarmupActive() && (globalThis as any).DISABLE_HD_FAR_MODELS !== true) {
-                this.queueHdFarScene(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
+            if ((globalThis as any).DISABLE_HD_FAR_MODELS !== true) {
+                // Queue far/static HD locs even during login warmup so the first HD
+                // frames are not terrain-only. HDRenderer applies lower warmup budgets.
+                (globalThis as any)._HD_FAR_SCENE_QUEUING = true;
+                try {
+                    this.queueHdFarScene(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
+                } finally {
+                    (globalThis as any)._HD_FAR_SCENE_QUEUING = false;
+                }
             }
         }
 
@@ -1261,8 +1268,8 @@ export default class World {
         const renderedSprites = new Set<Sprite>();
         const start = performance.now();
         const tileBudget = Number((globalThis as any).HD_FAR_TILE_BUDGET ?? 2601);
-        const candidateBudget = Number((globalThis as any).HD_FAR_MODEL_CANDIDATES ?? 1600);
-        const timeBudgetMs = Number((globalThis as any).HD_FAR_TIME_BUDGET_MS ?? 18);
+        const candidateBudget = Number((globalThis as any).HD_FAR_MODEL_CANDIDATES ?? 5000);
+        const timeBudgetMs = Number((globalThis as any).HD_FAR_TIME_BUDGET_MS ?? 0);
         let tilesScanned = 0;
         let candidatesQueued = 0;
 
@@ -1280,7 +1287,7 @@ export default class World {
                 return true;
             }
 
-            if (tilesScanned++ >= tileBudget || candidatesQueued >= candidateBudget || performance.now() - start > timeBudgetMs) {
+            if (tilesScanned++ >= tileBudget || candidatesQueued >= candidateBudget || (timeBudgetMs > 0 && performance.now() - start > timeBudgetMs)) {
                 return false;
             }
 
@@ -1293,7 +1300,7 @@ export default class World {
                 const softwareVisibleRegion = x >= World.minX && x < World.maxX && z >= World.minZ && z < World.maxZ;
                 candidatesQueued += this.queueHdFarTile(tile, loopCycle, renderedSprites, softwareVisibleRegion, candidateBudget - candidatesQueued);
 
-                if (candidatesQueued >= candidateBudget || performance.now() - start > timeBudgetMs) {
+                if (candidatesQueued >= candidateBudget || (timeBudgetMs > 0 && performance.now() - start > timeBudgetMs)) {
                     return false;
                 }
             }

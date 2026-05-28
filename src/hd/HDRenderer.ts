@@ -71,7 +71,7 @@ const HD_RENDERER_BUILD = process.env.BUILD_TIME;
 const HD_SKY_COLOUR = [0.24, 0.28, 0.31] as const;
 const HD_FOG_START = 2600;
 const HD_FOG_END = 5200;
-const HD_FAR_PLANE = 6000;
+const HD_FAR_PLANE = 9000;
 
 const shadowShader: ShaderSource = {
     vertex: `#version 300 es
@@ -976,6 +976,7 @@ export default class HDRenderer {
     private static lightSpaceMatrix: Float32Array = new Float32Array(16);
     private static modelUsedKeys: Set<number> = new Set();
     private static queuedModelKeys: Set<string> = new Set();
+    private static farModelDrawCount: number = 0;
     private static modelObjectIds: WeakMap<object, number> = new WeakMap();
     private static nextModelObjectId: number = 1;
     private static lastCameraRange: { minX: number; minZ: number; maxX: number; maxZ: number; maxLevel: number } | null = null;
@@ -1149,6 +1150,7 @@ export default class HDRenderer {
         this.modelBatches.clear();
         this.transparentBatches.length = 0;
         this.modelDrawCount = 0;
+        this.farModelDrawCount = 0;
         this.modelVertexCount = 0;
         this.modelBatchCount = 0;
         this.clippedTriangleCount = 0;
@@ -1175,9 +1177,8 @@ export default class HDRenderer {
             return;
         }
 
-        if (this.safeWarmupFrames > 0) {
-            return;
-        }
+        const warmingUp = this.safeWarmupFrames > 0;
+        const isFarSceneModel = (globalThis as any)._HD_FAR_SCENE_QUEUING === true;
 
         if (!model.vertexX || !model.vertexY || !model.vertexZ || !model.faceVertexA || !model.faceVertexB || !model.faceVertexC || !model.faceColourA) {
             return;
@@ -1189,9 +1190,19 @@ export default class HDRenderer {
             return;
         }
 
-        const modelBudget = Number((globalThis as any).HD_MODEL_BUDGET ?? 700);
+        const modelBudget = Number((globalThis as any).HD_MODEL_BUDGET ?? (warmingUp ? 1200 : 3000));
         if (this.modelDrawCount >= modelBudget) {
             return;
+        }
+
+        // The far-scene pass now runs during login warmup so static locs do not pop
+        // in 2 seconds late. Keep a separate cap for far models so static scenery
+        // cannot consume the whole frame budget before actors/NPCs/player models queue.
+        if (isFarSceneModel) {
+            const farModelBudget = Number((globalThis as any).HD_FAR_MODEL_BUDGET ?? (warmingUp ? 700 : 2200));
+            if (this.farModelDrawCount >= farModelBudget) {
+                return;
+            }
         }
 
         const faceCount = Number(model.faceCount ?? 0);
@@ -1200,7 +1211,7 @@ export default class HDRenderer {
             return;
         }
 
-        const vertexBudget = Number((globalThis as any).HD_MODEL_VERTEX_BUDGET ?? 360000);
+        const vertexBudget = Number((globalThis as any).HD_MODEL_VERTEX_BUDGET ?? (warmingUp ? 180000 : 520000));
         if (this.modelVertexCount + faceCount * 3 > vertexBudget) {
             return;
         }
@@ -1388,6 +1399,9 @@ export default class HDRenderer {
         }
 
         this.modelDrawCount++;
+        if (isFarSceneModel) {
+            this.farModelDrawCount++;
+        }
         this.modelBatchCount = this.modelBatches.size + this.transparentBatches.length;
     }
 
@@ -1614,7 +1628,7 @@ export default class HDRenderer {
             if (this.safeWarmupFrames > 0) {
                 this.safeWarmupFrames--;
                 if (this.safeWarmupFrames === 0) {
-                    fetch('/debug-log', { method: 'POST', body: '[hd-render] safe warmup complete; 25-tile no-flash bright HD terrain/models enabled' }).catch(() => {});
+                    fetch('/debug-log', { method: 'POST', body: '[hd-render] safe warmup complete; immediate HD models + rotation-stable budgets enabled' }).catch(() => {});
                 }
             }
             this.publishStatus();

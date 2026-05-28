@@ -6453,11 +6453,11 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-28T15:48:36.777Z";
+var HD_RENDERER_BUILD = "2026-05-28T16:04:30.297Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
-var HD_FAR_PLANE = 6000;
+var HD_FAR_PLANE = 9000;
 var shadowShader = {
   vertex: `#version 300 es
 precision highp float;
@@ -7309,6 +7309,7 @@ class HDRenderer {
   static lightSpaceMatrix = new Float32Array(16);
   static modelUsedKeys = new Set;
   static queuedModelKeys = new Set;
+  static farModelDrawCount = 0;
   static modelObjectIds = new WeakMap;
   static nextModelObjectId = 1;
   static lastCameraRange = null;
@@ -7444,6 +7445,7 @@ class HDRenderer {
     this.modelBatches.clear();
     this.transparentBatches.length = 0;
     this.modelDrawCount = 0;
+    this.farModelDrawCount = 0;
     this.modelVertexCount = 0;
     this.modelBatchCount = 0;
     this.clippedTriangleCount = 0;
@@ -7463,9 +7465,8 @@ class HDRenderer {
     if (globalThis.DISABLE_HD_MODELS === true) {
       return;
     }
-    if (this.safeWarmupFrames > 0) {
-      return;
-    }
+    const warmingUp = this.safeWarmupFrames > 0;
+    const isFarSceneModel = globalThis._HD_FAR_SCENE_QUEUING === true;
     if (!model.vertexX || !model.vertexY || !model.vertexZ || !model.faceVertexA || !model.faceVertexB || !model.faceVertexC || !model.faceColourA) {
       return;
     }
@@ -7474,16 +7475,22 @@ class HDRenderer {
     if (relativeX * relativeX + relativeY * relativeY + relativeZ * relativeZ > maxModelDistSq) {
       return;
     }
-    const modelBudget = Number(globalThis.HD_MODEL_BUDGET ?? 700);
+    const modelBudget = Number(globalThis.HD_MODEL_BUDGET ?? (warmingUp ? 1200 : 3000));
     if (this.modelDrawCount >= modelBudget) {
       return;
+    }
+    if (isFarSceneModel) {
+      const farModelBudget = Number(globalThis.HD_FAR_MODEL_BUDGET ?? (warmingUp ? 700 : 2200));
+      if (this.farModelDrawCount >= farModelBudget) {
+        return;
+      }
     }
     const faceCount = Number(model.faceCount ?? 0);
     const maxFacesPerModel = Number(globalThis.HD_MODEL_MAX_FACES ?? 1200);
     if (faceCount <= 0 || faceCount > maxFacesPerModel) {
       return;
     }
-    const vertexBudget = Number(globalThis.HD_MODEL_VERTEX_BUDGET ?? 360000);
+    const vertexBudget = Number(globalThis.HD_MODEL_VERTEX_BUDGET ?? (warmingUp ? 180000 : 520000));
     if (this.modelVertexCount + faceCount * 3 > vertexBudget) {
       return;
     }
@@ -7639,6 +7646,9 @@ class HDRenderer {
       this.modelVertexCount += (batch.length - beforeFloats) / VERTEX_FLOATS;
     }
     this.modelDrawCount++;
+    if (isFarSceneModel) {
+      this.farModelDrawCount++;
+    }
     this.modelBatchCount = this.modelBatches.size + this.transparentBatches.length;
   }
   static modelObjectId(model) {
@@ -7860,7 +7870,7 @@ class HDRenderer {
       if (this.safeWarmupFrames > 0) {
         this.safeWarmupFrames--;
         if (this.safeWarmupFrames === 0) {
-          fetch("/debug-log", { method: "POST", body: "[hd-render] safe warmup complete; 25-tile no-flash bright HD terrain/models enabled" }).catch(() => {});
+          fetch("/debug-log", { method: "POST", body: "[hd-render] safe warmup complete; immediate HD models + rotation-stable budgets enabled" }).catch(() => {});
         }
       }
       this.publishStatus();
@@ -15475,8 +15485,13 @@ class World {
         maxTileX: hdMaxX,
         maxTileZ: hdMaxZ
       });
-      if (!HDRenderer.isSafeWarmupActive() && globalThis.DISABLE_HD_FAR_MODELS !== true) {
-        this.queueHdFarScene(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
+      if (globalThis.DISABLE_HD_FAR_MODELS !== true) {
+        globalThis._HD_FAR_SCENE_QUEUING = true;
+        try {
+          this.queueHdFarScene(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
+        } finally {
+          globalThis._HD_FAR_SCENE_QUEUING = false;
+        }
       }
     }
     this.calcOcclude();
@@ -15601,8 +15616,8 @@ class World {
     const renderedSprites = new Set;
     const start = performance.now();
     const tileBudget = Number(globalThis.HD_FAR_TILE_BUDGET ?? 2601);
-    const candidateBudget = Number(globalThis.HD_FAR_MODEL_CANDIDATES ?? 1600);
-    const timeBudgetMs = Number(globalThis.HD_FAR_TIME_BUDGET_MS ?? 18);
+    const candidateBudget = Number(globalThis.HD_FAR_MODEL_CANDIDATES ?? 5000);
+    const timeBudgetMs = Number(globalThis.HD_FAR_TIME_BUDGET_MS ?? 0);
     let tilesScanned = 0;
     let candidatesQueued = 0;
     const centreX = Math.max(minTileX, Math.min(maxTileX - 1, World.gx));
@@ -15612,7 +15627,7 @@ class World {
       if (x < minTileX || x >= maxTileX || z < minTileZ || z >= maxTileZ) {
         return true;
       }
-      if (tilesScanned++ >= tileBudget || candidatesQueued >= candidateBudget || performance.now() - start > timeBudgetMs) {
+      if (tilesScanned++ >= tileBudget || candidatesQueued >= candidateBudget || timeBudgetMs > 0 && performance.now() - start > timeBudgetMs) {
         return false;
       }
       for (let level = this.minLevel;level < this.maxTileLevel; level++) {
@@ -15622,7 +15637,7 @@ class World {
         }
         const softwareVisibleRegion = x >= World.minX && x < World.maxX && z >= World.minZ && z < World.maxZ;
         candidatesQueued += this.queueHdFarTile(tile, loopCycle, renderedSprites, softwareVisibleRegion, candidateBudget - candidatesQueued);
-        if (candidatesQueued >= candidateBudget || performance.now() - start > timeBudgetMs) {
+        if (candidatesQueued >= candidateBudget || timeBudgetMs > 0 && performance.now() - start > timeBudgetMs) {
           return false;
         }
       }
@@ -33615,4 +33630,4 @@ export {
   Client
 };
 
-//# debugId=B36BDFDD58DFC46764756E2164756E21
+//# debugId=4FACC152689AB61A64756E2164756E21
