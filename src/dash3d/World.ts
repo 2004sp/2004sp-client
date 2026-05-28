@@ -1130,6 +1130,14 @@ export default class World {
                     }
                 }
             }
+
+            // Dynamic actors must not be stored in the cached static far-scene, or
+            // they leave ghost copies while walking.  But if we rely only on the
+            // old software visibility walk, players/NPCs/bots can flicker out at
+            // certain camera angles. Queue live dynamic sprites every HD frame
+            // inside the same 25-tile radius; HDRenderer's per-frame key de-dupe
+            // prevents double drawing if the software pass also queues them.
+            this.queueHdDynamicSprites(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
         }
 
         this.calcOcclude();
@@ -1329,6 +1337,42 @@ export default class World {
                 if (!visitTile(centreX - r, centreZ + dz)) { return; }
                 if (!visitTile(centreX + r, centreZ + dz)) { return; }
             }
+        }
+    }
+
+    private queueHdDynamicSprites(minTileX: number, minTileZ: number, maxTileX: number, maxTileZ: number, maxLevel: number, loopCycle: number): void {
+        if ((globalThis as any).DISABLE_HD_DYNAMIC_SPRITES === true) {
+            return;
+        }
+
+        const budget = Number((globalThis as any).HD_DYNAMIC_MODEL_BUDGET ?? 512);
+        let queued = 0;
+        const seen = new Set<Sprite>();
+
+        for (let i: number = 0; i < this.dynamicCount && queued < budget; i++) {
+            const sprite: Sprite | null = this.dynamicSprites[i];
+            if (!sprite || seen.has(sprite)) {
+                continue;
+            }
+            seen.add(sprite);
+
+            if (sprite.level > maxLevel) {
+                continue;
+            }
+            if (sprite.maxTileX < minTileX || sprite.minTileX >= maxTileX || sprite.maxTileZ < minTileZ || sprite.minTileZ >= maxTileZ) {
+                continue;
+            }
+
+            // Static loc/scenery sprites are handled by the cached far scene. This
+            // pass is only for live moving entities, so it fixes rotation flicker
+            // without reintroducing the old cached actor ghost/trail bug.
+            const spriteSceneType = (sprite.typecode >> 29) & 0x3;
+            if (sprite.typecode > 0 && spriteSceneType === 2) {
+                continue;
+            }
+
+            sprite.model?.hdRender(loopCycle, sprite.yaw, sprite.x - World.cx, sprite.y - World.cy, sprite.z - World.cz);
+            queued++;
         }
     }
 

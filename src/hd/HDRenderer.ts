@@ -1702,7 +1702,7 @@ export default class HDRenderer {
             if (this.safeWarmupFrames > 0) {
                 this.safeWarmupFrames--;
                 if (this.safeWarmupFrames === 0) {
-                    fetch('/debug-log', { method: 'POST', body: '[hd-render] safe warmup complete; cached far-scene + stable walkable surfaces + no actor ghosts enabled' }).catch(() => {});
+                    fetch('/debug-log', { method: 'POST', body: '[hd-render] safe warmup complete; cached far-scene + stable walkable surfaces + live actor no-flicker enabled' }).catch(() => {});
                 }
             }
             this.publishStatus();

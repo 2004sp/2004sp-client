@@ -6453,7 +6453,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-28T17:04:10.439Z";
+var HD_RENDERER_BUILD = "2026-05-28T17:10:50.975Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -7927,7 +7927,7 @@ class HDRenderer {
       if (this.safeWarmupFrames > 0) {
         this.safeWarmupFrames--;
         if (this.safeWarmupFrames === 0) {
-          fetch("/debug-log", { method: "POST", body: "[hd-render] safe warmup complete; cached far-scene + stable walkable surfaces + no actor ghosts enabled" }).catch(() => {});
+          fetch("/debug-log", { method: "POST", body: "[hd-render] safe warmup complete; cached far-scene + stable walkable surfaces + live actor no-flicker enabled" }).catch(() => {});
         }
       }
       this.publishStatus();
@@ -15622,6 +15622,7 @@ class World {
           }
         }
       }
+      this.queueHdDynamicSprites(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
     }
     this.calcOcclude();
     World.fillLeft = 0;
@@ -15792,6 +15793,33 @@ class World {
           return;
         }
       }
+    }
+  }
+  queueHdDynamicSprites(minTileX, minTileZ, maxTileX, maxTileZ, maxLevel, loopCycle) {
+    if (globalThis.DISABLE_HD_DYNAMIC_SPRITES === true) {
+      return;
+    }
+    const budget = Number(globalThis.HD_DYNAMIC_MODEL_BUDGET ?? 512);
+    let queued = 0;
+    const seen = new Set;
+    for (let i = 0;i < this.dynamicCount && queued < budget; i++) {
+      const sprite = this.dynamicSprites[i];
+      if (!sprite || seen.has(sprite)) {
+        continue;
+      }
+      seen.add(sprite);
+      if (sprite.level > maxLevel) {
+        continue;
+      }
+      if (sprite.maxTileX < minTileX || sprite.minTileX >= maxTileX || sprite.maxTileZ < minTileZ || sprite.minTileZ >= maxTileZ) {
+        continue;
+      }
+      const spriteSceneType = sprite.typecode >> 29 & 3;
+      if (sprite.typecode > 0 && spriteSceneType === 2) {
+        continue;
+      }
+      sprite.model?.hdRender(loopCycle, sprite.yaw, sprite.x - World.cx, sprite.y - World.cy, sprite.z - World.cz);
+      queued++;
     }
   }
   queueHdFarTile(tile, loopCycle, renderedSprites, softwareVisibleRegion, remainingBudget) {
@@ -33763,4 +33791,4 @@ export {
   Client
 };
 
-//# debugId=663B69A1CC55B16B64756E2164756E21
+//# debugId=85526B8142140B3064756E2164756E21
