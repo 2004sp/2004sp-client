@@ -6453,7 +6453,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-28T16:22:24.538Z";
+var HD_RENDERER_BUILD = "2026-05-28T16:56:06.051Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -6842,13 +6842,19 @@ void main() {
     float viewX = relative.z * u_sinEyeYaw + relative.x * u_cosEyeYaw;
     float viewY = relative.y * u_cosEyePitch - zPrime * u_sinEyePitch;
     float viewZ = relative.y * u_sinEyePitch + zPrime * u_cosEyePitch;
-    float depth = ((viewZ - u_nearPlane) / max(u_farPlane - u_nearPlane, 1.0)) * 2.0 - 1.0;
+    // Use proper perspective clip coordinates instead of manually dividing x/y by
+    // viewZ with w=1. The old path could make near-plane terrain/model triangles
+    // fold or vanish at specific camera rotations, especially bridge/walkable
+    // surfaces close to the camera. With w=viewZ, WebGL clips the triangle against
+    // the near plane consistently while keeping the same screen projection.
+    float safeRange = max(u_farPlane - u_nearPlane, 1.0);
+    float ndcDepth = ((viewZ - u_nearPlane) / safeRange) * 2.0 - 1.0;
 
     gl_Position = vec4(
-        viewX * u_projectionScale.x / max(viewZ, 1.0),
-        -viewY * u_projectionScale.y / max(viewZ, 1.0),
-        depth,
-        1.0
+        viewX * u_projectionScale.x,
+        -viewY * u_projectionScale.y,
+        ndcDepth * viewZ,
+        viewZ
     );
 
     v_worldPos = a_position;
@@ -7523,12 +7529,12 @@ class HDRenderer {
     if (relativeX * relativeX + relativeY * relativeY + relativeZ * relativeZ > maxModelDistSq) {
       return;
     }
-    const modelBudget = Number(globalThis.HD_MODEL_BUDGET ?? (warmingUp ? 650 : 1400));
+    const modelBudget = Number(globalThis.HD_MODEL_BUDGET ?? (isFarSceneModel ? 9000 : warmingUp ? 650 : 1600));
     if (this.modelDrawCount >= modelBudget) {
       return;
     }
     if (isFarSceneModel) {
-      const farModelBudget = Number(globalThis.HD_FAR_MODEL_BUDGET ?? (warmingUp ? 900 : 1800));
+      const farModelBudget = Number(globalThis.HD_FAR_MODEL_BUDGET ?? (warmingUp ? 2500 : 9000));
       if (this.farModelDrawCount >= farModelBudget) {
         return;
       }
@@ -7538,7 +7544,7 @@ class HDRenderer {
     if (faceCount <= 0 || faceCount > maxFacesPerModel) {
       return;
     }
-    const vertexBudget = Number(globalThis.HD_MODEL_VERTEX_BUDGET ?? (warmingUp ? 120000 : 260000));
+    const vertexBudget = Number(globalThis.HD_MODEL_VERTEX_BUDGET ?? (isFarSceneModel ? 1800000 : warmingUp ? 120000 : 320000));
     if (this.modelVertexCount + faceCount * 3 > vertexBudget) {
       return;
     }
@@ -7616,9 +7622,9 @@ class HDRenderer {
       }
       this.countMaterial(material);
       const batchKey = modelTexture ? texture : -1;
-      const batch = alpha < 1 ? [] : this.modelBatches.get(batchKey) ?? [];
+      const batch = alpha < 1 ? [] : targetModelBatches.get(batchKey) ?? [];
       if (alpha >= 1) {
-        this.modelBatches.set(batchKey, batch);
+        targetModelBatches.set(batchKey, batch);
       }
       uvA[0] = 0;
       uvA[1] = 0;
@@ -7675,7 +7681,8 @@ class HDRenderer {
         this.clippedTriangleCount++;
         continue;
       }
-      if (outLen === 3 && this.isBackface(this._fvOut[0], this._fvOut[1], this._fvOut[2])) {
+      const isWalkableSurfaceFace = Math.abs(norm[1]) > 0.28 && material !== 1 /* Water */ && material !== 2 /* Lava */;
+      if (outLen === 3 && !isWalkableSurfaceFace && this.isBackface(this._fvOut[0], this._fvOut[1], this._fvOut[2])) {
         this.skippedBackfaceCount++;
         continue;
       }
@@ -7920,7 +7927,7 @@ class HDRenderer {
       if (this.safeWarmupFrames > 0) {
         this.safeWarmupFrames--;
         if (this.safeWarmupFrames === 0) {
-          fetch("/debug-log", { method: "POST", body: "[hd-render] safe warmup complete; cached far-scene HD performance mode enabled" }).catch(() => {});
+          fetch("/debug-log", { method: "POST", body: "[hd-render] safe warmup complete; cached far-scene + stable walkable surfaces enabled" }).catch(() => {});
         }
       }
       this.publishStatus();
@@ -15738,8 +15745,8 @@ class World {
     const renderedSprites = new Set;
     const start = performance.now();
     const tileBudget = Number(globalThis.HD_FAR_TILE_BUDGET ?? 2601);
-    const candidateBudget = Number(globalThis.HD_FAR_MODEL_CANDIDATES ?? 2600);
-    const timeBudgetMs = Number(globalThis.HD_FAR_TIME_BUDGET_MS ?? 12);
+    const candidateBudget = Number(globalThis.HD_FAR_MODEL_CANDIDATES ?? 12000);
+    const timeBudgetMs = Number(globalThis.HD_FAR_TIME_BUDGET_MS ?? 0);
     let tilesScanned = 0;
     let candidatesQueued = 0;
     const centreX = Math.max(minTileX, Math.min(maxTileX - 1, World.gx));
@@ -33752,4 +33759,4 @@ export {
   Client
 };
 
-//# debugId=6A8DA81286D5BD3964756E2164756E21
+//# debugId=C9E565625163F62764756E2164756E21

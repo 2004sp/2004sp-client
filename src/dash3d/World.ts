@@ -1273,8 +1273,8 @@ export default class World {
         const renderedSprites = new Set<Sprite>();
         const start = performance.now();
         const tileBudget = Number((globalThis as any).HD_FAR_TILE_BUDGET ?? 2601);
-        const candidateBudget = Number((globalThis as any).HD_FAR_MODEL_CANDIDATES ?? 2600);
-        const timeBudgetMs = Number((globalThis as any).HD_FAR_TIME_BUDGET_MS ?? 12);
+        const candidateBudget = Number((globalThis as any).HD_FAR_MODEL_CANDIDATES ?? 12000);
+        const timeBudgetMs = Number((globalThis as any).HD_FAR_TIME_BUDGET_MS ?? 0);
         let tilesScanned = 0;
         let candidatesQueued = 0;
 
@@ -1283,6 +1283,9 @@ export default class World {
         // on distant edge tiles, so models only appeared when they were extremely close
         // or at certain camera angles. This keeps the stable static-far filtering but
         // fills the full 25-tile radius in a predictable nearest-first order.
+        // Default time budget is 0/unlimited because this pass is cached; a partial
+        // first cache build is worse than a slightly longer one-off build because it
+        // leaves bridges/docks/platforms missing until the next range change.
         const centreX = Math.max(minTileX, Math.min(maxTileX - 1, World.gx));
         const centreZ = Math.max(minTileZ, Math.min(maxTileZ - 1, World.gz));
         const maxRadius = Math.max(centreX - minTileX, maxTileX - 1 - centreX, centreZ - minTileZ, maxTileZ - 1 - centreZ);

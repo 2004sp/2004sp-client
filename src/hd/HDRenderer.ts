@@ -402,13 +402,19 @@ void main() {
     float viewX = relative.z * u_sinEyeYaw + relative.x * u_cosEyeYaw;
     float viewY = relative.y * u_cosEyePitch - zPrime * u_sinEyePitch;
     float viewZ = relative.y * u_sinEyePitch + zPrime * u_cosEyePitch;
-    float depth = ((viewZ - u_nearPlane) / max(u_farPlane - u_nearPlane, 1.0)) * 2.0 - 1.0;
+    // Use proper perspective clip coordinates instead of manually dividing x/y by
+    // viewZ with w=1. The old path could make near-plane terrain/model triangles
+    // fold or vanish at specific camera rotations, especially bridge/walkable
+    // surfaces close to the camera. With w=viewZ, WebGL clips the triangle against
+    // the near plane consistently while keeping the same screen projection.
+    float safeRange = max(u_farPlane - u_nearPlane, 1.0);
+    float ndcDepth = ((viewZ - u_nearPlane) / safeRange) * 2.0 - 1.0;
 
     gl_Position = vec4(
-        viewX * u_projectionScale.x / max(viewZ, 1.0),
-        -viewY * u_projectionScale.y / max(viewZ, 1.0),
-        depth,
-        1.0
+        viewX * u_projectionScale.x,
+        -viewY * u_projectionScale.y,
+        ndcDepth * viewZ,
+        viewZ
     );
 
     v_worldPos = a_position;
@@ -1249,7 +1255,7 @@ export default class HDRenderer {
             return;
         }
 
-        const modelBudget = Number((globalThis as any).HD_MODEL_BUDGET ?? (warmingUp ? 650 : 1400));
+        const modelBudget = Number((globalThis as any).HD_MODEL_BUDGET ?? (isFarSceneModel ? 9000 : (warmingUp ? 650 : 1600)));
         if (this.modelDrawCount >= modelBudget) {
             return;
         }
@@ -1258,7 +1264,7 @@ export default class HDRenderer {
         // in 2 seconds late. Keep a separate cap for far models so static scenery
         // cannot consume the whole frame budget before actors/NPCs/player models queue.
         if (isFarSceneModel) {
-            const farModelBudget = Number((globalThis as any).HD_FAR_MODEL_BUDGET ?? (warmingUp ? 900 : 1800));
+            const farModelBudget = Number((globalThis as any).HD_FAR_MODEL_BUDGET ?? (warmingUp ? 2500 : 9000));
             if (this.farModelDrawCount >= farModelBudget) {
                 return;
             }
@@ -1270,7 +1276,7 @@ export default class HDRenderer {
             return;
         }
 
-        const vertexBudget = Number((globalThis as any).HD_MODEL_VERTEX_BUDGET ?? (warmingUp ? 120000 : 260000));
+        const vertexBudget = Number((globalThis as any).HD_MODEL_VERTEX_BUDGET ?? (isFarSceneModel ? 1800000 : (warmingUp ? 120000 : 320000)));
         if (this.modelVertexCount + faceCount * 3 > vertexBudget) {
             return;
         }
@@ -1381,9 +1387,9 @@ export default class HDRenderer {
             }
             this.countMaterial(material);
             const batchKey = modelTexture ? texture : -1;
-            const batch = alpha < 1 ? [] : (this.modelBatches.get(batchKey) ?? []);
+            const batch = alpha < 1 ? [] : (targetModelBatches.get(batchKey) ?? []);
             if (alpha >= 1) {
-                this.modelBatches.set(batchKey, batch);
+                targetModelBatches.set(batchKey, batch);
             }
 
             // Set UV coordinates in-place (no allocation).
@@ -1428,7 +1434,14 @@ export default class HDRenderer {
             }
 
             // Backface check only when no clipping occurred (outLen === 3 ↔ all verts inside).
-            if (outLen === 3 && this.isBackface(this._fvOut[0], this._fvOut[1], this._fvOut[2])) {
+            // 2004 map geometry has a lot of one-sided/differently-wound flat model
+            // faces used as walkable surfaces: bridges, docks, gangplanks, raised
+            // floors and platforms. CPU backface-culling those faces makes them vanish
+            // at specific camera rotations across the map. Keep near-horizontal
+            // model faces double-sided; roofs are still hidden by World's loc-shape
+            // filtering, not by this triangle culler.
+            const isWalkableSurfaceFace = Math.abs(norm[1]) > 0.28 && material !== HDMaterial.Water && material !== HDMaterial.Lava;
+            if (outLen === 3 && !isWalkableSurfaceFace && this.isBackface(this._fvOut[0], this._fvOut[1], this._fvOut[2])) {
                 this.skippedBackfaceCount++;
                 continue;
             }
@@ -1689,7 +1702,7 @@ export default class HDRenderer {
             if (this.safeWarmupFrames > 0) {
                 this.safeWarmupFrames--;
                 if (this.safeWarmupFrames === 0) {
-                    fetch('/debug-log', { method: 'POST', body: '[hd-render] safe warmup complete; cached far-scene HD performance mode enabled' }).catch(() => {});
+                    fetch('/debug-log', { method: 'POST', body: '[hd-render] safe warmup complete; cached far-scene + stable walkable surfaces enabled' }).catch(() => {});
                 }
             }
             this.publishStatus();
