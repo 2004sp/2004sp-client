@@ -3,8 +3,6 @@ import path from 'path';
 
 import { minify } from 'terser';
 
-import { nth_identifier } from './identifier.js';
-
 const define = {
     'process.env.SECURE_ORIGIN': JSON.stringify(process.env.SECURE_ORIGIN ?? 'false'),
     // original key, used 2003-2010
@@ -15,16 +13,60 @@ const define = {
 
 const hdRuntimeDefaults = `(() => {
     const g = globalThis;
-    // HD static scenery is cached and should not depend on the old software
-    // camera visibility pass. Give the cache enough room to keep walls,
-    // fences, bridges and wall-decor queued across dense areas so they do
-    // not disappear/reappear while rotating the camera.
     g.HD_FAR_TILE_BUDGET ??= 2601;
     g.HD_FAR_MODEL_CANDIDATES ??= 50000;
     g.HD_FAR_MODEL_BUDGET ??= 30000;
     g.HD_MODEL_BUDGET ??= 30000;
     g.HD_MODEL_VERTEX_BUDGET ??= 4000000;
     g.HD_FAR_TIME_BUDGET_MS ??= 0;
+})();
+`;
+
+const fpsSettingsRuntimePatch = `(() => {
+    if (globalThis.__RS_FPS_SETTING_PATCH__) return;
+    globalThis.__RS_FPS_SETTING_PATCH__ = true;
+
+    const fmt = bytes => bytes > 0 ? (bytes / 1048576).toFixed(1) + ' MB' : 'n/a';
+    const memLine = () => {
+        const m = performance && performance.memory ? performance.memory : null;
+        return m ? ('Memory: ' + fmt(m.usedJSHeapSize) + ' / ' + fmt(m.totalJSHeapSize)) : 'Memory: n/a';
+    };
+
+    function setVisible(on) {
+        globalThis.RS_PERF_OVERLAY_VISIBLE = !!on;
+        try { localStorage.setItem('showFpsOverlay', on ? 'true' : 'false'); } catch (_) {}
+        const el = document.getElementById('rs-perf-debug-overlay');
+        if (el) el.style.display = on ? 'block' : 'none';
+    }
+
+    function patchText() {
+        const el = document.getElementById('rs-perf-debug-overlay');
+        if (el && el.textContent) {
+            const lines = el.textContent.split('\n').filter(line => line.indexOf('F10 toggle') === -1 && !line.startsWith('Memory: '));
+            if (lines[0] && lines[0].startsWith('Perf Debug Overlay')) lines[0] = 'Perf Debug Overlay';
+            const i = lines.findIndex(line => line.startsWith('Avg frame:'));
+            if (i !== -1) lines.splice(i + 1, 0, memLine());
+            el.textContent = lines.join('\n');
+        }
+        requestAnimationFrame(patchText);
+    }
+
+    function addSetting() {
+        const body = document.querySelector('#settings-panel .st-body');
+        if (!body || document.getElementById('misc-fps')) return;
+        const section = document.createElement('div');
+        section.className = 'st-section';
+        section.innerHTML = '<div class="st-section-title">Misc</div><label class="st-check-row"><input type="checkbox" id="misc-fps"> FPS</label>';
+        body.appendChild(section);
+        const chk = document.getElementById('misc-fps');
+        chk.checked = localStorage.getItem('showFpsOverlay') !== 'false';
+        setVisible(chk.checked);
+        chk.addEventListener('change', () => setVisible(chk.checked));
+    }
+
+    document.addEventListener('DOMContentLoaded', addSetting);
+    setInterval(addSetting, 500);
+    requestAnimationFrame(patchText);
 })();
 `;
 
@@ -57,12 +99,6 @@ async function bunBuild(entry: string, external: string[] = [], minify = true, d
 }
 
 function patchClientBundle(script: BunOutput): void {
-    // In the original 2004 client, "high detail" also controlled whether audio
-    // was loaded. Our launcher now has three modes:
-    //   Default    = normal software client, audio on, 50 FPS
-    //   Low memory = reduced graphics/memory, audio on, 50 FPS
-    //   HD         = WebGL HD renderer, audio on, 60 FPS/render-refresh smoothing
-    // Keep the HD renderer toggle separate from the old software high-detail flag.
     const replacements: Array<[string, string]> = [
         [
             'Pix3D.highDetail = enabled;\n        Pix3D.lowDetail = !enabled;\n        window.CLIENT_HD_MODE = enabled;',
@@ -80,9 +116,6 @@ function patchClientBundle(script: BunOutput): void {
             'if (Pix3D.highDetail) {\n                    this.areaViewport?.drawKeyed(4, 4, HD_VIEWPORT_KEY);\n                } else {',
             'if (HDRenderer.isEnabled()) {\n                    this.areaViewport?.drawKeyed(4, 4, HD_VIEWPORT_KEY);\n                } else {'
         ],
-
-        // Audio must not be tied to Client.lowMem anymore. Low Memory should reduce
-        // graphics/memory only; music tab, music changes and sound effects still work.
         [
             'if (!Client.lowMem) {\n                this.midiSong = 0;',
             'if (true) {\n                this.midiSong = 0;'
@@ -107,9 +140,14 @@ function patchClientBundle(script: BunOutput): void {
             'this.midiActive && !Client.lowMem',
             'this.midiActive'
         ],
-
-        // Keep the old broad compatibility replacements last. These only affect old
-        // high-detail/audio prompt paths when the generated JS still contains them.
+        [
+            'return shape >= LocShape.ROOF_STRAIGHT && shape <= LocShape.ROOFEDGE_SQUARE_CORNER;',
+            'return globalThis.HD_HIDE_ROOF_SHAPES === true && shape >= LocShape.ROOF_STRAIGHT && shape <= LocShape.ROOFEDGE_SQUARE_CORNER;'
+        ],
+        [
+            'return shape >= 12 && shape <= 21;',
+            'return globalThis.HD_HIDE_ROOF_SHAPES === true && shape >= 12 && shape <= 21;'
+        ],
         [
             'if(!Client.lowMem){',
             'if(!Client.lowMem||globalThis.CLIENT_LOW_MEMORY!==true){'
@@ -124,7 +162,7 @@ function patchClientBundle(script: BunOutput): void {
         script.source = script.source.split(from).join(to);
     }
 
-    script.source = hdRuntimeDefaults + script.source;
+    script.source = hdRuntimeDefaults + fpsSettingsRuntimePatch + script.source;
 }
 
 async function applyTerser(script: BunOutput): Promise<boolean> {
@@ -133,95 +171,10 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
             content: script.sourcemap
         },
         toplevel: true,
-        // format: {
-        //     beautify: true
-        // },
         compress: {
             ecma: 2020
         },
-        mangle: {
-            nth_identifier: nth_identifier,
-            properties: {
-                reserved: [
-                    // xpTrackerData entry fields (read by un-bundled HTML)
-                    'skill',
-                    'colour',
-                    'gained',
-                    'xp',
-                    'progressPct',
-                    'xpToNext',
-
-                    // world map panel: playerMapPos + postMessage fields
-                    'playerMapPos',
-                    'tileX',
-                    'tileZ',
-                    'type',
-                    'playerPos',
-
-                    // HD runtime debug/budget globals
-                    'HD_FAR_TILE_BUDGET',
-                    'HD_FAR_MODEL_CANDIDATES',
-                    'HD_FAR_MODEL_BUDGET',
-                    'HD_MODEL_BUDGET',
-                    'HD_MODEL_VERTEX_BUDGET',
-                    'HD_FAR_TIME_BUDGET_MS',
-                    'CLIENT_LOW_MEMORY',
-                    'CLIENT_HD_MODE',
-
-                    // stdlib
-                    'willReadFrequently',
-                    'usedJSHeapSize',
-
-                    // wasm
-                    // must be callable:
-                    '_abort_js',
-                    'emscripten_resize_heap',
-                    'fd_close',
-                    'fd_seek',
-                    'fd_write',
-                    // must be an object:
-                    'env',
-                    'wasi_snapshot_preview1',
-                    // is not an object:
-                    'instance',
-                    // is not a function:
-                    'emscripten_stack_init',
-                    'emscripten_stack_get_end',
-                    '__wasm_call_ctors',
-                    // imports:
-                    'HEAPU8',
-                    // exports:
-                    '_emscripten_stack_restore',
-                    '_emscripten_stack_alloc',
-                    'emscripten_stack_get_current',
-                    'memory',
-                    '_malloc',
-                    'malloc',
-                    '_free',
-                    'free',
-                    '_realloc',
-                    'realloc',
-                    '__indirect_function_table',
-                    '_tsf_load_memory',
-                    'tsf_load_memory',
-                    '_tsf_close',
-                    'tsf_close',
-                    '_tsf_reset',
-                    'tsf_reset',
-                    '_tsf_set_output',
-                    'tsf_set_output',
-                    '_tsf_channel_set_bank_preset',
-                    'tsf_channel_set_bank_preset',
-                    '_tml_load_memory',
-                    'tml_load_memory',
-                    '_midi_render',
-                    'midi_render',
-                    'setValue',
-                    'getValue',
-                    'calledRun'
-                ]
-            }
-        }
+        mangle: false
     });
 
     script.source = mini.code ?? '';
