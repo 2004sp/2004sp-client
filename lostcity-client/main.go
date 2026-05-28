@@ -204,6 +204,163 @@ window.HD_TEXTURE_DEBUG_MODE = window.HD_TEXTURE_DEBUG_MODE || 'normal';
 
   window.setHdTextureDebugMode = setHdTextureDebugMode;
 })();
+
+(function () {
+  if (window.__RS_PERF_OVERLAY_INSTALLED__) return;
+  window.__RS_PERF_OVERLAY_INSTALLED__ = true;
+  window.RS_PERF_OVERLAY_VISIBLE = window.RS_PERF_OVERLAY_VISIBLE !== false;
+
+  const perf = {
+    fps: 0,
+    frameMs: 0,
+    avgFrameMs: 0,
+    drawCallsLastFrame: 0,
+    drawCallsThisFrame: 0,
+    frames: 0,
+    frameMsSum: 0,
+    lastFrameTime: performance.now(),
+    lastSecondTime: performance.now(),
+    rebuildsThisSecond: 0,
+    rebuildsPerSecond: 0,
+    lastTerrainVertexCount: -1,
+    lastModelBatchCount: -1,
+    lastTextureAtlasLoadedCount: -1
+  };
+
+  function hookWebGlDrawCalls(proto) {
+    if (!proto || proto.__RS_DRAW_CALLS_HOOKED__) return;
+    proto.__RS_DRAW_CALLS_HOOKED__ = true;
+
+    const drawArrays = proto.drawArrays;
+    if (typeof drawArrays === 'function') {
+      proto.drawArrays = function () {
+        perf.drawCallsThisFrame++;
+        return drawArrays.apply(this, arguments);
+      };
+    }
+
+    const drawElements = proto.drawElements;
+    if (typeof drawElements === 'function') {
+      proto.drawElements = function () {
+        perf.drawCallsThisFrame++;
+        return drawElements.apply(this, arguments);
+      };
+    }
+  }
+
+  hookWebGlDrawCalls(window.WebGLRenderingContext && window.WebGLRenderingContext.prototype);
+  hookWebGlDrawCalls(window.WebGL2RenderingContext && window.WebGL2RenderingContext.prototype);
+
+  function ensureOverlay() {
+    let el = document.getElementById('rs-perf-debug-overlay');
+    if (el) return el;
+
+    el = document.createElement('pre');
+    el.id = 'rs-perf-debug-overlay';
+    el.style.position = 'fixed';
+    el.style.right = '10px';
+    el.style.top = '10px';
+    el.style.zIndex = '2147483647';
+    el.style.margin = '0';
+    el.style.padding = '8px 10px';
+    el.style.minWidth = '220px';
+    el.style.background = 'rgba(0, 0, 0, 0.78)';
+    el.style.color = '#00ff66';
+    el.style.border = '1px solid rgba(0, 255, 102, 0.8)';
+    el.style.borderRadius = '4px';
+    el.style.font = '12px Consolas, monospace';
+    el.style.lineHeight = '1.35';
+    el.style.pointerEvents = 'none';
+    el.textContent = 'Perf overlay loading...';
+    document.documentElement.appendChild(el);
+    return el;
+  }
+
+  function updateRebuildCounter(status) {
+    if (!status) return;
+
+    const terrainChanged = typeof status.terrainVertexCount === 'number' &&
+      perf.lastTerrainVertexCount !== -1 &&
+      status.terrainVertexCount !== perf.lastTerrainVertexCount;
+    const batchChanged = typeof status.modelBatchCount === 'number' &&
+      perf.lastModelBatchCount !== -1 &&
+      status.modelBatchCount !== perf.lastModelBatchCount;
+    const atlasChanged = typeof status.textureAtlasLoadedCount === 'number' &&
+      perf.lastTextureAtlasLoadedCount !== -1 &&
+      status.textureAtlasLoadedCount !== perf.lastTextureAtlasLoadedCount;
+
+    if (terrainChanged || batchChanged || atlasChanged) {
+      perf.rebuildsThisSecond++;
+    }
+
+    if (typeof status.terrainVertexCount === 'number') perf.lastTerrainVertexCount = status.terrainVertexCount;
+    if (typeof status.modelBatchCount === 'number') perf.lastModelBatchCount = status.modelBatchCount;
+    if (typeof status.textureAtlasLoadedCount === 'number') perf.lastTextureAtlasLoadedCount = status.textureAtlasLoadedCount;
+  }
+
+  function renderOverlay() {
+    const el = ensureOverlay();
+    el.style.display = window.RS_PERF_OVERLAY_VISIBLE ? 'block' : 'none';
+    if (!window.RS_PERF_OVERLAY_VISIBLE) return;
+
+    const status = window.HD_RENDERER_STATUS || null;
+    updateRebuildCounter(status);
+
+    const visibleObjects = status ? (status.modelDrawCount || 0) : 0;
+    const culledObjects = status ? ((status.clippedTriangleCount || 0) + (status.skippedBackfaceCount || 0)) : 0;
+    const terrainVerts = status ? (status.terrainVertexCount || 0) : 0;
+    const modelVerts = status ? (status.modelVertexCount || 0) : 0;
+
+    el.textContent = [
+      'Perf Debug Overlay  (F10 toggle)',
+      'FPS: ' + perf.fps,
+      'Frame time: ' + perf.frameMs.toFixed(2) + ' ms',
+      'Avg frame: ' + perf.avgFrameMs.toFixed(2) + ' ms',
+      'Draw calls: ' + perf.drawCallsLastFrame,
+      'Visible objects: ' + visibleObjects,
+      'Culled objects: ' + culledObjects,
+      'Rebuilds/sec: ' + perf.rebuildsPerSecond,
+      'Terrain verts: ' + terrainVerts,
+      'Model verts: ' + modelVerts,
+      'HD: ' + (status ? (status.enabled ? 'enabled' : 'disabled') : 'not ready')
+    ].join('\n');
+  }
+
+  function tick(now) {
+    perf.frameMs = now - perf.lastFrameTime;
+    perf.lastFrameTime = now;
+    perf.frameMsSum += perf.frameMs;
+    perf.frames++;
+
+    perf.drawCallsLastFrame = perf.drawCallsThisFrame;
+    perf.drawCallsThisFrame = 0;
+
+    if (now - perf.lastSecondTime >= 1000) {
+      perf.fps = perf.frames;
+      perf.avgFrameMs = perf.frames > 0 ? perf.frameMsSum / perf.frames : 0;
+      perf.frames = 0;
+      perf.frameMsSum = 0;
+      perf.lastSecondTime = now;
+      perf.rebuildsPerSecond = perf.rebuildsThisSecond;
+      perf.rebuildsThisSecond = 0;
+    }
+
+    renderOverlay();
+    requestAnimationFrame(tick);
+  }
+
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'F10') {
+      e.preventDefault();
+      e.stopPropagation();
+      window.RS_PERF_OVERLAY_VISIBLE = !window.RS_PERF_OVERLAY_VISIBLE;
+      renderOverlay();
+    }
+  }, true);
+
+  window.RS_PERF_STATS = perf;
+  requestAnimationFrame(tick);
+})();
 `)
 		return
 
