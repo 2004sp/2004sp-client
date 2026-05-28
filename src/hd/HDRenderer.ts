@@ -991,6 +991,8 @@ export default class HDRenderer {
     private static lightSpaceMatrix: Float32Array = new Float32Array(16);
     private static modelUsedKeys: Set<number> = new Set();
     private static queuedModelKeys: Set<string> = new Set();
+    private static staticFarTransparentBuffers: Map<number, WebGLBuffer> = new Map();
+    private static staticFarTransparentVaos: Map<number, WebGLVertexArrayObject> = new Map();
     private static farModelDrawCount: number = 0;
     private static modelObjectIds: WeakMap<object, number> = new WeakMap();
     private static nextModelObjectId: number = 1;
@@ -1099,6 +1101,16 @@ export default class HDRenderer {
         return this.safeWarmupFrames > 0;
     }
 
+    // Call this before mapBuild on first login so the atlas upload happens while
+    // the loading screen is still showing, not on the first visible HD frame.
+    static prewarmAtlas(): void {
+        if (!this.enabled) {
+            return;
+        }
+        this.init();
+        this.ensureTextureAtlas();
+    }
+
     static beginStaticFarScene(key: string): boolean {
         if ((globalThis as any).DISABLE_HD_FAR_MODELS === true) {
             return false;
@@ -1141,9 +1153,21 @@ export default class HDRenderer {
                     this.gl.deleteBuffer(buffer);
                 }
             }
+            for (const vao of this.staticFarTransparentVaos.values()) {
+                if (vao) {
+                    this.gl.deleteVertexArray(vao);
+                }
+            }
+            for (const buffer of this.staticFarTransparentBuffers.values()) {
+                if (buffer) {
+                    this.gl.deleteBuffer(buffer);
+                }
+            }
         }
         this.staticFarModelVaos.clear();
         this.staticFarModelBuffers.clear();
+        this.staticFarTransparentVaos.clear();
+        this.staticFarTransparentBuffers.clear();
     }
 
 
@@ -1242,8 +1266,9 @@ export default class HDRenderer {
 
         const warmingUp = this.safeWarmupFrames > 0;
         const isFarSceneModel = (globalThis as any)._HD_FAR_SCENE_QUEUING === true;
-        const targetModelBatches = this.staticFarSceneBuilding && isFarSceneModel ? this.staticFarModelBatches : this.modelBatches;
-        const targetTransparentBatches = this.staticFarSceneBuilding && isFarSceneModel ? this.staticFarTransparentBatches : this.transparentBatches;
+        const cacheStaticFarScene = this.staticFarSceneBuilding && isFarSceneModel;
+        const targetModelBatches = cacheStaticFarScene ? this.staticFarModelBatches : this.modelBatches;
+        const targetTransparentBatches = cacheStaticFarScene ? this.staticFarTransparentBatches : this.transparentBatches;
 
         if (!model.vertexX || !model.vertexY || !model.vertexZ || !model.faceVertexA || !model.faceVertexB || !model.faceVertexC || !model.faceColourA) {
             return;
@@ -1425,26 +1450,42 @@ export default class HDRenderer {
             fv2.uv[0] = uvC[0]; fv2.uv[1] = uvC[1];
             fv2.depth = this.faceVertexDepth(pc);
 
-            // Clip against near plane into _fvOut (no allocation).
-            this.clipPolygonToNearInto(3);
-            const outLen = this._fvOutLen;
-            if (outLen < 3) {
-                this.clippedTriangleCount++;
-                continue;
-            }
+            if (cacheStaticFarScene) {
+                // Static far-scene buffers are reused while the camera rotates. They
+                // must therefore be camera-independent. Do NOT near-plane clip or
+                // backface-cull here using the current camera angle, otherwise the
+                // cached buffer permanently loses faces that should become visible
+                // from another rotation. WebGL's real perspective projection clips
+                // these raw world-space triangles correctly at draw time.
+                const o0 = this._fvOut[0];
+                o0.position[0] = fv0.position[0]; o0.position[1] = fv0.position[1]; o0.position[2] = fv0.position[2];
+                o0.colour[0] = fv0.colour[0]; o0.colour[1] = fv0.colour[1]; o0.colour[2] = fv0.colour[2];
+                o0.uv[0] = fv0.uv[0]; o0.uv[1] = fv0.uv[1]; o0.depth = fv0.depth;
+                const o1 = this._fvOut[1];
+                o1.position[0] = fv1.position[0]; o1.position[1] = fv1.position[1]; o1.position[2] = fv1.position[2];
+                o1.colour[0] = fv1.colour[0]; o1.colour[1] = fv1.colour[1]; o1.colour[2] = fv1.colour[2];
+                o1.uv[0] = fv1.uv[0]; o1.uv[1] = fv1.uv[1]; o1.depth = fv1.depth;
+                const o2 = this._fvOut[2];
+                o2.position[0] = fv2.position[0]; o2.position[1] = fv2.position[1]; o2.position[2] = fv2.position[2];
+                o2.colour[0] = fv2.colour[0]; o2.colour[1] = fv2.colour[1]; o2.colour[2] = fv2.colour[2];
+                o2.uv[0] = fv2.uv[0]; o2.uv[1] = fv2.uv[1]; o2.depth = fv2.depth;
+                this._fvOutLen = 3;
+            } else {
+                // Clip against near plane into _fvOut (no allocation).
+                this.clipPolygonToNearInto(3);
+                const outLen = this._fvOutLen;
+                if (outLen < 3) {
+                    this.clippedTriangleCount++;
+                    continue;
+                }
 
-            // Backface check only when no clipping occurred (outLen === 3 ↔ all verts inside).
-            // 2004 map geometry has a lot of one-sided/differently-wound flat model
-            // faces used as walkable surfaces: bridges, docks, gangplanks, raised
-            // floors and platforms. CPU backface-culling those faces makes them vanish
-            // at specific camera rotations across the map. Keep near-horizontal
-            // model faces double-sided; roofs are still hidden by World's loc-shape
-            // filtering, not by this triangle culler.
-            const isWalkableSurfaceFace = Math.abs(norm[1]) > 0.28 && material !== HDMaterial.Water && material !== HDMaterial.Lava;
-            if (outLen === 3 && !isWalkableSurfaceFace && this.isBackface(this._fvOut[0], this._fvOut[1], this._fvOut[2])) {
-                this.skippedBackfaceCount++;
-                continue;
+                // No CPU backface culling for dynamic models. 2004 RS models have
+                // inconsistent winding orders and are pre-lit — culling by screen-space
+                // winding makes faces vanish as the camera rotates. Roofs are hidden by
+                // World's loc-shape filtering upstream, not here. The GPU z-buffer handles
+                // depth correctly without CPU-side face rejection.
             }
+            const outLen = this._fvOutLen;
 
             const beforeFloats = batch.length;
             for (let i = 1; i < outLen - 1; i++) {
@@ -1702,7 +1743,7 @@ export default class HDRenderer {
             if (this.safeWarmupFrames > 0) {
                 this.safeWarmupFrames--;
                 if (this.safeWarmupFrames === 0) {
-                    fetch('/debug-log', { method: 'POST', body: '[hd-render] safe warmup complete; cached far-scene + stable walkable surfaces + live actor no-flicker enabled' }).catch(() => {});
+                    fetch('/debug-log', { method: 'POST', body: '[hd-render] safe warmup complete; camera-independent static cache + stable transparent scenery enabled' }).catch(() => {});
                 }
             }
             this.publishStatus();
@@ -3606,7 +3647,7 @@ export default class HDRenderer {
 
     private static drawStaticFarModels(): void {
         const gl = this.gl;
-        if (!gl || this.staticFarModelBatches.size === 0) {
+        if (!gl) {
             return;
         }
 
@@ -3618,6 +3659,65 @@ export default class HDRenderer {
             if (vao) {
                 this.drawBuffer(vao, vertices.length / VERTEX_FLOATS);
             }
+        }
+
+        // Static far-scene foliage, nets, rails and some scenery use transparent
+        // faces. These are cached with the static scene too, so draw them here;
+        // otherwise they only appear from the old per-frame/software-visible path
+        // and flicker on/off when the camera rotates.
+        if (this.staticFarTransparentBatches.length > 0) {
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            gl.depthMask(false);
+            this.staticFarTransparentBatches.sort((a, b) => {
+                const ap = this.prioritySortGroup(a.priority);
+                const bp = this.prioritySortGroup(b.priority);
+                if (ap !== bp) {
+                    return ap - bp;
+                }
+                return b.depth - a.depth;
+            });
+
+            for (const batch of this.staticFarTransparentBatches) {
+                if (batch.vertices.length === 0) {
+                    continue;
+                }
+
+                // Use dedicated far-scene transparent buffers so dynamic models
+                // (uploadAndDrawModels) cannot overwrite the same GPU buffer for
+                // the same texture key, which would cause fences/foliage to flicker.
+                let buffer = this.staticFarTransparentBuffers.get(batch.texture);
+                if (!buffer) {
+                    buffer = gl.createBuffer();
+                    if (!buffer) {
+                        continue;
+                    }
+                    this.staticFarTransparentBuffers.set(batch.texture, buffer);
+                }
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+                if (batch.vertices.length > this._uploadBuf.length) {
+                    this._uploadBuf = new Float32Array(batch.vertices.length * 2);
+                }
+                this._uploadBuf.set(batch.vertices, 0);
+                gl.bufferData(gl.ARRAY_BUFFER, this._uploadBuf.subarray(0, batch.vertices.length), gl.DYNAMIC_DRAW);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+                let vao = this.staticFarTransparentVaos.get(batch.texture);
+                if (!vao) {
+                    const created = this.setupVao(buffer);
+                    if (!created) {
+                        continue;
+                    }
+                    vao = created;
+                    this.staticFarTransparentVaos.set(batch.texture, vao);
+                }
+
+                this.drawBuffer(vao, batch.vertices.length / VERTEX_FLOATS);
+            }
+
+            gl.depthMask(true);
+            gl.disable(gl.BLEND);
         }
     }
 

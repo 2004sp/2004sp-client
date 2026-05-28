@@ -6453,7 +6453,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-28T17:10:50.975Z";
+var HD_RENDERER_BUILD = "2026-05-28T18:49:18.443Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -7322,6 +7322,8 @@ class HDRenderer {
   static lightSpaceMatrix = new Float32Array(16);
   static modelUsedKeys = new Set;
   static queuedModelKeys = new Set;
+  static staticFarTransparentBuffers = new Map;
+  static staticFarTransparentVaos = new Map;
   static farModelDrawCount = 0;
   static modelObjectIds = new WeakMap;
   static nextModelObjectId = 1;
@@ -7409,6 +7411,13 @@ class HDRenderer {
   static isSafeWarmupActive() {
     return this.safeWarmupFrames > 0;
   }
+  static prewarmAtlas() {
+    if (!this.enabled) {
+      return;
+    }
+    this.init();
+    this.ensureTextureAtlas();
+  }
   static beginStaticFarScene(key) {
     if (globalThis.DISABLE_HD_FAR_MODELS === true) {
       return false;
@@ -7443,9 +7452,21 @@ class HDRenderer {
           this.gl.deleteBuffer(buffer);
         }
       }
+      for (const vao of this.staticFarTransparentVaos.values()) {
+        if (vao) {
+          this.gl.deleteVertexArray(vao);
+        }
+      }
+      for (const buffer of this.staticFarTransparentBuffers.values()) {
+        if (buffer) {
+          this.gl.deleteBuffer(buffer);
+        }
+      }
     }
     this.staticFarModelVaos.clear();
     this.staticFarModelBuffers.clear();
+    this.staticFarTransparentVaos.clear();
+    this.staticFarTransparentBuffers.clear();
   }
   static resetScene() {
     this.groundTiles.length = 0;
@@ -7519,8 +7540,9 @@ class HDRenderer {
     }
     const warmingUp = this.safeWarmupFrames > 0;
     const isFarSceneModel = globalThis._HD_FAR_SCENE_QUEUING === true;
-    const targetModelBatches = this.staticFarSceneBuilding && isFarSceneModel ? this.staticFarModelBatches : this.modelBatches;
-    const targetTransparentBatches = this.staticFarSceneBuilding && isFarSceneModel ? this.staticFarTransparentBatches : this.transparentBatches;
+    const cacheStaticFarScene = this.staticFarSceneBuilding && isFarSceneModel;
+    const targetModelBatches = cacheStaticFarScene ? this.staticFarModelBatches : this.modelBatches;
+    const targetTransparentBatches = cacheStaticFarScene ? this.staticFarTransparentBatches : this.transparentBatches;
     if (!model.vertexX || !model.vertexY || !model.vertexZ || !model.faceVertexA || !model.faceVertexB || !model.faceVertexC || !model.faceColourA) {
       return;
     }
@@ -7675,17 +7697,47 @@ class HDRenderer {
       fv2.uv[0] = uvC[0];
       fv2.uv[1] = uvC[1];
       fv2.depth = this.faceVertexDepth(pc);
-      this.clipPolygonToNearInto(3);
+      if (cacheStaticFarScene) {
+        const o0 = this._fvOut[0];
+        o0.position[0] = fv0.position[0];
+        o0.position[1] = fv0.position[1];
+        o0.position[2] = fv0.position[2];
+        o0.colour[0] = fv0.colour[0];
+        o0.colour[1] = fv0.colour[1];
+        o0.colour[2] = fv0.colour[2];
+        o0.uv[0] = fv0.uv[0];
+        o0.uv[1] = fv0.uv[1];
+        o0.depth = fv0.depth;
+        const o1 = this._fvOut[1];
+        o1.position[0] = fv1.position[0];
+        o1.position[1] = fv1.position[1];
+        o1.position[2] = fv1.position[2];
+        o1.colour[0] = fv1.colour[0];
+        o1.colour[1] = fv1.colour[1];
+        o1.colour[2] = fv1.colour[2];
+        o1.uv[0] = fv1.uv[0];
+        o1.uv[1] = fv1.uv[1];
+        o1.depth = fv1.depth;
+        const o2 = this._fvOut[2];
+        o2.position[0] = fv2.position[0];
+        o2.position[1] = fv2.position[1];
+        o2.position[2] = fv2.position[2];
+        o2.colour[0] = fv2.colour[0];
+        o2.colour[1] = fv2.colour[1];
+        o2.colour[2] = fv2.colour[2];
+        o2.uv[0] = fv2.uv[0];
+        o2.uv[1] = fv2.uv[1];
+        o2.depth = fv2.depth;
+        this._fvOutLen = 3;
+      } else {
+        this.clipPolygonToNearInto(3);
+        const outLen2 = this._fvOutLen;
+        if (outLen2 < 3) {
+          this.clippedTriangleCount++;
+          continue;
+        }
+      }
       const outLen = this._fvOutLen;
-      if (outLen < 3) {
-        this.clippedTriangleCount++;
-        continue;
-      }
-      const isWalkableSurfaceFace = Math.abs(norm[1]) > 0.28 && material !== 1 /* Water */ && material !== 2 /* Lava */;
-      if (outLen === 3 && !isWalkableSurfaceFace && this.isBackface(this._fvOut[0], this._fvOut[1], this._fvOut[2])) {
-        this.skippedBackfaceCount++;
-        continue;
-      }
       const beforeFloats = batch.length;
       for (let i = 1;i < outLen - 1; i++) {
         this.pushClippedTriangle(batch, this._fvOut[0], this._fvOut[i], this._fvOut[i + 1], material, modelTexture ? texture : -1, alpha, material === 1 /* Water */ ? 3 /* Model */ : 0 /* None */);
@@ -7927,7 +7979,7 @@ class HDRenderer {
       if (this.safeWarmupFrames > 0) {
         this.safeWarmupFrames--;
         if (this.safeWarmupFrames === 0) {
-          fetch("/debug-log", { method: "POST", body: "[hd-render] safe warmup complete; cached far-scene + stable walkable surfaces + live actor no-flicker enabled" }).catch(() => {});
+          fetch("/debug-log", { method: "POST", body: "[hd-render] safe warmup complete; camera-independent static cache + stable transparent scenery enabled" }).catch(() => {});
         }
       }
       this.publishStatus();
@@ -9434,7 +9486,7 @@ class HDRenderer {
   }
   static drawStaticFarModels() {
     const gl = this.gl;
-    if (!gl || this.staticFarModelBatches.size === 0) {
+    if (!gl) {
       return;
     }
     for (const [texture, vertices] of this.staticFarModelBatches) {
@@ -9445,6 +9497,51 @@ class HDRenderer {
       if (vao) {
         this.drawBuffer(vao, vertices.length / VERTEX_FLOATS);
       }
+    }
+    if (this.staticFarTransparentBatches.length > 0) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      this.staticFarTransparentBatches.sort((a, b) => {
+        const ap = this.prioritySortGroup(a.priority);
+        const bp = this.prioritySortGroup(b.priority);
+        if (ap !== bp) {
+          return ap - bp;
+        }
+        return b.depth - a.depth;
+      });
+      for (const batch of this.staticFarTransparentBatches) {
+        if (batch.vertices.length === 0) {
+          continue;
+        }
+        let buffer = this.staticFarTransparentBuffers.get(batch.texture);
+        if (!buffer) {
+          buffer = gl.createBuffer();
+          if (!buffer) {
+            continue;
+          }
+          this.staticFarTransparentBuffers.set(batch.texture, buffer);
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        if (batch.vertices.length > this._uploadBuf.length) {
+          this._uploadBuf = new Float32Array(batch.vertices.length * 2);
+        }
+        this._uploadBuf.set(batch.vertices, 0);
+        gl.bufferData(gl.ARRAY_BUFFER, this._uploadBuf.subarray(0, batch.vertices.length), gl.DYNAMIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        let vao = this.staticFarTransparentVaos.get(batch.texture);
+        if (!vao) {
+          const created = this.setupVao(buffer);
+          if (!created) {
+            continue;
+          }
+          vao = created;
+          this.staticFarTransparentVaos.set(batch.texture, vao);
+        }
+        this.drawBuffer(vao, batch.vertices.length / VERTEX_FLOATS);
+      }
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
     }
   }
   static uploadAndDrawModels() {
@@ -28102,14 +28199,13 @@ class Client extends GameShell {
     ClientBuild.minusedlevel = this.minusedlevel;
     const wantedHdAfterMapBuild = HDRenderer.isEnabled();
     const hdHadSuccessfulSceneBefore = this._hdHadSuccessfulSceneBefore === true;
-    const useFirstBuildSoftwareFallback = wantedHdAfterMapBuild && !hdHadSuccessfulSceneBefore;
-    if (useFirstBuildSoftwareFallback) {
-      fetch("/debug-log", { method: "POST", body: "[checkScene] first HD mapBuild: temporarily disabling HD; will re-enable with safe warmup" }).catch(() => {});
-      HDRenderer.setEnabled(false);
-      Pix3D.highDetail = false;
-      Pix3D.lowDetail = true;
-    } else if (wantedHdAfterMapBuild) {
-      fetch("/debug-log", { method: "POST", body: "[checkScene] travel HD mapBuild: preserving HD; no software flash or model warmup" }).catch(() => {});
+    if (wantedHdAfterMapBuild) {
+      if (!hdHadSuccessfulSceneBefore) {
+        fetch("/debug-log", { method: "POST", body: "[checkScene] first HD mapBuild: prewarming atlas before mapBuild" }).catch(() => {});
+        HDRenderer.prewarmAtlas();
+      } else {
+        fetch("/debug-log", { method: "POST", body: "[checkScene] travel HD mapBuild: preserving HD; no software flash or model warmup" }).catch(() => {});
+      }
       Pix3D.highDetail = true;
       Pix3D.lowDetail = false;
     }
@@ -28117,26 +28213,17 @@ class Client extends GameShell {
     this.mapBuild();
     this._hdHadSuccessfulSceneBefore = true;
     fetch("/debug-log", { method: "POST", body: "[checkScene] mapBuild returned, mberr:" + String(this._mapBuildError ?? "").substring(0, 120) }).catch(() => {});
-    if (useFirstBuildSoftwareFallback) {
-      window.setTimeout(() => {
-        try {
-          HDRenderer.setEnabled(true);
-          HDRenderer.startSafeWarmup(90);
-          Pix3D.highDetail = true;
-          Pix3D.lowDetail = false;
-          fetch("/debug-log", { method: "POST", body: "[checkScene] re-enabled HD after first software map build with safe warmup" }).catch(() => {});
-        } catch (e) {
-          fetch("/debug-log", { method: "POST", body: "[checkScene] HD re-enable failed: " + String(e).substring(0, 500) }).catch(() => {});
-        }
-      }, 250);
-    } else if (wantedHdAfterMapBuild) {
+    if (wantedHdAfterMapBuild) {
       try {
         HDRenderer.setEnabled(true);
+        if (!hdHadSuccessfulSceneBefore) {
+          HDRenderer.startSafeWarmup(90);
+        }
         Pix3D.highDetail = true;
         Pix3D.lowDetail = false;
-        fetch("/debug-log", { method: "POST", body: "[checkScene] kept HD enabled after travel mapBuild; models stay live" }).catch(() => {});
+        fetch("/debug-log", { method: "POST", body: "[checkScene] HD active after mapBuild; first:" + !hdHadSuccessfulSceneBefore }).catch(() => {});
       } catch (e) {
-        fetch("/debug-log", { method: "POST", body: "[checkScene] HD travel keep-alive failed: " + String(e).substring(0, 500) }).catch(() => {});
+        fetch("/debug-log", { method: "POST", body: "[checkScene] HD enable failed: " + String(e).substring(0, 500) }).catch(() => {});
       }
     }
     this.out.pIsaac(134 /* MAP_BUILD_COMPLETE */);
@@ -33791,4 +33878,4 @@ export {
   Client
 };
 
-//# debugId=85526B8142140B3064756E2164756E21
+//# debugId=ADC96B7F8998DAEC64756E2164756E21

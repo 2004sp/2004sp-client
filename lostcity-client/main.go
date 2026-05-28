@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -107,9 +108,11 @@ func startWSProxy() {
 // all unrecognised paths (game assets like /crc, /title*, /ondemand.zip) to the
 // game web server.
 type assetProxyHandler struct {
-	distFS   fs.FS
-	embedded http.Handler
-	proxy    *httputil.ReverseProxy
+	distFS       fs.FS
+	publicFS     fs.FS
+	diskPublicFS fs.FS // live disk override: takes priority over embedded files
+	embedded     http.Handler
+	proxy        *httputil.ReverseProxy
 }
 
 func (h *assetProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -240,11 +243,52 @@ window.HD_TEXTURE_DEBUG_MODE = window.HD_TEXTURE_DEBUG_MODE || 'normal';
 		return
 	}
 
+	// Disk-based public override takes priority over embedded assets, enabling
+	// live client.js edits without rebuilding the binary.
+	if h.diskPublicFS != nil && h.isDiskPublic(r.URL.Path) {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		http.FileServerFS(h.diskPublicFS).ServeHTTP(w, r)
+		return
+	}
 	if h.isEmbedded(r.URL.Path) {
 		h.embedded.ServeHTTP(w, r)
 		return
 	}
+	if h.isPublic(r.URL.Path) {
+		http.FileServerFS(h.publicFS).ServeHTTP(w, r)
+		return
+	}
 	h.proxy.ServeHTTP(w, r)
+}
+
+// isPublic reports whether the URL path exists as a file in frontend/public.
+func (h *assetProxyHandler) isPublic(urlPath string) bool {
+	if urlPath == "/" || urlPath == "" {
+		return false
+	}
+	fsPath := strings.TrimPrefix(urlPath, "/")
+	f, err := h.publicFS.Open(fsPath)
+	if err == nil {
+		f.Close()
+		return true
+	}
+	return false
+}
+
+// isDiskPublic reports whether the URL path exists in the live disk public dir.
+func (h *assetProxyHandler) isDiskPublic(urlPath string) bool {
+	if urlPath == "/" || urlPath == "" {
+		return false
+	}
+	fsPath := strings.TrimPrefix(urlPath, "/")
+	f, err := h.diskPublicFS.Open(fsPath)
+	if err == nil {
+		f.Close()
+		return true
+	}
+	return false
 }
 
 // isEmbedded reports whether the URL path exists as a file in frontend/dist.
@@ -272,6 +316,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to sub embedded FS: %v", err)
 	}
+	publicFS, err := fs.Sub(assets, "frontend/public")
+	if err != nil {
+		log.Fatalf("failed to sub embedded public FS: %v", err)
+	}
 
 	gameWebURL := fmt.Sprintf("http://%s:%d", cfg.WebHost, cfg.WebPort)
 	target, err := url.Parse(gameWebURL)
@@ -293,10 +341,21 @@ func main() {
 		http.Error(w, "game server unavailable: "+proxyErr.Error(), http.StatusBadGateway)
 	}
 
+	// Use a live disk-based public FS so edits to frontend/public/ take effect
+	// immediately without rebuilding the binary. Falls back to embedded if the
+	// directory doesn't exist (e.g. when running from a different working dir).
+	var diskPublicFS fs.FS
+	if info, err := os.Stat("frontend/public"); err == nil && info.IsDir() {
+		diskPublicFS = os.DirFS("frontend/public")
+		log.Printf("[config] disk public override active: frontend/public")
+	}
+
 	handler := &assetProxyHandler{
-		distFS:   distFS,
-		embedded: application.AssetFileServerFS(distFS),
-		proxy:    proxy,
+		distFS:       distFS,
+		publicFS:     publicFS,
+		diskPublicFS: diskPublicFS,
+		embedded:     application.AssetFileServerFS(distFS),
+		proxy:        proxy,
 	}
 
 	app := application.New(application.Options{

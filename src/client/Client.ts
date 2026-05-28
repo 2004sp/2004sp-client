@@ -5986,20 +5986,16 @@ export class Client extends GameShell {
 
         const wantedHdAfterMapBuild = HDRenderer.isEnabled();
         const hdHadSuccessfulSceneBefore = (this as any)._hdHadSuccessfulSceneBefore === true;
-        const useFirstBuildSoftwareFallback = wantedHdAfterMapBuild && !hdHadSuccessfulSceneBefore;
 
-        if (useFirstBuildSoftwareFallback) {
-            // First login/build still uses the old safe path because enabling HD on the
-            // very first scene frame was the original "Loading - please wait" freeze.
-            fetch('/debug-log', { method: 'POST', body: '[checkScene] first HD mapBuild: temporarily disabling HD; will re-enable with safe warmup' }).catch(() => {});
-            HDRenderer.setEnabled(false);
-            Pix3D.highDetail = false;
-            Pix3D.lowDetail = true;
-        } else if (wantedHdAfterMapBuild) {
-            // Region travel / quick rebuild: do NOT drop to software and do NOT start the
-            // long model warmup. Dropping HD here caused the pink/software flash and made
-            // NPCs/players/objects disappear until the HD model queues warmed back up.
-            fetch('/debug-log', { method: 'POST', body: '[checkScene] travel HD mapBuild: preserving HD; no software flash or model warmup' }).catch(() => {});
+        if (wantedHdAfterMapBuild) {
+            if (!hdHadSuccessfulSceneBefore) {
+                // First login: prewarm the texture atlas now, while the loading screen is
+                // still showing, so the atlas upload does not freeze the first visible frame.
+                fetch('/debug-log', { method: 'POST', body: '[checkScene] first HD mapBuild: prewarming atlas before mapBuild' }).catch(() => {});
+                HDRenderer.prewarmAtlas();
+            } else {
+                fetch('/debug-log', { method: 'POST', body: '[checkScene] travel HD mapBuild: preserving HD; no software flash or model warmup' }).catch(() => {});
+            }
             Pix3D.highDetail = true;
             Pix3D.lowDetail = false;
         }
@@ -6009,26 +6005,17 @@ export class Client extends GameShell {
         (this as any)._hdHadSuccessfulSceneBefore = true;
         fetch('/debug-log', { method: 'POST', body: '[checkScene] mapBuild returned, mberr:' + (String((this as any)._mapBuildError ?? '').substring(0, 120)) }).catch(() => {});
 
-        if (useFirstBuildSoftwareFallback) {
-            window.setTimeout(() => {
-                try {
-                    HDRenderer.setEnabled(true);
-                    HDRenderer.startSafeWarmup(90);
-                    Pix3D.highDetail = true;
-                    Pix3D.lowDetail = false;
-                    fetch('/debug-log', { method: 'POST', body: '[checkScene] re-enabled HD after first software map build with safe warmup' }).catch(() => {});
-                } catch (e) {
-                    fetch('/debug-log', { method: 'POST', body: '[checkScene] HD re-enable failed: ' + String(e).substring(0, 500) }).catch(() => {});
-                }
-            }, 250);
-        } else if (wantedHdAfterMapBuild) {
+        if (wantedHdAfterMapBuild) {
             try {
                 HDRenderer.setEnabled(true);
+                if (!hdHadSuccessfulSceneBefore) {
+                    HDRenderer.startSafeWarmup(90);
+                }
                 Pix3D.highDetail = true;
                 Pix3D.lowDetail = false;
-                fetch('/debug-log', { method: 'POST', body: '[checkScene] kept HD enabled after travel mapBuild; models stay live' }).catch(() => {});
+                fetch('/debug-log', { method: 'POST', body: '[checkScene] HD active after mapBuild; first:' + !hdHadSuccessfulSceneBefore }).catch(() => {});
             } catch (e) {
-                fetch('/debug-log', { method: 'POST', body: '[checkScene] HD travel keep-alive failed: ' + String(e).substring(0, 500) }).catch(() => {});
+                fetch('/debug-log', { method: 'POST', body: '[checkScene] HD enable failed: ' + String(e).substring(0, 500) }).catch(() => {});
             }
         }
 
