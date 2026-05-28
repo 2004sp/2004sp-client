@@ -939,6 +939,15 @@ export default class HDRenderer {
     private static terrainVertexCount: number = 0;
     private static modelBatches: Map<number, number[]> = new Map();
     private static transparentBatches: TransparentBatch[] = [];
+    // Static far-scene cache: expensive 25-tile scenery is built only when the
+    // loaded HD tile range changes, then drawn from cached GPU buffers every frame.
+    private static staticFarModelBatches: Map<number, number[]> = new Map();
+    private static staticFarTransparentBatches: TransparentBatch[] = [];
+    private static staticFarModelBuffers: Map<number, WebGLBuffer> = new Map();
+    private static staticFarModelVaos: Map<number, WebGLVertexArrayObject> = new Map();
+    private static staticFarGpuDirty: boolean = true;
+    private static staticFarSceneKey: string = '';
+    private static staticFarSceneBuilding: boolean = false;
     private static modelDrawCount: number = 0;
     private static modelVertexCount: number = 0;
     private static modelBatchCount: number = 0;
@@ -1084,12 +1093,60 @@ export default class HDRenderer {
         return this.safeWarmupFrames > 0;
     }
 
+    static beginStaticFarScene(key: string): boolean {
+        if ((globalThis as any).DISABLE_HD_FAR_MODELS === true) {
+            return false;
+        }
+
+        // Reuse the static far-scene buffers while standing on the same loaded HD
+        // tile range. This keeps the 25-tile visual radius without rebuilding every
+        // fence/tree/bush model every camera rotation frame.
+        if (this.staticFarSceneKey === key && !this.staticFarGpuDirty) {
+            return false;
+        }
+
+        this.staticFarSceneKey = key;
+        this.staticFarModelBatches.clear();
+        this.staticFarTransparentBatches.length = 0;
+        this.staticFarSceneBuilding = true;
+        this.staticFarGpuDirty = true;
+        return true;
+    }
+
+    static endStaticFarScene(): void {
+        this.staticFarSceneBuilding = false;
+    }
+
+    private static clearStaticFarScene(): void {
+        this.staticFarSceneKey = '';
+        this.staticFarModelBatches.clear();
+        this.staticFarTransparentBatches.length = 0;
+        this.staticFarGpuDirty = true;
+        this.staticFarSceneBuilding = false;
+
+        if (this.gl) {
+            for (const vao of this.staticFarModelVaos.values()) {
+                if (vao) {
+                    this.gl.deleteVertexArray(vao);
+                }
+            }
+            for (const buffer of this.staticFarModelBuffers.values()) {
+                if (buffer) {
+                    this.gl.deleteBuffer(buffer);
+                }
+            }
+        }
+        this.staticFarModelVaos.clear();
+        this.staticFarModelBuffers.clear();
+    }
+
 
     static resetScene(): void {
         this.groundTiles.length = 0;
         this.groundTileMap.clear();
         this.visibleGroundKeys.clear();
         this.groundObjectCache.clear();
+        this.clearStaticFarScene();
         this.sceneDirty = true;
         this.terrainVertexCount = 0;
         this.lastCameraRange = null;
@@ -1179,6 +1236,8 @@ export default class HDRenderer {
 
         const warmingUp = this.safeWarmupFrames > 0;
         const isFarSceneModel = (globalThis as any)._HD_FAR_SCENE_QUEUING === true;
+        const targetModelBatches = this.staticFarSceneBuilding && isFarSceneModel ? this.staticFarModelBatches : this.modelBatches;
+        const targetTransparentBatches = this.staticFarSceneBuilding && isFarSceneModel ? this.staticFarTransparentBatches : this.transparentBatches;
 
         if (!model.vertexX || !model.vertexY || !model.vertexZ || !model.faceVertexA || !model.faceVertexB || !model.faceVertexC || !model.faceColourA) {
             return;
@@ -1190,7 +1249,7 @@ export default class HDRenderer {
             return;
         }
 
-        const modelBudget = Number((globalThis as any).HD_MODEL_BUDGET ?? (warmingUp ? 1200 : 3000));
+        const modelBudget = Number((globalThis as any).HD_MODEL_BUDGET ?? (warmingUp ? 650 : 1400));
         if (this.modelDrawCount >= modelBudget) {
             return;
         }
@@ -1199,7 +1258,7 @@ export default class HDRenderer {
         // in 2 seconds late. Keep a separate cap for far models so static scenery
         // cannot consume the whole frame budget before actors/NPCs/player models queue.
         if (isFarSceneModel) {
-            const farModelBudget = Number((globalThis as any).HD_FAR_MODEL_BUDGET ?? (warmingUp ? 700 : 2200));
+            const farModelBudget = Number((globalThis as any).HD_FAR_MODEL_BUDGET ?? (warmingUp ? 900 : 1800));
             if (this.farModelDrawCount >= farModelBudget) {
                 return;
             }
@@ -1211,7 +1270,7 @@ export default class HDRenderer {
             return;
         }
 
-        const vertexBudget = Number((globalThis as any).HD_MODEL_VERTEX_BUDGET ?? (warmingUp ? 180000 : 520000));
+        const vertexBudget = Number((globalThis as any).HD_MODEL_VERTEX_BUDGET ?? (warmingUp ? 120000 : 260000));
         if (this.modelVertexCount + faceCount * 3 > vertexBudget) {
             return;
         }
@@ -1387,7 +1446,7 @@ export default class HDRenderer {
             }
 
             if (alpha < 1) {
-                this.transparentBatches.push({
+                targetTransparentBatches.push({
                     depth: this.faceDepth(pa, pb, pc),
                     priority,
                     texture: batchKey,
@@ -1402,7 +1461,7 @@ export default class HDRenderer {
         if (isFarSceneModel) {
             this.farModelDrawCount++;
         }
-        this.modelBatchCount = this.modelBatches.size + this.transparentBatches.length;
+        this.modelBatchCount = this.modelBatches.size + this.transparentBatches.length + this.staticFarModelBatches.size + this.staticFarTransparentBatches.length;
     }
 
     private static modelObjectId(model: HDModelInput): number {
@@ -1586,6 +1645,7 @@ export default class HDRenderer {
             this.buildLightSpaceMatrix(this.camera);
             (globalThis as any)._hdPhase = 'renderFrame-uploadModels';
             this.uploadModelBuffers();
+            this.uploadStaticFarModelBuffers();
 
             // Keep shadows off by default for now. This keeps HD visibly enabled while
             // avoiding the extra shadow depth pass that can freeze some WebGL drivers.
@@ -1621,6 +1681,7 @@ export default class HDRenderer {
                 this.drawBuffer(this.terrainVao, this.terrainVertexCount);
             }
 
+            this.drawStaticFarModels();
             this.uploadAndDrawModels();
             gl.flush();
             this.compositeViewportToGameCanvas(viewport);
@@ -1628,7 +1689,7 @@ export default class HDRenderer {
             if (this.safeWarmupFrames > 0) {
                 this.safeWarmupFrames--;
                 if (this.safeWarmupFrames === 0) {
-                    fetch('/debug-log', { method: 'POST', body: '[hd-render] safe warmup complete; immediate HD models + rotation-stable budgets enabled' }).catch(() => {});
+                    fetch('/debug-log', { method: 'POST', body: '[hd-render] safe warmup complete; cached far-scene HD performance mode enabled' }).catch(() => {});
                 }
             }
             this.publishStatus();
@@ -2539,6 +2600,7 @@ export default class HDRenderer {
         });
         this.modelBuffers.clear();
         this.transparentBatches = [];
+        this.clearStaticFarScene();
     }
 
     private static installTextureDebugHotkeys(): void {
@@ -3466,6 +3528,82 @@ export default class HDRenderer {
                 if (vao) {
                     this.modelVaos.set(texture, vao);
                 }
+            }
+        }
+    }
+
+    private static uploadStaticFarModelBuffers(): void {
+        const gl = this.gl;
+        if (!gl || !this.staticFarGpuDirty) {
+            return;
+        }
+
+        const liveKeys = new Set<number>();
+        for (const [texture, vertices] of this.staticFarModelBatches) {
+            if (vertices.length === 0) {
+                continue;
+            }
+            liveKeys.add(texture);
+
+            let buffer = this.staticFarModelBuffers.get(texture);
+            if (!buffer) {
+                buffer = gl.createBuffer();
+                if (!buffer) {
+                    continue;
+                }
+                this.staticFarModelBuffers.set(texture, buffer);
+            }
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            const n = vertices.length;
+            if (n > this._uploadBuf.length) {
+                this._uploadBuf = new Float32Array(n * 2);
+            }
+            this._uploadBuf.set(vertices, 0);
+            gl.bufferData(gl.ARRAY_BUFFER, this._uploadBuf.subarray(0, n), gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+            if (!this.staticFarModelVaos.has(texture)) {
+                const vao = this.setupVao(buffer);
+                if (vao) {
+                    this.staticFarModelVaos.set(texture, vao);
+                }
+            }
+        }
+
+        for (const [texture, vao] of this.staticFarModelVaos) {
+            if (!liveKeys.has(texture)) {
+                if (vao) {
+                    gl.deleteVertexArray(vao);
+                }
+                this.staticFarModelVaos.delete(texture);
+            }
+        }
+        for (const [texture, buffer] of this.staticFarModelBuffers) {
+            if (!liveKeys.has(texture)) {
+                if (buffer) {
+                    gl.deleteBuffer(buffer);
+                }
+                this.staticFarModelBuffers.delete(texture);
+            }
+        }
+
+        this.staticFarGpuDirty = false;
+    }
+
+    private static drawStaticFarModels(): void {
+        const gl = this.gl;
+        if (!gl || this.staticFarModelBatches.size === 0) {
+            return;
+        }
+
+        for (const [texture, vertices] of this.staticFarModelBatches) {
+            if (vertices.length === 0) {
+                continue;
+            }
+            const vao = this.staticFarModelVaos.get(texture);
+            if (vao) {
+                this.drawBuffer(vao, vertices.length / VERTEX_FLOATS);
             }
         }
     }

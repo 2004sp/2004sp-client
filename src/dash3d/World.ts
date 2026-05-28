@@ -1116,13 +1116,18 @@ export default class World {
             // strict distance, face, vertex and per-frame budgets.
             // DevTools emergency switch: window.DISABLE_HD_FAR_MODELS = true
             if ((globalThis as any).DISABLE_HD_FAR_MODELS !== true) {
-                // Queue far/static HD locs even during login warmup so the first HD
-                // frames are not terrain-only. HDRenderer applies lower warmup budgets.
-                (globalThis as any)._HD_FAR_SCENE_QUEUING = true;
-                try {
-                    this.queueHdFarScene(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
-                } finally {
-                    (globalThis as any)._HD_FAR_SCENE_QUEUING = false;
+                // Build the expensive 25-tile static scenery cache only when the HD
+                // tile range changes. Camera rotation then reuses GPU buffers instead
+                // of rebuilding thousands of fences/trees/bushes every frame.
+                const farSceneKey = `${hdMinX}:${hdMinZ}:${hdMaxX}:${hdMaxZ}:${maxLevel}`;
+                if (HDRenderer.beginStaticFarScene(farSceneKey)) {
+                    (globalThis as any)._HD_FAR_SCENE_QUEUING = true;
+                    try {
+                        this.queueHdFarScene(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
+                    } finally {
+                        (globalThis as any)._HD_FAR_SCENE_QUEUING = false;
+                        HDRenderer.endStaticFarScene();
+                    }
                 }
             }
         }
@@ -1268,8 +1273,8 @@ export default class World {
         const renderedSprites = new Set<Sprite>();
         const start = performance.now();
         const tileBudget = Number((globalThis as any).HD_FAR_TILE_BUDGET ?? 2601);
-        const candidateBudget = Number((globalThis as any).HD_FAR_MODEL_CANDIDATES ?? 5000);
-        const timeBudgetMs = Number((globalThis as any).HD_FAR_TIME_BUDGET_MS ?? 0);
+        const candidateBudget = Number((globalThis as any).HD_FAR_MODEL_CANDIDATES ?? 2600);
+        const timeBudgetMs = Number((globalThis as any).HD_FAR_TIME_BUDGET_MS ?? 12);
         let tilesScanned = 0;
         let candidatesQueued = 0;
 

@@ -6453,7 +6453,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-28T16:04:30.297Z";
+var HD_RENDERER_BUILD = "2026-05-28T16:22:24.538Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -7272,6 +7272,13 @@ class HDRenderer {
   static terrainVertexCount = 0;
   static modelBatches = new Map;
   static transparentBatches = [];
+  static staticFarModelBatches = new Map;
+  static staticFarTransparentBatches = [];
+  static staticFarModelBuffers = new Map;
+  static staticFarModelVaos = new Map;
+  static staticFarGpuDirty = true;
+  static staticFarSceneKey = "";
+  static staticFarSceneBuilding = false;
   static modelDrawCount = 0;
   static modelVertexCount = 0;
   static modelBatchCount = 0;
@@ -7396,11 +7403,50 @@ class HDRenderer {
   static isSafeWarmupActive() {
     return this.safeWarmupFrames > 0;
   }
+  static beginStaticFarScene(key) {
+    if (globalThis.DISABLE_HD_FAR_MODELS === true) {
+      return false;
+    }
+    if (this.staticFarSceneKey === key && !this.staticFarGpuDirty) {
+      return false;
+    }
+    this.staticFarSceneKey = key;
+    this.staticFarModelBatches.clear();
+    this.staticFarTransparentBatches.length = 0;
+    this.staticFarSceneBuilding = true;
+    this.staticFarGpuDirty = true;
+    return true;
+  }
+  static endStaticFarScene() {
+    this.staticFarSceneBuilding = false;
+  }
+  static clearStaticFarScene() {
+    this.staticFarSceneKey = "";
+    this.staticFarModelBatches.clear();
+    this.staticFarTransparentBatches.length = 0;
+    this.staticFarGpuDirty = true;
+    this.staticFarSceneBuilding = false;
+    if (this.gl) {
+      for (const vao of this.staticFarModelVaos.values()) {
+        if (vao) {
+          this.gl.deleteVertexArray(vao);
+        }
+      }
+      for (const buffer of this.staticFarModelBuffers.values()) {
+        if (buffer) {
+          this.gl.deleteBuffer(buffer);
+        }
+      }
+    }
+    this.staticFarModelVaos.clear();
+    this.staticFarModelBuffers.clear();
+  }
   static resetScene() {
     this.groundTiles.length = 0;
     this.groundTileMap.clear();
     this.visibleGroundKeys.clear();
     this.groundObjectCache.clear();
+    this.clearStaticFarScene();
     this.sceneDirty = true;
     this.terrainVertexCount = 0;
     this.lastCameraRange = null;
@@ -7467,6 +7513,8 @@ class HDRenderer {
     }
     const warmingUp = this.safeWarmupFrames > 0;
     const isFarSceneModel = globalThis._HD_FAR_SCENE_QUEUING === true;
+    const targetModelBatches = this.staticFarSceneBuilding && isFarSceneModel ? this.staticFarModelBatches : this.modelBatches;
+    const targetTransparentBatches = this.staticFarSceneBuilding && isFarSceneModel ? this.staticFarTransparentBatches : this.transparentBatches;
     if (!model.vertexX || !model.vertexY || !model.vertexZ || !model.faceVertexA || !model.faceVertexB || !model.faceVertexC || !model.faceColourA) {
       return;
     }
@@ -7475,12 +7523,12 @@ class HDRenderer {
     if (relativeX * relativeX + relativeY * relativeY + relativeZ * relativeZ > maxModelDistSq) {
       return;
     }
-    const modelBudget = Number(globalThis.HD_MODEL_BUDGET ?? (warmingUp ? 1200 : 3000));
+    const modelBudget = Number(globalThis.HD_MODEL_BUDGET ?? (warmingUp ? 650 : 1400));
     if (this.modelDrawCount >= modelBudget) {
       return;
     }
     if (isFarSceneModel) {
-      const farModelBudget = Number(globalThis.HD_FAR_MODEL_BUDGET ?? (warmingUp ? 700 : 2200));
+      const farModelBudget = Number(globalThis.HD_FAR_MODEL_BUDGET ?? (warmingUp ? 900 : 1800));
       if (this.farModelDrawCount >= farModelBudget) {
         return;
       }
@@ -7490,7 +7538,7 @@ class HDRenderer {
     if (faceCount <= 0 || faceCount > maxFacesPerModel) {
       return;
     }
-    const vertexBudget = Number(globalThis.HD_MODEL_VERTEX_BUDGET ?? (warmingUp ? 180000 : 520000));
+    const vertexBudget = Number(globalThis.HD_MODEL_VERTEX_BUDGET ?? (warmingUp ? 120000 : 260000));
     if (this.modelVertexCount + faceCount * 3 > vertexBudget) {
       return;
     }
@@ -7636,7 +7684,7 @@ class HDRenderer {
         this.pushClippedTriangle(batch, this._fvOut[0], this._fvOut[i], this._fvOut[i + 1], material, modelTexture ? texture : -1, alpha, material === 1 /* Water */ ? 3 /* Model */ : 0 /* None */);
       }
       if (alpha < 1) {
-        this.transparentBatches.push({
+        targetTransparentBatches.push({
           depth: this.faceDepth(pa, pb, pc),
           priority,
           texture: batchKey,
@@ -7649,7 +7697,7 @@ class HDRenderer {
     if (isFarSceneModel) {
       this.farModelDrawCount++;
     }
-    this.modelBatchCount = this.modelBatches.size + this.transparentBatches.length;
+    this.modelBatchCount = this.modelBatches.size + this.transparentBatches.length + this.staticFarModelBatches.size + this.staticFarTransparentBatches.length;
   }
   static modelObjectId(model) {
     const objectModel = model;
@@ -7839,6 +7887,7 @@ class HDRenderer {
       this.buildLightSpaceMatrix(this.camera);
       globalThis._hdPhase = "renderFrame-uploadModels";
       this.uploadModelBuffers();
+      this.uploadStaticFarModelBuffers();
       const hdShadowsEnabled = globalThis.ENABLE_HD_SHADOWS === true;
       if (hdShadowsEnabled) {
         globalThis._hdPhase = "renderFrame-shadowPass";
@@ -7863,6 +7912,7 @@ class HDRenderer {
       if (this.terrainVertexCount > 0 && this.terrainVao) {
         this.drawBuffer(this.terrainVao, this.terrainVertexCount);
       }
+      this.drawStaticFarModels();
       this.uploadAndDrawModels();
       gl.flush();
       this.compositeViewportToGameCanvas(viewport);
@@ -7870,7 +7920,7 @@ class HDRenderer {
       if (this.safeWarmupFrames > 0) {
         this.safeWarmupFrames--;
         if (this.safeWarmupFrames === 0) {
-          fetch("/debug-log", { method: "POST", body: "[hd-render] safe warmup complete; immediate HD models + rotation-stable budgets enabled" }).catch(() => {});
+          fetch("/debug-log", { method: "POST", body: "[hd-render] safe warmup complete; cached far-scene HD performance mode enabled" }).catch(() => {});
         }
       }
       this.publishStatus();
@@ -8520,6 +8570,7 @@ class HDRenderer {
     });
     this.modelBuffers.clear();
     this.transparentBatches = [];
+    this.clearStaticFarScene();
   }
   static installTextureDebugHotkeys() {
     if (this.debugHotkeysInstalled || typeof window === "undefined") {
@@ -9319,6 +9370,73 @@ class HDRenderer {
         if (vao) {
           this.modelVaos.set(texture, vao);
         }
+      }
+    }
+  }
+  static uploadStaticFarModelBuffers() {
+    const gl = this.gl;
+    if (!gl || !this.staticFarGpuDirty) {
+      return;
+    }
+    const liveKeys = new Set;
+    for (const [texture, vertices] of this.staticFarModelBatches) {
+      if (vertices.length === 0) {
+        continue;
+      }
+      liveKeys.add(texture);
+      let buffer = this.staticFarModelBuffers.get(texture);
+      if (!buffer) {
+        buffer = gl.createBuffer();
+        if (!buffer) {
+          continue;
+        }
+        this.staticFarModelBuffers.set(texture, buffer);
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      const n = vertices.length;
+      if (n > this._uploadBuf.length) {
+        this._uploadBuf = new Float32Array(n * 2);
+      }
+      this._uploadBuf.set(vertices, 0);
+      gl.bufferData(gl.ARRAY_BUFFER, this._uploadBuf.subarray(0, n), gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      if (!this.staticFarModelVaos.has(texture)) {
+        const vao = this.setupVao(buffer);
+        if (vao) {
+          this.staticFarModelVaos.set(texture, vao);
+        }
+      }
+    }
+    for (const [texture, vao] of this.staticFarModelVaos) {
+      if (!liveKeys.has(texture)) {
+        if (vao) {
+          gl.deleteVertexArray(vao);
+        }
+        this.staticFarModelVaos.delete(texture);
+      }
+    }
+    for (const [texture, buffer] of this.staticFarModelBuffers) {
+      if (!liveKeys.has(texture)) {
+        if (buffer) {
+          gl.deleteBuffer(buffer);
+        }
+        this.staticFarModelBuffers.delete(texture);
+      }
+    }
+    this.staticFarGpuDirty = false;
+  }
+  static drawStaticFarModels() {
+    const gl = this.gl;
+    if (!gl || this.staticFarModelBatches.size === 0) {
+      return;
+    }
+    for (const [texture, vertices] of this.staticFarModelBatches) {
+      if (vertices.length === 0) {
+        continue;
+      }
+      const vao = this.staticFarModelVaos.get(texture);
+      if (vao) {
+        this.drawBuffer(vao, vertices.length / VERTEX_FLOATS);
       }
     }
   }
@@ -15486,11 +15604,15 @@ class World {
         maxTileZ: hdMaxZ
       });
       if (globalThis.DISABLE_HD_FAR_MODELS !== true) {
-        globalThis._HD_FAR_SCENE_QUEUING = true;
-        try {
-          this.queueHdFarScene(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
-        } finally {
-          globalThis._HD_FAR_SCENE_QUEUING = false;
+        const farSceneKey = `${hdMinX}:${hdMinZ}:${hdMaxX}:${hdMaxZ}:${maxLevel}`;
+        if (HDRenderer.beginStaticFarScene(farSceneKey)) {
+          globalThis._HD_FAR_SCENE_QUEUING = true;
+          try {
+            this.queueHdFarScene(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
+          } finally {
+            globalThis._HD_FAR_SCENE_QUEUING = false;
+            HDRenderer.endStaticFarScene();
+          }
         }
       }
     }
@@ -15616,8 +15738,8 @@ class World {
     const renderedSprites = new Set;
     const start = performance.now();
     const tileBudget = Number(globalThis.HD_FAR_TILE_BUDGET ?? 2601);
-    const candidateBudget = Number(globalThis.HD_FAR_MODEL_CANDIDATES ?? 5000);
-    const timeBudgetMs = Number(globalThis.HD_FAR_TIME_BUDGET_MS ?? 0);
+    const candidateBudget = Number(globalThis.HD_FAR_MODEL_CANDIDATES ?? 2600);
+    const timeBudgetMs = Number(globalThis.HD_FAR_TIME_BUDGET_MS ?? 12);
     let tilesScanned = 0;
     let candidatesQueued = 0;
     const centreX = Math.max(minTileX, Math.min(maxTileX - 1, World.gx));
@@ -33630,4 +33752,4 @@ export {
   Client
 };
 
-//# debugId=4FACC152689AB61A64756E2164756E21
+//# debugId=6A8DA81286D5BD3964756E2164756E21
