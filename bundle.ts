@@ -65,8 +65,16 @@ function patchClientBundle(script: BunOutput): void {
     // Keep the HD renderer toggle separate from the old software high-detail flag.
     const replacements: Array<[string, string]> = [
         [
+            'Pix3D.highDetail = enabled;\n        Pix3D.lowDetail = !enabled;\n        window.CLIENT_HD_MODE = enabled;',
+            'Pix3D.highDetail = enabled || window.CLIENT_LOW_MEMORY !== true;\n        Pix3D.lowDetail = !Pix3D.highDetail;\n        window.CLIENT_HD_MODE = enabled;'
+        ],
+        [
+            'Pix3D.highDetail = enabled;\n        Pix3D.lowDetail = !enabled;\n        globalThis.CLIENT_HD_MODE = enabled;',
+            'Pix3D.highDetail = enabled || globalThis.CLIENT_LOW_MEMORY !== true;\n        Pix3D.lowDetail = !Pix3D.highDetail;\n        globalThis.CLIENT_HD_MODE = enabled;'
+        ],
+        [
             'Pix3D.highDetail = enabled;\n        Pix3D.lowDetail = !enabled;\n        (window as any).CLIENT_HD_MODE = enabled;',
-            'Pix3D.highDetail = enabled || (window as any).CLIENT_LOW_MEMORY !== true;\n        Pix3D.lowDetail = !Pix3D.highDetail;\n        (window as any).CLIENT_HD_MODE = enabled;'
+            'Pix3D.highDetail = enabled || window.CLIENT_LOW_MEMORY !== true;\n        Pix3D.lowDetail = !Pix3D.highDetail;\n        window.CLIENT_HD_MODE = enabled;'
         ],
         [
             'if (Pix3D.highDetail) {\n                    this.areaViewport?.drawKeyed(4, 4, HD_VIEWPORT_KEY);\n                } else {',
@@ -78,7 +86,7 @@ function patchClientBundle(script: BunOutput): void {
         ],
         [
             'if (!Client.lowMem) {',
-            'if (!Client.lowMem || (globalThis as any).CLIENT_LOW_MEMORY !== true) {'
+            'if (!Client.lowMem || globalThis.CLIENT_LOW_MEMORY !== true) {'
         ]
     ];
 
