@@ -6453,7 +6453,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-28T16:56:06.051Z";
+var HD_RENDERER_BUILD = "2026-05-28T17:04:10.439Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -7927,7 +7927,7 @@ class HDRenderer {
       if (this.safeWarmupFrames > 0) {
         this.safeWarmupFrames--;
         if (this.safeWarmupFrames === 0) {
-          fetch("/debug-log", { method: "POST", body: "[hd-render] safe warmup complete; cached far-scene + stable walkable surfaces enabled" }).catch(() => {});
+          fetch("/debug-log", { method: "POST", body: "[hd-render] safe warmup complete; cached far-scene + stable walkable surfaces + no actor ghosts enabled" }).catch(() => {});
         }
       }
       this.publishStatus();
@@ -15836,6 +15836,10 @@ class World {
       for (let i = 0;canQueue() && i < tile.spriteCount; i++) {
         const sprite = tile.sprites[i];
         if (!sprite || renderedSprites.has(sprite)) {
+          continue;
+        }
+        const spriteSceneType = sprite.typecode >> 29 & 3;
+        if (sprite.typecode <= 0 || spriteSceneType !== 2) {
           continue;
         }
         if (this.shouldLeaveHdLocToSoftwareVisibility(sprite.typecode, sprite.typecode2, softwareVisibleRegion)) {
@@ -33759,4 +33763,4 @@ export {
   Client
 };
 
-//# debugId=C9E565625163F62764756E2164756E21
+//# debugId=663B69A1CC55B16B64756E2164756E21

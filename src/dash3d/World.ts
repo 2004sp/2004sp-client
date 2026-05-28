@@ -1380,6 +1380,17 @@ export default class World {
                     continue;
                 }
 
+                // Only cache static loc/scenery sprites in the far-scene cache.
+                // Players, NPCs and bots are also stored as Sprite instances while
+                // walking, but their typecode is not a loc scene type. Caching those
+                // dynamic actor sprites made an old copy stay behind while the live
+                // actor kept moving, which looked like a second player/NPC walking
+                // out of the original model.
+                const spriteSceneType = (sprite.typecode >> 29) & 0x3;
+                if (sprite.typecode <= 0 || spriteSceneType !== 2) {
+                    continue;
+                }
+
                 if (this.shouldLeaveHdLocToSoftwareVisibility(sprite.typecode, sprite.typecode2, softwareVisibleRegion)) {
                     continue;
                 }
