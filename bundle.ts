@@ -60,7 +60,7 @@ function patchClientBundle(script: BunOutput): void {
     // In the original 2004 client, "high detail" also controlled whether audio
     // was loaded. Our launcher now has three modes:
     //   Default    = normal software client, audio on, 50 FPS
-    //   Low memory = reduced memory, audio off, 50 FPS
+    //   Low memory = reduced graphics/memory, audio on, 50 FPS
     //   HD         = WebGL HD renderer, audio on, 60 FPS/render-refresh smoothing
     // Keep the HD renderer toggle separate from the old software high-detail flag.
     const replacements: Array<[string, string]> = [
@@ -80,6 +80,36 @@ function patchClientBundle(script: BunOutput): void {
             'if (Pix3D.highDetail) {\n                    this.areaViewport?.drawKeyed(4, 4, HD_VIEWPORT_KEY);\n                } else {',
             'if (HDRenderer.isEnabled()) {\n                    this.areaViewport?.drawKeyed(4, 4, HD_VIEWPORT_KEY);\n                } else {'
         ],
+
+        // Audio must not be tied to Client.lowMem anymore. Low Memory should reduce
+        // graphics/memory only; music tab, music changes and sound effects still work.
+        [
+            'if (!Client.lowMem) {\n                this.midiSong = 0;',
+            'if (true) {\n                this.midiSong = 0;'
+        ],
+        [
+            'if (!Client.lowMem) {\n                const midiCount = this.onDemand.getFileCount(2);',
+            'if (true) {\n                const midiCount = this.onDemand.getFileCount(2);'
+        ],
+        [
+            "if (!Client.lowMem) {\n                await this.messageBox('Unpacking sounds', 90);",
+            "if (true) {\n                await this.messageBox('Unpacking sounds', 90);"
+        ],
+        [
+            'this.waveEnabled && !Client.lowMem && this.waveCount < 50',
+            'this.waveEnabled && this.waveCount < 50'
+        ],
+        [
+            'this.nextMidiSong != id && this.midiActive && !Client.lowMem',
+            'this.nextMidiSong != id && this.midiActive'
+        ],
+        [
+            'this.midiActive && !Client.lowMem',
+            'this.midiActive'
+        ],
+
+        // Keep the old broad compatibility replacements last. These only affect old
+        // high-detail/audio prompt paths when the generated JS still contains them.
         [
             'if(!Client.lowMem){',
             'if(!Client.lowMem||globalThis.CLIENT_LOW_MEMORY!==true){'
