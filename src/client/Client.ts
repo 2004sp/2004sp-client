@@ -45,15 +45,15 @@ import { Int32Array2d, TypedArray1d, TypedArray3d, Int32Array3d, Uint8Array3d } 
 import { downloadUrl, sleep, arraycopy } from '#/util/JsUtil.js';
 
 import AnimFrame from '#/dash3d/AnimFrame.js';
-import { canvas2d } from '#/graphics/Canvas.js';
-import { Colour } from '#/graphics/Colour.js';
-import Pix2D from '#/graphics/Pix2D.js';
+import { canvas2d } from '#/dash3d/graphics/Canvas.js';
+import { Colour } from '#/dash3d/graphics/Colour.js';
+import Pix2D from '#/dash3d/graphics/Pix2D.js';
 import Pix3D from '#/dash3d/Pix3D.js';
 import Model from '#/dash3d/Model.js';
-import Pix8 from '#/graphics/Pix8.js';
-import Pix32 from '#/graphics/Pix32.js';
-import PixFont from '#/graphics/PixFont.js';
-import PixMap from '#/graphics/PixMap.js';
+import Pix8 from '#/dash3d/graphics/Pix8.js';
+import Pix32 from '#/dash3d/graphics/Pix32.js';
+import PixFont from '#/dash3d/graphics/PixFont.js';
+import PixMap from '#/dash3d/graphics/PixMap.js';
 
 import ClientStream from '#/io/ClientStream.js';
 import { ClientProt } from '#/io/ClientProt.js';
@@ -68,6 +68,7 @@ import WordFilter from '#/wordenc/WordFilter.js';
 import WordPack from '#/wordenc/WordPack.js';
 
 import JagFX from '#/sound/JagFX.js';
+import HDRenderer from '#/hd/HDRenderer.js';
 
 const CLIENT_VERSION = 254;
 
@@ -81,6 +82,7 @@ const SCROLLBAR_TRACK = 0x23201b;
 const SCROLLBAR_GRIP_FOREGROUND = 0x4d4233;
 const SCROLLBAR_GRIP_HIGHLIGHT = 0x766654;
 const SCROLLBAR_GRIP_LOWLIGHT = 0x332d25;
+const HD_VIEWPORT_KEY = 0xff00ff;
 
 export class Client extends GameShell {
 
@@ -122,6 +124,7 @@ export class Client extends GameShell {
     static nodeId: number = 10;
     static memServer: boolean = true;
     static lowMem: boolean = false;
+    private static activeClient: Client | null = null;
 
     private alreadyStarted: boolean = false;
     private errorStarted: boolean = false;
@@ -358,6 +361,14 @@ export class Client extends GameShell {
     private orbitCameraPitchVelocity: number = 0;
     private orbitCameraX: number = 0;
     private orbitCameraZ: number = 0;
+
+    // Previous tick camera state used by render-only 60 FPS interpolation.
+    private prevOrbitCameraPitch: number = 128;
+    private prevOrbitCameraYaw: number = 0;
+    private prevOrbitCameraX: number = 0;
+    private prevOrbitCameraZ: number = 0;
+    private prevCameraPitchClamp: number = 0;
+
     private sendCameraDelay: number = 0;
     private sendCamera: boolean = false;
     private cameraPitchClamp: number = 0;
@@ -618,6 +629,7 @@ export class Client extends GameShell {
 
     constructor(nodeid: number, lowmem: boolean, members: boolean) {
         super();
+        Client.activeClient = this;
 
         if (typeof nodeid === 'undefined' || typeof lowmem === 'undefined' || typeof members === 'undefined') {
             return;
@@ -639,9 +651,55 @@ export class Client extends GameShell {
         (window as any).setClientLowMemoryMode = (enabled: boolean): void => {
             if (enabled) {
                 Client.setLowMem();
+                Client.setHdMode(false);
             } else {
                 Client.setHighMem();
             }
+        };
+
+        (window as any).setClientHdMode = (enabled: boolean): void => {
+            Client.setHdMode(enabled);
+        };
+
+        (window as any).captureHdComparison = async (): Promise<{ software: string; hd: string; status: unknown }> => {
+            const gameCanvas = document.getElementById('canvas') as HTMLCanvasElement | null;
+            if (!gameCanvas) {
+                throw new Error('game canvas not found');
+            }
+
+            const waitFrame = (): Promise<void> => new Promise(resolve => requestAnimationFrame(() => resolve()));
+            const originalHdMode = Pix3D.highDetail;
+
+            Client.setHdMode(false);
+            await waitFrame();
+            await waitFrame();
+            const software = gameCanvas.toDataURL('image/png');
+
+            Client.setHdMode(true);
+            await waitFrame();
+            await waitFrame();
+
+            const composite = document.createElement('canvas');
+            composite.width = gameCanvas.width;
+            composite.height = gameCanvas.height;
+            const ctx = composite.getContext('2d');
+            if (!ctx) {
+                throw new Error('comparison canvas context unavailable');
+            }
+
+            const hdCanvas = document.getElementById('hd-canvas') as HTMLCanvasElement | null;
+            if (hdCanvas) {
+                ctx.drawImage(hdCanvas, 0, 0, composite.width, composite.height);
+            }
+            ctx.drawImage(gameCanvas, 0, 0);
+            const hd = composite.toDataURL('image/png');
+
+            Client.setHdMode(originalHdMode);
+            return {
+                software,
+                hd,
+                status: (window as any).HD_RENDERER_STATUS ?? null
+            };
         };
 
         Client.nodeId = nodeid;
@@ -652,6 +710,7 @@ export class Client extends GameShell {
         } else {
             Client.setHighMem();
         }
+        Client.setHdMode((window as any).CLIENT_HD_MODE === true);
 
         this.run();
     }
@@ -661,6 +720,8 @@ export class Client extends GameShell {
         Pix3D.lowMem = true;
         Client.lowMem = true;
         ClientBuild.lowMem = true;
+        Pix3D.clearTexels();
+        Pix3D.initPool(20);
     }
 
     static setHighMem(): void {
@@ -668,6 +729,38 @@ export class Client extends GameShell {
         Pix3D.lowMem = false;
         Client.lowMem = false;
         ClientBuild.lowMem = false;
+        Pix3D.clearTexels();
+        Pix3D.initPool(20);
+    }
+
+    static setHdMode(enabled: boolean): void {
+        // Real HD toggle: do not fake-enable the button while keeping software mode.
+        // The previous rescue patch blocked HD here, which kept the game playable but
+        // also made HD look identical to normal rendering.
+        Pix3D.highDetail = enabled;
+        Pix3D.lowDetail = !enabled;
+        (window as any).CLIENT_HD_MODE = enabled;
+
+        (window as any)._hdPhase = enabled ? 'toggle-enable' : 'toggle-disable';
+        (window as any).HD_RENDERER_STATUS = HDRenderer.setEnabled(enabled);
+        fetch('/debug-log', {
+            method: 'POST',
+            body: `[hd-toggle] ${enabled ? 'enabled' : 'disabled'} hdok:${((window as any).HD_RENDERER_STATUS?.available ?? false)} reason:${((window as any).HD_RENDERER_STATUS?.reason ?? '')}`
+        }).catch(() => {});
+
+        if (enabled) {
+            Client.setHighMem();
+            // deltime stays at 20 (50 Hz game logic); tfps=0 lets rAF run at display refresh rate.
+            Client.activeClient?.setTargetedFramerate(Client.activeClient.isMobile ? 30 : 0);
+        } else if ((window as any).CLIENT_LOW_MEMORY === true) {
+            Client.setLowMem();
+            Client.activeClient?.setFramerate(50);
+            Client.activeClient?.setTargetedFramerate(Client.activeClient.isMobile ? 30 : 50);
+        } else {
+            Client.setHighMem();
+            Client.activeClient?.setFramerate(50);
+            Client.activeClient?.setTargetedFramerate(50);
+        }
     }
 
     saveMidi(data: Uint8Array, fading: boolean) {
@@ -820,6 +913,7 @@ export class Client extends GameShell {
     // ----
 
     override async maininit() {
+        fetch('/debug-log', { method: 'POST', body: '[maininit] start hd:' + HDRenderer.isEnabled() + ' hdok:' + HDRenderer.status(false).available }).catch(() => {});
         if (this.isMobile && Client.lowMem) {
             // force mobile on low detail mode to 30 fps
             this.setTargetedFramerate(30);
@@ -1243,14 +1337,21 @@ export class Client extends GameShell {
                 distance[x] = (offset * sin) >> 16;
             }
 
+            fetch('/debug-log', { method: 'POST', body: '[maininit] World.init starting' }).catch(() => {});
+            const _worldInitStart = performance.now();
             World.init(distance, 500, 800, 512, 334);
+            fetch('/debug-log', { method: 'POST', body: '[maininit] World.init done in ' + Math.round(performance.now() - _worldInitStart) + 'ms' }).catch(() => {});
+            fetch('/debug-log', { method: 'POST', body: '[maininit] WordFilter.unpack starting' }).catch(() => {});
             WordFilter.unpack(wordenc);
+            fetch('/debug-log', { method: 'POST', body: '[maininit] WordFilter.unpack done' }).catch(() => {});
 
             setInterval(() => {
                 this.mouseTracking.cycle();
             }, 50);
+            fetch('/debug-log', { method: 'POST', body: '[maininit] complete — returning' }).catch(() => {});
         } catch (e) {
             console.error(e);
+            fetch('/debug-log', { method: 'POST', body: '[maininit] ERROR caught: ' + String(e).substring(0, 200) }).catch(() => {});
 
             if (e instanceof Error) {
                 this.errorMessage = `loaderror - ${this.lastProgressMessage} ${this.lastProgressPercent}%: ${e.message}`;
@@ -1261,6 +1362,14 @@ export class Client extends GameShell {
     }
 
     override async mainloop() {
+        // Probe once per second regardless
+        {
+            const nowSec = Math.floor(performance.now() / 1000);
+            if ((this as any)._lastMainLoopLogSec !== nowSec) {
+                (this as any)._lastMainLoopLogSec = nowSec;
+                fetch('/debug-log', { method: 'POST', body: '[mainloop] eS:' + this.errorStarted + ' eL:' + this.errorLoading + ' eH:' + this.errorHost + ' ingame:' + this.ingame + ' cycle:' + this.loopCycle }).catch(() => {});
+            }
+        }
         if (this.errorStarted || this.errorLoading || this.errorHost) {
             return;
         }
@@ -1288,13 +1397,35 @@ export class Client extends GameShell {
         if (!this.ingame) {
             await this.titleScreenLoop();
         } else {
-            await this.gameLoop();
+            try {
+                await this.gameLoop();
+            } catch (e) {
+                fetch('/debug-log', { method: 'POST', body: '[mainloop] gameLoop THREW: ' + String(e).substring(0, 300) }).catch(() => {});
+                throw e;
+            }
         }
 
         await this.onDemandLoop();
     }
 
     override async maindraw() {
+        // Probe fires unconditionally before any early-return (once per second)
+        {
+            const nowSec = Math.floor(performance.now() / 1000);
+            if ((this as any)._lastDbgLogSec !== nowSec) {
+                (this as any)._lastDbgLogSec = nowSec;
+                const od = this.onDemand as any;
+                const hdSt = HDRenderer.status(false);
+                const errFlags = 'eS:' + this.errorStarted + ' eL:' + this.errorLoading + ' eH:' + this.errorHost;
+                const msg = [
+                    errFlags + ' ingame:' + this.ingame + ' scene:' + this.sceneState + ' dc:' + this.drawCycle + ' rem:' + (this.onDemand?.remaining() ?? '?'),
+                    'hd:' + hdSt.enabled + ' hdok:' + hdSt.available + ' hdreason:' + hdSt.reason,
+                    'phase:' + ((window as any)._mapPhase ?? '-') + ' glph:' + ((window as any)._glPhase ?? '-') + ' mberr:' + ((this as any)._mapBuildError ?? '').substring(0, 80)
+                ].join(' | ');
+                fetch('/debug-log', { method: 'POST', body: '[maindraw] ' + msg }).catch(() => {});
+            }
+        }
+
         if (this.errorStarted || this.errorLoading || this.errorHost) {
             this.drawError();
             return;
@@ -3741,6 +3872,14 @@ export class Client extends GameShell {
             return; // custom
         }
 
+        // Snapshot camera state before the 50 TPS logic tick mutates it.
+        // gameDrawMain() lerps from these values to the current values at render FPS.
+        this.prevOrbitCameraX = this.orbitCameraX;
+        this.prevOrbitCameraZ = this.orbitCameraZ;
+        this.prevOrbitCameraYaw = this.orbitCameraYaw;
+        this.prevOrbitCameraPitch = this.orbitCameraPitch;
+        this.prevCameraPitchClamp = this.cameraPitchClamp;
+
         const orbitX: number = this.localPlayer.x + this.macroCameraX;
         const orbitZ: number = this.localPlayer.z + this.macroCameraZ;
 
@@ -3941,7 +4080,9 @@ export class Client extends GameShell {
                         this.lastWaveStartTime = performance.now();
                         this.lastWaveId = this.waveIds[wave];
                         this.lastWaveLoops = this.waveLoops[wave];
-                        await playWave(buf.data.slice(0, buf.pos));
+                        // Do not await browser/WebAudio playback here. If the audio promise never
+                        // resolves, it stalls the fixed game loop right after loading a scene.
+                        void Promise.resolve(playWave(buf.data.slice(0, buf.pos))).catch(() => {});
                     }
                 } catch (_e) {
                     // empty
@@ -4002,6 +4143,9 @@ export class Client extends GameShell {
     }
 
     private moveEntity(e: ClientEntity): void {
+        e.prevX = e.x;
+        e.prevZ = e.z;
+
         if (e.x < 128 || e.z < 128 || e.x >= 13184 || e.z >= 13184) {
             e.primaryAnim = -1;
             e.spotanimId = -1;
@@ -4429,7 +4573,11 @@ export class Client extends GameShell {
             this.redrawPrivacySettings = true;
 
             if (this.sceneState !== 2) {
-                this.areaViewport?.draw(4, 4);
+                if (Pix3D.highDetail) {
+                    this.areaViewport?.drawKeyed(4, 4, HD_VIEWPORT_KEY);
+                } else {
+                    this.areaViewport?.draw(4, 4);
+                }
                 this.areaMapback?.draw(550, 4);
             }
         }
@@ -4686,7 +4834,22 @@ export class Client extends GameShell {
         this.worldUpdateNum = 0;
     }
 
+    private lerpCameraAngle(previous: number, current: number, alpha: number): number {
+        let delta: number = (current - previous) & 0x7ff;
+
+        if (delta > 1024) {
+            delta -= 2048;
+        }
+
+        return ((previous + delta * alpha) | 0) & 0x7ff;
+    }
+
+    private lerpCameraValue(previous: number, current: number, alpha: number): number {
+        return (previous + (current - previous) * alpha + 0.5) | 0;
+    }
+
     private gameDrawMain(): void {
+        ClientEntity.renderAlpha = this.tickAlpha;
         this.sceneCycle++;
 
         this.addPlayers(true);
@@ -4697,18 +4860,35 @@ export class Client extends GameShell {
         this.addMapAnim();
 
         if (!this.cinemaCam) {
-            let pitch: number = this.orbitCameraPitch;
-            if (((this.cameraPitchClamp / 256) | 0) > pitch) {
-                pitch = (this.cameraPitchClamp / 256) | 0;
+            const cameraAlpha: number = this.tickAlpha;
+
+            const orbitDx: number = this.orbitCameraX - this.prevOrbitCameraX;
+            const orbitDz: number = this.orbitCameraZ - this.prevOrbitCameraZ;
+            const orbitNoInterp: boolean = Math.abs(orbitDx) > 512 || Math.abs(orbitDz) > 512;
+
+            const renderOrbitX: number = orbitNoInterp ? this.orbitCameraX : this.lerpCameraValue(this.prevOrbitCameraX, this.orbitCameraX, cameraAlpha);
+            const renderOrbitZ: number = orbitNoInterp ? this.orbitCameraZ : this.lerpCameraValue(this.prevOrbitCameraZ, this.orbitCameraZ, cameraAlpha);
+            const renderOrbitYaw: number = this.lerpCameraAngle(this.prevOrbitCameraYaw, this.orbitCameraYaw, cameraAlpha);
+            const renderOrbitPitch: number = this.lerpCameraValue(this.prevOrbitCameraPitch, this.orbitCameraPitch, cameraAlpha);
+            const renderPitchClamp: number = this.lerpCameraValue(this.prevCameraPitchClamp, this.cameraPitchClamp, cameraAlpha);
+
+            let pitch: number = renderOrbitPitch;
+            if (((renderPitchClamp / 256) | 0) > pitch) {
+                pitch = (renderPitchClamp / 256) | 0;
             }
             if (this.camShake[4] && this.camShakeRan[4] + 128 > pitch) {
                 pitch = this.camShakeRan[4] + 128;
             }
 
-            const yaw: number = (this.orbitCameraYaw + this.macroCameraAngle) & 0x7ff;
+            const yaw: number = (renderOrbitYaw + this.macroCameraAngle) & 0x7ff;
 
             if (this.localPlayer) {
-                this.camFollow(pitch, yaw, this.orbitCameraX, this.getAvH(this.localPlayer.x, this.localPlayer.z, this.minusedlevel) - 50, this.orbitCameraZ, pitch * 3 + 600 * Client.cameraZoom);
+                const lpdx: number = this.localPlayer.x - this.localPlayer.prevX;
+                const lpdz: number = this.localPlayer.z - this.localPlayer.prevZ;
+                const lpNoInterp: boolean = Math.abs(lpdx) > 512 || Math.abs(lpdz) > 512;
+                const lpx: number = lpNoInterp ? this.localPlayer.x : (this.localPlayer.prevX + lpdx * cameraAlpha + 0.5) | 0;
+                const lpz: number = lpNoInterp ? this.localPlayer.z : (this.localPlayer.prevZ + lpdz * cameraAlpha + 0.5) | 0;
+                this.camFollow(pitch, yaw, renderOrbitX, this.getAvH(lpx, lpz, this.minusedlevel) - 50, renderOrbitZ, pitch * 3 + 600 * Client.cameraZoom);
             }
         }
 
@@ -4759,13 +4939,29 @@ export class Client extends GameShell {
         Model.mouseY = this.mouseY - 4;
 
         Pix2D.cls();
+        (window as any)._gameDrawPhase = 'world-renderAll';
+        const worldStart = performance.now();
         this.world?.renderAll(this.camX, this.camY, this.camZ, level, this.camYaw, this.camPitch, this.loopCycle);
+        const worldMs = performance.now() - worldStart;
+        if (worldMs > 250) {
+            fetch('/debug-log', { method: 'POST', body: '[gameDrawMain] world.renderAll slow ' + worldMs.toFixed(1) + 'ms hd:' + HDRenderer.isEnabled() + ' warmup:' + HDRenderer.isSafeWarmupActive() }).catch(() => {});
+        }
+        (window as any)._gameDrawPhase = 'hd-renderFrame';
+        HDRenderer.renderFrame();
+        (window as any)._gameDrawPhase = 'removeSprites';
         this.world?.removeSprites();
+        if (Pix3D.highDetail) {
+            Pix2D.fillRect(0, 0, 512, 334, HD_VIEWPORT_KEY);
+        }
         this.entityOverlays();
         this.coordArrow();
         this.textureRunAnims(cycle);
         this.otherOverlays();
-        this.areaViewport?.draw(4, 4);
+        if (Pix3D.highDetail) {
+            this.areaViewport?.drawKeyed(4, 4, HD_VIEWPORT_KEY);
+        } else {
+            this.areaViewport?.draw(4, 4);
+        }
 
         this.camX = camX;
         this.camY = camY;
@@ -4823,6 +5019,14 @@ export class Client extends GameShell {
                 continue;
             }
 
+            // Interpolate between previous and current tick position.
+            // Skip interpolation for teleports (> 4 tiles in one tick).
+            const pdx: number = player.x - player.prevX;
+            const pdz: number = player.z - player.prevZ;
+            const noInterp: boolean = Math.abs(pdx) > 512 || Math.abs(pdz) > 512;
+            const ix: number = noInterp ? player.x : (player.prevX + pdx * this.tickAlpha + 0.5) | 0;
+            const iz: number = noInterp ? player.z : (player.prevZ + pdz * this.tickAlpha + 0.5) | 0;
+
             if (!player.locModel || this.loopCycle < player.locStartCycle || this.loopCycle >= player.locStopCycle) {
                 if ((player.x & 0x7f) === 64 && (player.z & 0x7f) === 64) {
                     if (this.tileLastOccupiedCycle[stx][stz] == this.sceneCycle && i != -1) {
@@ -4832,12 +5036,12 @@ export class Client extends GameShell {
                     this.tileLastOccupiedCycle[stx][stz] = this.sceneCycle;
                 }
 
-                player.y = this.getAvH(player.x, player.z, this.minusedlevel);
-                this.world?.addDynamic(this.minusedlevel, player.x, player.y, player.z, player, id, player.yaw, 60, player.needsForwardDrawPadding);
+                player.y = this.getAvH(ix, iz, this.minusedlevel);
+                this.world?.addDynamic(this.minusedlevel, ix, player.y, iz, player, id, player.yaw, 60, player.needsForwardDrawPadding);
             } else {
                 player.lowMemory = false;
-                player.y = this.getAvH(player.x, player.z, this.minusedlevel);
-                this.world?.addDynamic2(this.minusedlevel, player.x, player.y, player.z, player.minTileX, player.minTileZ, player.maxTileX, player.maxTileZ, player, id, player.yaw);
+                player.y = this.getAvH(ix, iz, this.minusedlevel);
+                this.world?.addDynamic2(this.minusedlevel, ix, player.y, iz, player.minTileX, player.minTileZ, player.maxTileX, player.maxTileZ, player, id, player.yaw);
             }
         }
     }
@@ -4866,7 +5070,13 @@ export class Client extends GameShell {
                 this.tileLastOccupiedCycle[x][z] = this.sceneCycle;
             }
 
-            this.world?.addDynamic(this.minusedlevel, npc.x, this.getAvH(npc.x, npc.z, this.minusedlevel), npc.z, npc, typecode, npc.yaw, (npc.size - 1) * 64 + 60, npc.needsForwardDrawPadding);
+            const ndx: number = npc.x - npc.prevX;
+            const ndz: number = npc.z - npc.prevZ;
+            const nNoInterp: boolean = Math.abs(ndx) > 512 || Math.abs(ndz) > 512;
+            const nix: number = nNoInterp ? npc.x : (npc.prevX + ndx * this.tickAlpha + 0.5) | 0;
+            const niz: number = nNoInterp ? npc.z : (npc.prevZ + ndz * this.tickAlpha + 0.5) | 0;
+
+            this.world?.addDynamic(this.minusedlevel, nix, this.getAvH(nix, niz, this.minusedlevel), niz, npc, typecode, npc.yaw, (npc.size - 1) * 64 + 60, npc.needsForwardDrawPadding);
         }
     }
 
@@ -5499,7 +5709,7 @@ export class Client extends GameShell {
                 colour = Colour.RED;
             }
 
-            this.p12?.drawStringRight('Fps:' + this.fps, x, y, colour);
+            this.p12?.drawStringRight('Fps:' + this.renderFps + ' Tps:' + this.tps, x, y, colour);
             y += 15;
 
             let memoryUsage = -1;
@@ -5692,6 +5902,11 @@ export class Client extends GameShell {
     private checkMinimap(): void {
         if (Client.lowMem && this.sceneState === 2 && ClientBuild.minusedlevel !== this.minusedlevel) {
             this.areaViewport?.setPixels();
+            // HD mode uses 0xff00ff as a transparent viewport key. If a region load
+            // begins just after an HD frame, the backing PixMap can still contain the
+            // key colour; drawing it normally causes the pink loading flash. Clear the
+            // viewport first so the travel loading frame is always black/text only.
+            Pix2D.fillRect(0, 0, 512, 334, Colour.BLACK);
             this.p12?.centreString('Loading - please wait.', 257, 151, Colour.BLACK);
             this.p12?.centreString('Loading - please wait.', 256, 150, Colour.WHITE);
             this.areaViewport?.draw(4, 4);
@@ -5706,11 +5921,30 @@ export class Client extends GameShell {
                 console.log(`${this.loginUser} glcfb ${this.loginSeed},${status},${Client.lowMem},${this.db !== null},${this.onDemand?.remaining()},${this.minusedlevel},${this.mapBuildCenterZoneX},${this.mapBuildCenterZoneZ}`);
                 this.sceneLoadStartTime = performance.now();
             }
+            // DEBUG: POST checkScene status to terminal once per second (all statuses)
+            {
+                const nowSec = Math.floor(performance.now() / 1000);
+                if ((this as any)._lastSceneLogSec !== nowSec) {
+                    (this as any)._lastSceneLogSec = nowSec;
+                    const gd = this.mapBuildGroundData
+                        ? this.mapBuildGroundData.map((d, i) => d == null ? (this.mapBuildGroundFile[i] !== -1 ? 'pend' : 'skip') : 'ok').join(' ')
+                        : 'null';
+                    const ld = this.mapBuildLocationData
+                        ? this.mapBuildLocationData.map((d, i) => d == null ? (this.mapBuildLocationFile[i] !== -1 ? 'pend' : 'skip') : 'ok').join(' ')
+                        : 'null';
+                    const od = this.onDemand as any;
+                    const hdSt = HDRenderer.status(false);
+                    const msg = `status:${status} rem:${this.onDemand?.remaining() ?? '?'} zip:${od?.zip != null} db:${this.db !== null} await:${this.awaitingPlayerInfo} hd:${hdSt.enabled} hdok:${hdSt.available} hdreason:${hdSt.reason} gnd:[${gd}] loc:[${ld}]`;
+                    fetch('/debug-log', { method: 'POST', body: '[checkScene] ' + msg }).catch(() => {});
+                }
+            }
         }
 
-        if (this.sceneState === 2 && this.minusedlevel !== this.minimapLevel) {
-            this.minimapLevel = this.minusedlevel;
-            this.minimapBuildBuffer(this.minusedlevel);
+        if (this.sceneState === 2) {
+            if (this.minusedlevel !== this.minimapLevel) {
+                this.minimapLevel = this.minusedlevel;
+                this.minimapBuildBuffer(this.minusedlevel);
+            }
         }
     }
 
@@ -5749,18 +5983,69 @@ export class Client extends GameShell {
 
         this.sceneState = 2;
         ClientBuild.minusedlevel = this.minusedlevel;
+
+        const wantedHdAfterMapBuild = HDRenderer.isEnabled();
+        const hdHadSuccessfulSceneBefore = (this as any)._hdHadSuccessfulSceneBefore === true;
+        const useFirstBuildSoftwareFallback = wantedHdAfterMapBuild && !hdHadSuccessfulSceneBefore;
+
+        if (useFirstBuildSoftwareFallback) {
+            // First login/build still uses the old safe path because enabling HD on the
+            // very first scene frame was the original "Loading - please wait" freeze.
+            fetch('/debug-log', { method: 'POST', body: '[checkScene] first HD mapBuild: temporarily disabling HD; will re-enable with safe warmup' }).catch(() => {});
+            HDRenderer.setEnabled(false);
+            Pix3D.highDetail = false;
+            Pix3D.lowDetail = true;
+        } else if (wantedHdAfterMapBuild) {
+            // Region travel / quick rebuild: do NOT drop to software and do NOT start the
+            // long model warmup. Dropping HD here caused the pink/software flash and made
+            // NPCs/players/objects disappear until the HD model queues warmed back up.
+            fetch('/debug-log', { method: 'POST', body: '[checkScene] travel HD mapBuild: preserving HD; no software flash or model warmup' }).catch(() => {});
+            Pix3D.highDetail = true;
+            Pix3D.lowDetail = false;
+        }
+
+        fetch('/debug-log', { method: 'POST', body: '[checkScene] all data ready — calling mapBuild' }).catch(() => {});
         this.mapBuild();
+        (this as any)._hdHadSuccessfulSceneBefore = true;
+        fetch('/debug-log', { method: 'POST', body: '[checkScene] mapBuild returned, mberr:' + (String((this as any)._mapBuildError ?? '').substring(0, 120)) }).catch(() => {});
+
+        if (useFirstBuildSoftwareFallback) {
+            window.setTimeout(() => {
+                try {
+                    HDRenderer.setEnabled(true);
+                    HDRenderer.startSafeWarmup(90);
+                    Pix3D.highDetail = true;
+                    Pix3D.lowDetail = false;
+                    fetch('/debug-log', { method: 'POST', body: '[checkScene] re-enabled HD after first software map build with safe warmup' }).catch(() => {});
+                } catch (e) {
+                    fetch('/debug-log', { method: 'POST', body: '[checkScene] HD re-enable failed: ' + String(e).substring(0, 500) }).catch(() => {});
+                }
+            }, 250);
+        } else if (wantedHdAfterMapBuild) {
+            try {
+                HDRenderer.setEnabled(true);
+                Pix3D.highDetail = true;
+                Pix3D.lowDetail = false;
+                fetch('/debug-log', { method: 'POST', body: '[checkScene] kept HD enabled after travel mapBuild; models stay live' }).catch(() => {});
+            } catch (e) {
+                fetch('/debug-log', { method: 'POST', body: '[checkScene] HD travel keep-alive failed: ' + String(e).substring(0, 500) }).catch(() => {});
+            }
+        }
+
         this.out.pIsaac(ClientProt.MAP_BUILD_COMPLETE);
         return 0;
     }
 
     private mapBuild(): void {
+        fetch('/debug-log', { method: 'POST', body: '[mapBuild] starting hd:' + HDRenderer.isEnabled() + ' hdok:' + HDRenderer.status(false).available }).catch(() => {});
+        (window as any)._mapPhase = 'start';
         try {
             this.minimapLevel = -1;
             this.spotanims.clear();
             this.projectiles.clear();
             Pix3D.clearTexels();
             this.clearCaches();
+            (window as any)._mapPhase = 'resetMap';
             this.world?.resetMap();
 
             for (let level: number = 0; level < BuildArea.LEVELS; level++) {
@@ -5771,6 +6056,7 @@ export class Client extends GameShell {
             const maps: number = this.mapBuildGroundData?.length ?? 0;
 
             ClientBuild.lowMem = World.lowMem;
+            (window as any)._mapPhase = 'fillBaseLevel';
 
             if (this.mapBuildIndex) {
                 for (let index: number = 0; index < maps; index++) {
@@ -5793,6 +6079,7 @@ export class Client extends GameShell {
 
             if (this.mapBuildIndex && this.mapBuildGroundData) {
                 this.out.pIsaac(ClientProt.NO_TIMEOUT);
+                (window as any)._mapPhase = 'loadGround';
 
                 for (let i: number = 0; i < maps; i++) {
                     const x: number = (this.mapBuildIndex[i] >> 8) * 64 - this.mapBuildBaseX;
@@ -5804,6 +6091,7 @@ export class Client extends GameShell {
                     }
                 }
 
+                (window as any)._mapPhase = 'fadeAdjacent';
                 for (let i: number = 0; i < maps; i++) {
                     const x: number = (this.mapBuildIndex[i] >> 8) * 64 - this.mapBuildBaseX;
                     const z: number = (this.mapBuildIndex[i] & 0xff) * 64 - this.mapBuildBaseZ;
@@ -5817,6 +6105,7 @@ export class Client extends GameShell {
 
             if (this.mapBuildIndex && this.mapBuildLocationData) {
                 this.out.pIsaac(ClientProt.NO_TIMEOUT);
+                (window as any)._mapPhase = 'loadLocations';
 
                 for (let i: number = 0; i < maps; i++) {
                     const data: Uint8Array | null = this.mapBuildLocationData[i];
@@ -5830,11 +6119,13 @@ export class Client extends GameShell {
             }
 
             this.out.pIsaac(ClientProt.NO_TIMEOUT);
+            (window as any)._mapPhase = 'finishBuild';
 
             build.finishBuild(this.world, this.collision);
             this.areaViewport?.setPixels();
 
             this.out.pIsaac(ClientProt.NO_TIMEOUT);
+            (window as any)._mapPhase = 'showObject';
 
             for (let x: number = 0; x < BuildArea.SIZE; x++) {
                 for (let z: number = 0; z < BuildArea.SIZE; z++) {
@@ -5842,9 +6133,12 @@ export class Client extends GameShell {
                 }
             }
 
+            (window as any)._mapPhase = 'locChangePostBuildCorrect';
             this.locChangePostBuildCorrect();
+            (window as any)._mapPhase = 'done';
         } catch (e) {
             console.error(e);
+            (this as any)._mapBuildError = String(e);
         }
 
         LocType.mc1?.clear();
@@ -5891,10 +6185,14 @@ export class Client extends GameShell {
                 }
             }
         }
+
     }
 
     private minimapBuildBuffer(level: number): void {
+        (window as any)._glPhase = 'minimapBuildBuffer-start';
+        fetch('/debug-log', { method: 'POST', body: '[minimap] start level:' + level }).catch(() => {});
         if (!this.minimap) {
+            fetch('/debug-log', { method: 'POST', body: '[minimap] no minimap, returning early' }).catch(() => {});
             return;
         }
 
@@ -5904,6 +6202,8 @@ export class Client extends GameShell {
             pixels[i] = 0;
         }
 
+        (window as any)._glPhase = 'minimapBuildBuffer-render2D';
+        fetch('/debug-log', { method: 'POST', body: '[minimap] starting render2DGround loop' }).catch(() => {});
         for (let z: number = 1; z < BuildArea.SIZE - 1; z++) {
             let offset: number = (BuildArea.SIZE - 1 - z) * 512 * 4 + 24628;
 
@@ -5923,6 +6223,8 @@ export class Client extends GameShell {
         const inactiveRgb: number = ((((Math.random() * 20.0) | 0) + 238 - 10) << 16) + ((((Math.random() * 20.0) | 0) + 238 - 10) << 8) + ((Math.random() * 20.0) | 0) + 238 - 10;
         const activeRgb: number = (((Math.random() * 20.0) | 0) + 238 - 10) << 16;
 
+        (window as any)._glPhase = 'minimapBuildBuffer-drawDetail';
+        fetch('/debug-log', { method: 'POST', body: '[minimap] starting drawDetail loop' }).catch(() => {});
         this.minimap.setPixels();
 
         for (let z: number = 1; z < BuildArea.SIZE - 1; z++) {
@@ -5937,6 +6239,8 @@ export class Client extends GameShell {
             }
         }
 
+        (window as any)._glPhase = 'minimapBuildBuffer-mapFunctions';
+        fetch('/debug-log', { method: 'POST', body: '[minimap] starting mapFunctions loop' }).catch(() => {});
         this.areaViewport?.setPixels();
 
         this.activeMapFunctionCount = 0;
@@ -6000,6 +6304,7 @@ export class Client extends GameShell {
             this.out.pIsaac(ClientProt.ANTICHEAT_CYCLELOGIC3);
             this.out.p1(50);
         }
+        fetch('/debug-log', { method: 'POST', body: '[minimap] done' }).catch(() => {});
     }
 
     private drawDetail(level: number, tileX: number, tileZ: number, inactiveRgb: number, activeRgb: number): void {
@@ -7461,6 +7766,8 @@ export class Client extends GameShell {
                 this.sceneLoadStartTime = performance.now();
 
                 this.areaViewport?.setPixels();
+                // Avoid showing the HD magenta key colour during fast region travel.
+                Pix2D.fillRect(0, 0, 512, 334, Colour.BLACK);
                 this.p12?.centreString('Loading - please wait.', 257, 151, Colour.BLACK);
                 this.p12?.centreString('Loading - please wait.', 256, 150, Colour.WHITE);
                 this.areaViewport?.draw(4, 4);

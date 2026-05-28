@@ -34,12 +34,29 @@
             }
 
             #canvas {
+                background: #000;
+                border: none;
                 display: block;
                 width: 100%;
                 height: 100%;
                 max-width: calc(100vh * 765 / 503);
                 max-height: calc(100vw * 503 / 765);
                 image-rendering: pixelated;
+                outline: none;
+                box-shadow: none;
+            }
+
+            #canvas.hd-mode-active {
+                image-rendering: auto;
+                transform: translateZ(0);
+                backface-visibility: hidden;
+                will-change: transform;
+            }
+
+            #canvas:focus,
+            #canvas:focus-visible {
+                outline: none;
+                box-shadow: none;
             }
 
             #layout.app-fullscreen-fill #canvas-wrap,
@@ -708,6 +725,7 @@
                             </select>
                         </div>
                         <label class="st-check-row"><input type="checkbox" id="low-memory-mode"> Low Memory Mode</label>
+                        <label class="st-check-row"><input type="checkbox" id="hd-mode"> HD Mode</label>
                         <button type="button" id="fullscreen-bars" class="st-action-btn">Fullscreen (Bars)</button>
                         <button type="button" id="fullscreen-half" class="st-action-btn">Fullscreen (Half-Fill)</button>
                         <button type="button" id="fullscreen-fill" class="st-action-btn">Fullscreen (Fill)</button>
@@ -929,6 +947,7 @@
                 var filterSel = document.getElementById('canvas-filter-select');
                 var sizeSel = document.getElementById('canvas-size-select');
                 var lowMemoryChk = document.getElementById('low-memory-mode');
+                var hdModeChk = document.getElementById('hd-mode');
                 var fullscreenBarsBtn = document.getElementById('fullscreen-bars');
                 var fullscreenHalfBtn = document.getElementById('fullscreen-half');
                 var fullscreenFillBtn = document.getElementById('fullscreen-fill');
@@ -959,9 +978,16 @@
                     if (discordChk) discordChk.checked = discordEnabled;
 
                     var savedCanvasSize = localStorage.getItem('canvasSize');
+                    if (localStorage.getItem('canvasSizeDefaultVersion') !== '2') {
+                        if (savedCanvasSize === null || savedCanvasSize === '1.5') {
+                            savedCanvasSize = '2';
+                        }
+                        localStorage.setItem('canvasSizeDefaultVersion', '2');
+                    }
                     applyCanvasSize(savedCanvasSize === '1' || savedCanvasSize === '1.5' ? savedCanvasSize : '2');
                     applyCanvasFilter(localStorage.getItem('filtering') === 'false' ? 'auto' : (localStorage.getItem('canvasFilter') || 'pixelated'));
                     applyLowMemoryMode(localStorage.getItem('clientLowMemoryMode') === 'true');
+                    applyHdMode(localStorage.getItem('clientHdMode') === 'true');
                 }
 
                 function applyShiftPrefs(prefs) {
@@ -1004,12 +1030,38 @@
                 }
 
                 function applyLowMemoryMode(enabled) {
+                    if (enabled && hdModeChk) {
+                        hdModeChk.checked = false;
+                        window.CLIENT_HD_MODE = false;
+                        localStorage.setItem('clientHdMode', 'false');
+                        if (typeof window.setClientHdMode === 'function') {
+                            window.setClientHdMode(false);
+                        }
+                    }
+
                     window.CLIENT_LOW_MEMORY = !!enabled;
                     if (lowMemoryChk) lowMemoryChk.checked = !!enabled;
                     localStorage.setItem('clientLowMemoryMode', enabled ? 'true' : 'false');
 
                     if (typeof window.setClientLowMemoryMode === 'function') {
                         window.setClientLowMemoryMode(!!enabled);
+                    }
+                }
+
+                function applyHdMode(enabled) {
+                    window.CLIENT_HD_MODE = !!enabled;
+                    if (hdModeChk) hdModeChk.checked = !!enabled;
+                    localStorage.setItem('clientHdMode', enabled ? 'true' : 'false');
+                    if (canvas) canvas.classList.toggle('hd-mode-active', !!enabled);
+
+                    if (enabled) {
+                        applyLowMemoryMode(false);
+                        applyCanvasFilter('auto');
+                        applyCanvasSize('2');
+                    }
+
+                    if (typeof window.setClientHdMode === 'function') {
+                        window.setClientHdMode(!!enabled);
                     }
                 }
 
@@ -1196,6 +1248,12 @@
                 if (lowMemoryChk) {
                     lowMemoryChk.addEventListener('change', function () {
                         applyLowMemoryMode(lowMemoryChk.checked);
+                    });
+                }
+
+                if (hdModeChk) {
+                    hdModeChk.addEventListener('change', function () {
+                        applyHdMode(hdModeChk.checked);
                     });
                 }
 

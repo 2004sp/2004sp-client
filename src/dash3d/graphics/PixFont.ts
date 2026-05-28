@@ -1,7 +1,7 @@
 import Linkable2 from '#/datastruct/Linkable2.js';
 
-import { Colour } from '#/graphics/Colour.js';
-import Pix2D from '#/graphics/Pix2D.js';
+import { Colour } from '#/dash3d/graphics/Colour.js';
+import Pix2D from '#/dash3d/graphics/Pix2D.js';
 
 import Jagfile from '#/io/Jagfile.js';
 import Packet from '#/io/Packet.js';

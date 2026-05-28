@@ -167,6 +167,7 @@ for (const file of entrypoints) {
 
         if (output === 'client.js') {
             fs.writeFileSync('lostcity-client/frontend/dist/client.js', script.source);
+            fs.writeFileSync('lostcity-client/frontend/public/client.js', script.source);
         }
     }
 }

@@ -2,12 +2,12 @@ import Jagfile from '#/io/Jagfile.js';
 import Packet from '#/io/Packet.js';
 
 import Model from '#/dash3d/Model.js';
-import PixFont from '#/graphics/PixFont.js';
+import PixFont from '#/dash3d/graphics/PixFont.js';
 
 import LruCache from '#/datastruct/LruCache.js';
 import JString from '#/datastruct/JString.js';
 
-import Pix32 from '#/graphics/Pix32.js';
+import Pix32 from '#/dash3d/graphics/Pix32.js';
 
 import { TypedArray1d } from '#/util/Arrays.js';
 import NpcType from '#/config/NpcType.js';

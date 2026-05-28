@@ -1,6 +1,8 @@
 import { BuildArea } from '#/dash3d/CollisionMap.js';
 import { LocAngle } from '#/dash3d/LocAngle.js';
+import { LocShape } from '#/dash3d/LocShape.js';
 import Occlude from '#/dash3d/Occlude.js';
+import LocType from '#/config/LocType.js';
 
 import GroundDecor from '#/dash3d/GroundDecor.js';
 import Sprite from '#/dash3d/Sprite.js';
@@ -14,13 +16,16 @@ import Decor from '#/dash3d/Decor.js';
 
 import LinkList from '#/datastruct/LinkList.js';
 
-import Pix2D from '#/graphics/Pix2D.js';
+import Pix2D from '#/dash3d/graphics/Pix2D.js';
 import Pix3D from '#/dash3d/Pix3D.js';
 import Model from '#/dash3d/Model.js';
+import HDRenderer from '#/hd/HDRenderer.js';
 
 import { Int32Array3d, TypedArray1d, TypedArray2d, TypedArray3d, TypedArray4d } from '#/util/Arrays.js';
 import type ModelSource from '#/dash3d/ModelSource.js';
 import type PointNormal from '#/dash3d/PointNormal.js';
+
+let _renderAllProbesFired = false;
 
 const PRETAB = Uint8Array.of(19, 55, 38, 155, 255, 110, 137, 205, 76);
 const MIDTAB = Uint8Array.of(160, 192, 80, 96, 0, 144, 80, 48, 160);
@@ -160,6 +165,8 @@ export default class World {
     }
 
     resetMap(): void {
+        HDRenderer.resetScene();
+
         for (let level: number = 0; level < this.maxTileLevel; level++) {
             for (let x: number = 0; x < this.maxTileX; x++) {
                 for (let z: number = 0; z < this.maxTileZ; z++) {
@@ -239,8 +246,25 @@ export default class World {
         heightSW: number, heightSE: number, heightNE: number, heightNW: number,
         colourSW: number, colourSE: number, colourNE: number, colourNW: number,
         colour2SW: number, colour2SE: number, colour2NE: number, colour2NW: number,
-        overlay: number, underlay: number
+        overlay: number, underlay: number,
+        underlayId: number = -1, overlayId: number = -1
     ): void {
+        HDRenderer.addGroundTile({
+            level,
+            x,
+            z,
+            shape,
+            rotation,
+            texture,
+            heights: [heightSW, heightSE, heightNE, heightNW],
+            colours: [colourSW, colourSE, colourNE, colourNW],
+            secondaryColours: [colour2SW, colour2SE, colour2NE, colour2NW],
+            overlay,
+            underlay,
+            overlayId,
+            underlayId
+        });
+
         if (shape === TerrainOverlayShape.PLAIN) {
             for (let l: number = level; l >= 0; l--) {
                 if (!this.levelTiles[l][x][z]) {
@@ -1061,6 +1085,41 @@ export default class World {
             World.maxZ = this.maxTileZ;
         }
 
+        const hdRadius = ((globalThis as any).HD_SCENE_RADIUS ?? 25) | 0;
+        const hdMinX = Math.max(0, World.gx - hdRadius);
+        const hdMinZ = Math.max(0, World.gz - hdRadius);
+        const hdMaxX = Math.min(this.maxTileX, World.gx + hdRadius + 1);
+        const hdMaxZ = Math.min(this.maxTileZ, World.gz + hdRadius + 1);
+
+        if (HDRenderer.isEnabled()) {
+            HDRenderer.beginFrame({
+                eyeX,
+                eyeY,
+                eyeZ,
+                eyePitch,
+                eyeYaw,
+                sinEyePitch: World.cameraSinX,
+                cosEyePitch: World.cameraCosX,
+                sinEyeYaw: World.cameraSinY,
+                cosEyeYaw: World.cameraCosY,
+                maxLevel,
+                minTileX: hdMinX,
+                minTileZ: hdMinZ,
+                maxTileX: hdMaxX,
+                maxTileZ: hdMaxZ
+            });
+
+            // Queue HD models for the wider HD terrain radius too. Relying only on the
+            // old software visibility pass makes locs/foliage/fences appear only when
+            // they are extremely close to the camera, because the HD canvas covers the
+            // software scene. This pass is now safe because HDRenderer.queueModel has
+            // strict distance, face, vertex and per-frame budgets.
+            // DevTools emergency switch: window.DISABLE_HD_FAR_MODELS = true
+            if (!HDRenderer.isSafeWarmupActive() && (globalThis as any).DISABLE_HD_FAR_MODELS !== true) {
+                this.queueHdFarScene(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
+            }
+        }
+
         this.calcOcclude();
         World.fillLeft = 0;
 
@@ -1196,6 +1255,141 @@ export default class World {
                 }
             }
         }
+    }
+
+    private queueHdFarScene(minTileX: number, minTileZ: number, maxTileX: number, maxTileZ: number, maxLevel: number, loopCycle: number): void {
+        const renderedSprites = new Set<Sprite>();
+        const start = performance.now();
+        const tileBudget = Number((globalThis as any).HD_FAR_TILE_BUDGET ?? 2601);
+        const candidateBudget = Number((globalThis as any).HD_FAR_MODEL_CANDIDATES ?? 1600);
+        const timeBudgetMs = Number((globalThis as any).HD_FAR_TIME_BUDGET_MS ?? 18);
+        let tilesScanned = 0;
+        let candidatesQueued = 0;
+
+        // Scan outward from the player/camera tile instead of starting at the north-west
+        // corner of the HD radius. The old linear scan could spend the whole tiny budget
+        // on distant edge tiles, so models only appeared when they were extremely close
+        // or at certain camera angles. This keeps the stable static-far filtering but
+        // fills the full 25-tile radius in a predictable nearest-first order.
+        const centreX = Math.max(minTileX, Math.min(maxTileX - 1, World.gx));
+        const centreZ = Math.max(minTileZ, Math.min(maxTileZ - 1, World.gz));
+        const maxRadius = Math.max(centreX - minTileX, maxTileX - 1 - centreX, centreZ - minTileZ, maxTileZ - 1 - centreZ);
+
+        const visitTile = (x: number, z: number): boolean => {
+            if (x < minTileX || x >= maxTileX || z < minTileZ || z >= maxTileZ) {
+                return true;
+            }
+
+            if (tilesScanned++ >= tileBudget || candidatesQueued >= candidateBudget || performance.now() - start > timeBudgetMs) {
+                return false;
+            }
+
+            for (let level: number = this.minLevel; level < this.maxTileLevel; level++) {
+                const tile: Square | null = this.levelTiles[level][x][z];
+                if (!tile || tile.drawLevel > maxLevel) {
+                    continue;
+                }
+
+                const softwareVisibleRegion = x >= World.minX && x < World.maxX && z >= World.minZ && z < World.maxZ;
+                candidatesQueued += this.queueHdFarTile(tile, loopCycle, renderedSprites, softwareVisibleRegion, candidateBudget - candidatesQueued);
+
+                if (candidatesQueued >= candidateBudget || performance.now() - start > timeBudgetMs) {
+                    return false;
+                }
+            }
+
+            return true;
+        };
+
+        if (!visitTile(centreX, centreZ)) {
+            return;
+        }
+
+        for (let r: number = 1; r <= maxRadius; r++) {
+            for (let dx: number = -r; dx <= r; dx++) {
+                if (!visitTile(centreX + dx, centreZ - r)) { return; }
+                if (!visitTile(centreX + dx, centreZ + r)) { return; }
+            }
+            for (let dz: number = -r + 1; dz <= r - 1; dz++) {
+                if (!visitTile(centreX - r, centreZ + dz)) { return; }
+                if (!visitTile(centreX + r, centreZ + dz)) { return; }
+            }
+        }
+    }
+
+    private queueHdFarTile(tile: Square, loopCycle: number, renderedSprites: Set<Sprite>, softwareVisibleRegion: boolean, remainingBudget: number): number {
+        let queued = 0;
+        const canQueue = (): boolean => queued < remainingBudget;
+
+        // HD must not depend on the old software camera/frustum visibility.
+        // Keep all stable static loc categories queued inside the 25-tile HD radius,
+        // regardless of camera rotation. Only roofs are intentionally left to the
+        // software visibility path so buildings can still open/close like 2004scape.
+        const wall: Wall | null = tile.wall;
+        if (canQueue() && wall && !this.shouldLeaveHdLocToSoftwareVisibility(wall.typecode, wall.typecode2, softwareVisibleRegion)) {
+            wall.model1?.hdRender(loopCycle, 0, wall.x - World.cx, wall.y - World.cy, wall.z - World.cz);
+            queued++;
+            if (canQueue()) {
+                wall.model2?.hdRender(loopCycle, 0, wall.x - World.cx, wall.y - World.cy, wall.z - World.cz);
+                queued++;
+            }
+        }
+
+        const decor: Decor | null = tile.decor;
+        if (canQueue() && decor && !this.shouldLeaveHdLocToSoftwareVisibility(decor.typecode, decor.typecode2, softwareVisibleRegion)) {
+            decor.model.hdRender(loopCycle, decor.angle, decor.x - World.cx, decor.y - World.cy, decor.z - World.cz);
+            queued++;
+        }
+
+        const groundDecor: GroundDecor | null = tile.groundDecor;
+        if (canQueue() && groundDecor && !this.shouldLeaveHdLocToSoftwareVisibility(groundDecor.typecode, groundDecor.typecode2, softwareVisibleRegion)) {
+            groundDecor.model?.hdRender(loopCycle, 0, groundDecor.x - World.cx, groundDecor.y - World.cy, groundDecor.z - World.cz);
+            queued++;
+        }
+
+        if ((globalThis as any).ENABLE_HD_FAR_GROUND_OBJECTS === true && canQueue()) {
+            const objs: GroundObject | null = tile.groundObject;
+            if (objs) {
+                const y = objs.y - World.cy - objs.height;
+                objs.bottomObj?.hdRender(loopCycle, 0, objs.x - World.cx, y, objs.z - World.cz);
+                queued++;
+                if (canQueue()) { objs.middleObj?.hdRender(loopCycle, 0, objs.x - World.cx, y, objs.z - World.cz); queued++; }
+                if (canQueue()) { objs.topObj?.hdRender(loopCycle, 0, objs.x - World.cx, y, objs.z - World.cz); queued++; }
+            }
+        }
+
+        if ((globalThis as any).DISABLE_HD_STATIC_SPRITES !== true) {
+            for (let i: number = 0; canQueue() && i < tile.spriteCount; i++) {
+                const sprite: Sprite | null = tile.sprites[i];
+                if (!sprite || renderedSprites.has(sprite)) {
+                    continue;
+                }
+
+                if (this.shouldLeaveHdLocToSoftwareVisibility(sprite.typecode, sprite.typecode2, softwareVisibleRegion)) {
+                    continue;
+                }
+
+                renderedSprites.add(sprite);
+                sprite.model?.hdRender(loopCycle, sprite.yaw, sprite.x - World.cx, sprite.y - World.cy, sprite.z - World.cz);
+                queued++;
+            }
+        }
+
+        return queued;
+    }
+
+    private shouldLeaveHdLocToSoftwareVisibility(typecode: number, typecode2: number, _softwareVisibleRegion: boolean): boolean {
+        if (typecode <= 0) {
+            return false;
+        }
+
+        // Do not let normal objects depend on camera-angle software visibility.
+        // That was the cause of fences, trees, bushes, grass, NPCs and the player
+        // popping in/out while rotating. Roofs are the one exception: they should
+        // still be allowed to disappear based on the old scene visibility so indoor
+        // views remain usable.
+        const shape = typecode2 & 0x3f;
+        return shape >= LocShape.ROOF_STRAIGHT && shape <= LocShape.ROOFEDGE_SQUARE_CORNER;
     }
 
     private setSprite(
@@ -1520,7 +1714,7 @@ export default class World {
 
                     if (!linkedSquare.quickGround) {
                         if (linkedSquare.ground && !this.groundOccluded(0, tileX, tileZ)) {
-                            this.renderGround(tileX, tileZ, linkedSquare.ground, World.cameraSinX, World.cameraCosX, World.cameraSinY, World.cameraCosY);
+                            this.renderGround(tileX, tileZ, 0, linkedSquare.ground, World.cameraSinX, World.cameraCosX, World.cameraSinY, World.cameraCosY);
                         }
                     } else if (!this.groundOccluded(0, tileX, tileZ)) {
                         this.renderQuickGround(linkedSquare.quickGround, 0, tileX, tileZ, World.cameraSinX, World.cameraCosX, World.cameraSinY, World.cameraCosY);
@@ -1544,7 +1738,7 @@ export default class World {
                 if (!tile.quickGround) {
                     if (tile.ground && !this.groundOccluded(originalLevel, tileX, tileZ)) {
                         tileDrawn = true;
-                        this.renderGround(tileX, tileZ, tile.ground, World.cameraSinX, World.cameraCosX, World.cameraSinY, World.cameraCosY);
+                        this.renderGround(tileX, tileZ, originalLevel, tile.ground, World.cameraSinX, World.cameraCosX, World.cameraSinY, World.cameraCosY);
                     }
                 } else if (!this.groundOccluded(originalLevel, tileX, tileZ)) {
                     tileDrawn = true;
@@ -2045,6 +2239,8 @@ export default class World {
             return;
         }
 
+        HDRenderer.queueGroundTile(level, tileX, tileZ);
+
         const px0: number = Pix3D.originX + (((x0 << 9) / z0) | 0);
         const py0: number = Pix3D.originY + (((y0 << 9) / z0) | 0);
         const pz0: number = Pix3D.originX + (((x1 << 9) / z1) | 0);
@@ -2148,7 +2344,7 @@ export default class World {
         }
     }
 
-    private renderGround(tileX: number, tileZ: number, ground: Ground, sinEyePitch: number, cosEyePitch: number, sinEyeYaw: number, cosEyeYaw: number): void {
+    private renderGround(tileX: number, tileZ: number, level: number, ground: Ground, sinEyePitch: number, cosEyePitch: number, sinEyeYaw: number, cosEyeYaw: number): void {
         let vertexCount: number = ground.vertexX.length;
 
         for (let i: number = 0; i < vertexCount; i++) {
@@ -2177,6 +2373,8 @@ export default class World {
             Ground.drawVertexX[i] = Pix3D.originX + (((x << 9) / z) | 0);
             Ground.drawVertexY[i] = Pix3D.originY + (((y << 9) / z) | 0);
         }
+
+        HDRenderer.queueGroundTile(level, tileX, tileZ);
 
         Pix3D.trans = 0;
 

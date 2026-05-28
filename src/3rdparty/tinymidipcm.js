@@ -141,8 +141,7 @@ class TinyMidiPCM {
 
     let midiTimeout = null;
     let fadeTimeout = null;
-    // let renderEndSeconds = 0;
-    // let currentMidiBuffer = null;
+    let currentMidiBuffer = null;
     let samples = new Float32Array();
 
     let gainNode = window.audioContext.createGain();
@@ -162,8 +161,10 @@ class TinyMidiPCM {
             temp.set(float32, samples.length);
             samples = temp;
         },
-        onRenderEnd: ms => {
-            // renderEndSeconds = Math.floor(startTime + Math.floor(ms / 1000));
+        onRenderEnd: _ms => {
+            if (currentMidiBuffer) {
+                tinyMidiPCM.render(currentMidiBuffer);
+            }
         },
         bufferSize: 1024 * 100,
         sampleRate
@@ -235,7 +236,7 @@ class TinyMidiPCM {
             clearInterval(flushInterval);
         }
 
-        // currentMidiBuffer = null;
+        currentMidiBuffer = null;
         samples = new Float32Array();
 
         if (bufferSources.length) {
@@ -255,8 +256,7 @@ class TinyMidiPCM {
             window._tinyMidiVolume(vol);
         }
 
-        // currentMidiBuffer = midiBuffer;
-        // startTime = window.audioContext.currentTime;
+        currentMidiBuffer = midiBuffer;
         lastTime = window.audioContext.currentTime;
         flushInterval = setInterval(flush, flushTime);
         tinyMidiPCM.render(midiBuffer);

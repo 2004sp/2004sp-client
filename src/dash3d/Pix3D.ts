@@ -1,5 +1,5 @@
-import Pix2D from '#/graphics/Pix2D.js';
-import Pix8 from '#/graphics/Pix8.js';
+import Pix2D from '#/dash3d/graphics/Pix2D.js';
+import Pix8 from '#/dash3d/graphics/Pix8.js';
 
 import Jagfile from '#/io/Jagfile.js';
 import { Int32Array2d, TypedArray1d } from '#/util/Arrays.js';
@@ -7,6 +7,7 @@ import { Int32Array2d, TypedArray1d } from '#/util/Arrays.js';
 export default class Pix3D extends Pix2D {
     static lowMem: boolean = false;
     static lowDetail: boolean = true;
+    static highDetail: boolean = false;
 
     static divTable: Int32Array = new Int32Array(512);
     static divTable2: Int32Array = new Int32Array(2048);

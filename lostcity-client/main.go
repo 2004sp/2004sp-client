@@ -5,6 +5,7 @@ import (
 	"embed"
 	_ "embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -38,8 +39,8 @@ func init() {
 // from the browser and bridges them to the game server.
 // Running as a separate localhost server sidesteps any WebView2 origin restrictions.
 func startWSProxy() {
-	gameWSURL  := fmt.Sprintf("ws://%s:%d", cfg.WebHost, cfg.WebPort)
-	proxyAddr  := fmt.Sprintf(":%d", cfg.ProxyPort)
+	gameWSURL := fmt.Sprintf("ws://%s:%d", cfg.WebHost, cfg.WebPort)
+	proxyAddr := fmt.Sprintf(":%d", cfg.ProxyPort)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -113,6 +114,14 @@ type assetProxyHandler struct {
 
 func (h *assetProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
+	case "/debug-log":
+		// Client-side diagnostic logging → terminal
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 4096))
+		r.Body.Close()
+		log.Printf("[client] %s", strings.TrimSpace(string(body)))
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusNoContent)
+		return
 	case "/client-config.js":
 		// Expose runtime config to the frontend (port may differ per user).
 		w.Header().Set("Content-Type", "application/javascript")
@@ -121,6 +130,78 @@ func (h *assetProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "window.WASM_BASE_URL = '';\n")
 		fmt.Fprintf(w, "window.AUTO_START_CLIENT = true;\n")
 		fmt.Fprintf(w, "window.DISCORD_APP_ID = '%s';\n", cfg.DiscordAppId)
+
+		// HD texture debug hotkeys for the Wails EXE.
+		// F6 cycles: normal -> flat -> id-colours -> single-texture -> uv -> normal.
+		// Shift+F6 goes backwards. F7 resets to normal.
+		fmt.Fprint(w, `
+window.HD_TEXTURE_DEBUG_MODE = window.HD_TEXTURE_DEBUG_MODE || 'normal';
+(function () {
+  if (window.__HD_TEXTURE_DEBUG_KEYS_INSTALLED__) return;
+  window.__HD_TEXTURE_DEBUG_KEYS_INSTALLED__ = true;
+
+  const modes = ['normal', 'flat', 'id-colours', 'single-texture', 'uv'];
+
+  function showHdTextureDebugToast(mode) {
+    let toast = document.getElementById('hd-texture-debug-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'hd-texture-debug-toast';
+      toast.style.position = 'fixed';
+      toast.style.left = '12px';
+      toast.style.top = '12px';
+      toast.style.zIndex = '2147483647';
+      toast.style.padding = '8px 10px';
+      toast.style.background = 'rgba(0, 0, 0, 0.78)';
+      toast.style.color = '#ffff00';
+      toast.style.font = '13px monospace';
+      toast.style.border = '1px solid rgba(255, 255, 0, 0.8)';
+      toast.style.borderRadius = '4px';
+      toast.style.pointerEvents = 'none';
+      document.documentElement.appendChild(toast);
+    }
+
+    toast.textContent = 'HD texture debug: ' + mode + '  (F6 cycle, F7 normal)';
+    toast.style.display = 'block';
+
+    clearTimeout(window.__HD_TEXTURE_DEBUG_TOAST_TIMER__);
+    window.__HD_TEXTURE_DEBUG_TOAST_TIMER__ = setTimeout(function () {
+      toast.style.display = 'none';
+    }, 1800);
+  }
+
+  function setHdTextureDebugMode(mode) {
+    window.HD_TEXTURE_DEBUG_MODE = mode;
+    showHdTextureDebugToast(mode);
+
+    // Optional event if your HD renderer wants to listen for instant rebuilds later.
+    window.dispatchEvent(new CustomEvent('hd-texture-debug-mode', { detail: mode }));
+  }
+
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'F6') {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const current = window.HD_TEXTURE_DEBUG_MODE || 'normal';
+      const index = Math.max(0, modes.indexOf(current));
+      const direction = e.shiftKey ? -1 : 1;
+      const next = modes[(index + direction + modes.length) % modes.length];
+
+      setHdTextureDebugMode(next);
+      return;
+    }
+
+    if (e.key === 'F7') {
+      e.preventDefault();
+      e.stopPropagation();
+      setHdTextureDebugMode('normal');
+    }
+  }, true);
+
+  window.setHdTextureDebugMode = setHdTextureDebugMode;
+})();
+`)
 		return
 
 	case "/api/hiscores":
@@ -235,11 +316,13 @@ func main() {
 	})
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:     "2004 Singleplayer Progressive",
-		Width:     1280,
-		Height:    720,
-		MinWidth:  765,
-		MinHeight: 503,
+		Title:                  "2004 Singleplayer Progressive",
+		Width:                  1280,
+		Height:                 720,
+		MinWidth:               765,
+		MinHeight:              503,
+		DevToolsEnabled:        true,
+		OpenInspectorOnStartup: false,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,
 			Backdrop:                application.MacBackdropTranslucent,

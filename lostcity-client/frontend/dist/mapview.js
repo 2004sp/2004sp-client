@@ -1,1 +1,7960 @@
-class m{key=0n;next=null;h=null;i(){null!=this.h&&(this.h.next=this.next,this.next&&(this.next.h=this.h),this.next=null,this.h=null)}}class w extends m{j=null;k=null;l(){null!==this.k&&(this.k.j=this.j,this.j&&(this.j.k=this.k),this.j=null,this.k=null)}}class A{m=new m;cursor=null;constructor(){this.m.next=this.m,this.m.h=this.m}clear(){for(;;){let m=this.m.next;if(m===this.m)return;m?.i()}}push(m){m.h&&m.i(),m.h=this.m.h,m.next=this.m,m.h&&(m.h.next=m),m.next.h=m}o(m){m.h&&m.i(),m.h=this.m,m.next=this.m.next,m.h.next=m,m.next&&(m.next.h=m)}p(){let m=this.m.next;return m===this.m?null:(m?.i(),m)}head(){let m=this.m.next;return m===this.m?(this.cursor=null,null):(this.cursor=m?.next??null,m)}q(){let m=this.m.h;return m===this.m?(this.cursor=null,null):(this.cursor=m?.h??null,m)}next(){let m=this.cursor;return m===this.m?(this.cursor=null,null):(this.cursor=m?.next??null,m)}h(){let m=this.cursor;return m===this.m?(this.cursor=null,null):(this.cursor=m?.h??null,m)}}var B=async m=>new Promise(w=>setTimeout(w,m)),F=async m=>new Uint8Array(await(await fetch(m)).arrayBuffer());class j extends w{static t=3988292384;static u=new Int32Array(256);static v=new Uint32Array(33);static A=new A;static B=new A;static C=new A;static D=0;static F=0;static G=0;static{for(let m=0;m<32;m++)j.v[m]=(1<<m)-1;j.v[32]=4294967295;for(let m=0;m<256;m++){let w=m;for(let m=0;m<8;m++)1&~w?w>>>=1:w=w>>>1^j.t;j.u[m]=w}}static H(m,w,A){let B=4294967295;for(let F=w;F<A;F++)B=B>>>8^this.u[255&(B^m[F])];return~B}static I(m,w,A,B=0){return j.H(m,w,A)==B}view;data;J=0;K=0;random=null;constructor(m){if(!m)throw Error();super(),m instanceof Int8Array?this.data=new Uint8Array(m.buffer,m.byteOffset,m.byteLength):this.data=m,this.view=new DataView(this.data.buffer,this.data.byteOffset,this.data.byteLength)}get length(){return this.view.byteLength}get available(){return this.view.byteLength-this.J}static L(m){let w=null;return 0===m&&j.D>0?(j.D--,w=j.A.p()):1===m&&j.F>0?(j.F--,w=j.B.p()):2===m&&j.G>0&&(j.G--,w=j.C.p()),w?(w.J=0,w):new j(0===m?new Uint8Array(100):1===m?new Uint8Array(5e3):new Uint8Array(3e4))}release(){this.J=0,100===this.length&&j.D<1e3?(j.A.push(this),j.D++):5e3===this.length&&j.F<250?(j.B.push(this),j.F++):3e4===this.length&&j.G<50&&(j.C.push(this),j.G++)}M(){return this.view.getUint8(this.J++)}N(){return this.view.getInt8(this.J++)}O(){let m=this.view.getUint16(this.J);return this.J+=2,m}P(){let m=this.view.getInt16(this.J);return this.J+=2,m}R(){let m=this.view.getUint8(this.J++)<<16|this.view.getUint16(this.J);return this.J+=2,m}S(){let m=this.view.getInt32(this.J);return this.J+=4,m}T(){let m=this.view.getBigInt64(this.J);return this.J+=8,m}U(){return this.view.getUint8(this.J)<128?this.M()-64:this.O()-49152}V(){return this.view.getUint8(this.J)<128?this.M():this.O()-32768}W(){let m,w=this.view,A=w.byteLength,B="";for(;10!==(m=w.getUint8(this.J++))&&this.J<A;)B+=String.fromCharCode(m);return B}X(m,w,A){A.set(this.data.subarray(this.J,this.J+m),w),this.J+=m}Y(m){this.view.setUint8(this.J++,m+(this.random?.Z??0)&255)}p1(m){this.view.setUint8(this.J++,m)}p2(m){this.view.setUint16(this.J,m),this.J+=2}$(m){this.view.setUint16(this.J,m,!0),this.J+=2}p3(m){this.view.setUint8(this.J++,m>>16),this.view.setUint16(this.J,m),this.J+=2}p4(m){this.view.setInt32(this.J,m),this.J+=4}_(m){this.view.setInt32(this.J,m,!0),this.J+=4}aa(m){this.view.setBigInt64(this.J,m),this.J+=8}ba(m){let w=this.view,A=m.length;for(let B=0;B<A;B++)w.setUint8(this.J++,m.charCodeAt(B));w.setUint8(this.J++,10)}ca(m,w,A){this.data.set(m.subarray(A,A+w),this.J),this.J+=w-A}da(m){this.view.setUint8(this.J-m-1,m)}ea(){this.K=this.J<<3}bytes(){this.J=this.K+7>>>3}fa(m){let w=this.K>>>3,A=8-(7&this.K),B=0;for(this.K+=m;m>A;A=8)B+=(this.view.getUint8(w++)&j.v[A])<<m-A,m-=A;return B+=m===A?this.view.getUint8(w)&j.v[A]:this.view.getUint8(w)>>>A-m&j.v[m],B}ga(m,w){let A=this.J;this.J=0;let B=new Uint8Array(A);this.X(A,0,B);let F=function(m){let w=0n;for(let A=0;A<m.length;A++)w=w<<8n|BigInt(m[A]);return w}(B),j=function(m,w,A){let B=1n;for(;w>0n;)w%2n==1n&&(B=B*m%A),m=m*m%A,w>>=1n;return B}(F,w,m),L=function(m){let w=[];for(;m>0n;)w.unshift(Number(0xffn&m)),m>>=8n;return 128&w[0]&&w.unshift(0),new Uint8Array(w)}(j);this.J=0,this.p1(L.length),this.ca(L,L.length,0)}}class L{static active=!1;static ha=null;static ia=null;static ja=0;static ka=0;static la=0;static ma=0;static na=0;static oa(){this.ha=j.L(1),this.ia=null,this.ja=performance.now(),this.active=!0}static pa(){this.active=!1,this.ha=null,this.ia=null}static flush(){let m=null;return this.ia&&this.active&&(m=this.ia),this.ia=null,m}static stop(){let m=null;return this.ha&&this.ha.J>0&&this.active&&(m=this.ha),this.pa(),m}static qa(m){if(this.ha&&this.ha.J+m>=500){let m=this.ha;this.ha=j.L(1),this.ia=m}}static ra(m,w,A,B){if(!this.ha)return;if(!this.active&&m>=0&&m<789&&w>=0&&w<532)return;this.ka++;let F=performance.now(),j=(F-this.ja)/10|0;j>250&&(j=250),this.ja=F,this.qa(5),2===A?this.ha.p1(1):this.ha.p1(2),this.ha.p1(j),this.ha.p3(m+(w<<10))}static sa(m,w){if(!this.ha)return;if(!this.active)return;this.ka++;let A=performance.now(),B=(A-this.ja)/10|0;B>250&&(B=250),this.ja=A,this.qa(2),2===m?this.ha.p1(3):this.ha.p1(4),this.ha.p1(B)}static ta(m,w,A){if(!this.ha)return;if(!this.active&&m>=0&&m<789&&w>=0&&w<532)return;let B=performance.now();if(B-this.la<50)return;this.la=B,this.ka++;let F=(B-this.ja)/10|0;F>250&&(F=250),this.ja=B,m-this.ma<8&&m-this.ma>=-8&&w-this.na<8&&w-this.na>=-8?(this.qa(3),this.ha.p1(5),this.ha.p1(F),this.ha.p1(m+(w-this.na+8<<4)+8-this.ma)):m-this.ma<128&&m-this.ma>=-128&&w-this.na<128&&w-this.na>=-128?(this.qa(4),this.ha.p1(6),this.ha.p1(F),this.ha.p1(m+128-this.ma),this.ha.p1(w+128-this.na)):(this.qa(5),this.ha.p1(7),this.ha.p1(F),this.ha.p3(m+(w<<10))),this.ma=m,this.na=w}static ua(m){if(!this.ha)return;if(!this.active)return;this.ka++;let w=performance.now(),A=(w-this.ja)/10|0;A>250&&(A=250),this.ja=w,1e3===m?m=11:1001===m?m=12:1002===m?m=14:1003===m?m=15:m>=1008&&(m-=992),this.qa(3),this.ha.p1(8),this.ha.p1(A),this.ha.p1(m)}static va(m){if(!this.ha)return;if(!this.active)return;this.ka++;let w=performance.now(),A=(w-this.ja)/10|0;A>250&&(A=250),this.ja=w,1e3===m?m=11:1001===m?m=12:1002===m?m=14:1003===m?m=15:m>=1008&&(m-=992),this.qa(3),this.ha.p1(9),this.ha.p1(A),this.ha.p1(m)}static wa(){if(!this.ha)return;if(!this.active)return;this.ka++;let m=performance.now(),w=(m-this.ja)/10|0;w>250&&(w=250),this.ja=m,this.qa(2),this.ha.p1(10),this.ha.p1(w)}static xa(){if(!this.ha)return;if(!this.active)return;this.ka++;let m=performance.now(),w=(m-this.ja)/10|0;w>250&&(w=250),this.ja=m,this.qa(2),this.ha.p1(11),this.ha.p1(w)}static ya(){if(!this.ha)return;if(!this.active)return;this.ka++;let m=performance.now(),w=(m-this.ja)/10|0;w>250&&(w=250),this.ja=m,this.qa(2),this.ha.p1(12),this.ha.p1(w)}static za(){if(!this.ha)return;if(!this.active)return;this.ka++;let m=performance.now(),w=(m-this.ja)/10|0;w>250&&(w=250),this.ja=m,this.qa(2),this.ha.p1(13),this.ha.p1(w)}}var p=["F11","F12"],t=new Map;t.set("ArrowLeft",{code:37,ch:1}),t.set("ArrowRight",{code:39,ch:2}),t.set("ArrowUp",{code:38,ch:3}),t.set("ArrowDown",{code:40,ch:4}),t.set("Control",{code:17,ch:5}),t.set("Shift",{code:16,ch:6}),t.set("Alt",{code:18,ch:7}),t.set("Backspace",{code:8,ch:8}),t.set("Tab",{code:9,ch:9}),t.set("Enter",{code:10,ch:10}),t.set("Escape",{code:27,ch:27}),t.set(" ",{code:32,ch:32}),t.set("Delete",{code:127,ch:127}),t.set("Home",{code:36,ch:1e3}),t.set("End",{code:35,ch:1001}),t.set("PageUp",{code:33,ch:1002}),t.set("PageDown",{code:34,ch:1003}),t.set("F1",{code:112,ch:1008}),t.set("F2",{code:113,ch:1009}),t.set("F3",{code:114,ch:1010}),t.set("F4",{code:115,ch:1011}),t.set("F5",{code:116,ch:1012}),t.set("F6",{code:117,ch:1013}),t.set("F7",{code:118,ch:1014}),t.set("F8",{code:119,ch:1015}),t.set("F9",{code:120,ch:1016}),t.set("F10",{code:121,ch:1017}),t.set("F11",{code:122,ch:1018}),t.set("F12",{code:123,ch:1019}),t.set("CapsLock",{code:20,ch:65535}),t.set("Meta",{code:524,ch:65535}),t.set("Insert",{code:155,ch:65535}),t.set("`",{code:192,ch:96}),t.set("~",{code:192,ch:126}),t.set("!",{code:49,ch:33}),t.set("@",{code:50,ch:64}),t.set("#",{code:51,ch:35}),t.set("£",{code:51,ch:163}),t.set("$",{code:52,ch:36}),t.set("%",{code:53,ch:37}),t.set("^",{code:54,ch:94}),t.set("&",{code:55,ch:38}),t.set("*",{code:56,ch:42}),t.set("(",{code:57,ch:40}),t.set(")",{code:48,ch:41}),t.set("-",{code:45,ch:45}),t.set("_",{code:45,ch:95}),t.set("=",{code:61,ch:61}),t.set("+",{code:61,ch:43}),t.set("[",{code:91,ch:91}),t.set("{",{code:91,ch:123}),t.set("]",{code:93,ch:93}),t.set("}",{code:93,ch:125}),t.set("\\",{code:92,ch:92}),t.set("|",{code:92,ch:124}),t.set(";",{code:59,ch:59}),t.set(":",{code:59,ch:58}),t.set("'",{code:222,ch:39}),t.set('"',{code:222,ch:34}),t.set(",",{code:44,ch:44}),t.set("<",{code:44,ch:60}),t.set(".",{code:46,ch:46}),t.set(">",{code:46,ch:62}),t.set("/",{code:47,ch:47}),t.set("?",{code:47,ch:63}),t.set("0",{code:48,ch:48}),t.set("1",{code:49,ch:49}),t.set("2",{code:50,ch:50}),t.set("3",{code:51,ch:51}),t.set("4",{code:52,ch:52}),t.set("5",{code:53,ch:53}),t.set("6",{code:54,ch:54}),t.set("7",{code:55,ch:55}),t.set("8",{code:56,ch:56}),t.set("9",{code:57,ch:57}),t.set("a",{code:65,ch:97}),t.set("b",{code:66,ch:98}),t.set("c",{code:67,ch:99}),t.set("d",{code:68,ch:100}),t.set("e",{code:69,ch:101}),t.set("f",{code:70,ch:102}),t.set("g",{code:71,ch:103}),t.set("h",{code:72,ch:104}),t.set("i",{code:73,ch:105}),t.set("j",{code:74,ch:106}),t.set("k",{code:75,ch:107}),t.set("l",{code:76,ch:108}),t.set("m",{code:77,ch:109}),t.set("n",{code:78,ch:110}),t.set("o",{code:79,ch:111}),t.set("p",{code:80,ch:112}),t.set("q",{code:81,ch:113}),t.set("r",{code:82,ch:114}),t.set("s",{code:83,ch:115}),t.set("t",{code:84,ch:116}),t.set("u",{code:85,ch:117}),t.set("v",{code:86,ch:118}),t.set("w",{code:87,ch:119}),t.set("x",{code:88,ch:120}),t.set("y",{code:89,ch:121}),t.set("z",{code:90,ch:122}),t.set("A",{code:65,ch:65}),t.set("B",{code:66,ch:66}),t.set("C",{code:67,ch:67}),t.set("D",{code:68,ch:68}),t.set("E",{code:69,ch:69}),t.set("F",{code:70,ch:70}),t.set("G",{code:71,ch:71}),t.set("H",{code:72,ch:72}),t.set("I",{code:73,ch:73}),t.set("J",{code:74,ch:74}),t.set("K",{code:75,ch:75}),t.set("L",{code:76,ch:76}),t.set("M",{code:77,ch:77}),t.set("N",{code:78,ch:78}),t.set("O",{code:79,ch:79}),t.set("P",{code:80,ch:80}),t.set("Q",{code:81,ch:81}),t.set("R",{code:82,ch:82}),t.set("S",{code:83,ch:83}),t.set("T",{code:84,ch:84}),t.set("U",{code:85,ch:85}),t.set("V",{code:86,ch:86}),t.set("W",{code:87,ch:87}),t.set("X",{code:88,ch:88}),t.set("Y",{code:89,ch:89}),t.set("Z",{code:90,ch:90});var M=document.getElementById("canvas"),h=M?.getContext("2d",{Aa:!1,alpha:!1});function z(m,w){let A=document.createElement("a");A.href=m,A.download=w,document.body.appendChild(A),A.click(),document.body.removeChild(A)}class d extends w{static Ba=new Int32Array;static width=0;static height=0;static Ca=0;static Da=0;static Ea=0;static Fa=0;static sizeX=0;static Ga=0;static Ha=0;static Ia(m,w,A){this.Ba=m,this.width=w,this.height=A,this.Ja(0,0,w,A)}static Ka(){this.Ca=0,this.Ea=0,this.Da=this.width,this.Fa=this.height,this.sizeX=this.Da-1,this.Ga=this.Da/2|0}static Ja(m,w,A,B){m<0&&(m=0),w<0&&(w=0),A>this.width&&(A=this.width),B>this.height&&(B=this.height),this.Ea=w,this.Fa=B,this.Ca=m,this.Da=A,this.sizeX=this.Da-1,this.Ga=this.Da/2|0,this.Ha=this.Fa/2|0}static La(){let m=this.width*this.height;for(let w=0;w<m;w++)this.Ba[w]=0}static Ma(m,w,A,B,F,j){m<this.Ca&&(A-=this.Ca-m,m=this.Ca),w<this.Ea&&(B-=this.Ea-w,w=this.Ea),m+A>this.Da&&(A=this.Da-m),w+B>this.Fa&&(B=this.Fa-w);let L=256-j,p=(F>>16&255)*j,t=(F>>8&255)*j,M=(255&F)*j,h=this.width-A,z=m+w*this.width;for(let m=0;m<B;m++){for(let m=-A;m<0;m++){let m=(p+(this.Ba[z]>>16&255)*L>>8<<16)+(t+(this.Ba[z]>>8&255)*L>>8<<8)+(M+(255&this.Ba[z])*L>>8);this.Ba[z++]=m}z+=h}}static fillRect(m,w,A,B,F){m<this.Ca&&(A-=this.Ca-m,m=this.Ca),w<this.Ea&&(B-=this.Ea-w,w=this.Ea),m+A>this.Da&&(A=this.Da-m),w+B>this.Fa&&(B=this.Fa-w);let j=this.width-A,L=m+w*this.width;for(let m=-B;m<0;m++){for(let m=-A;m<0;m++)this.Ba[L++]=F;L+=j}}static Na(m,w,A,B,F){this.Oa(m,w,A,F),this.Oa(m,w+B-1,A,F),this.Pa(m,w,B,F),this.Pa(m+A-1,w,B,F)}static Qa(m,w,A,B,F,j){this.Ra(m,w,A,F,j),this.Ra(m,w+B-1,A,F,j),B>=3&&(this.Sa(m,w,B,F,j),this.Sa(m+A-1,w,B,F,j))}static Oa(m,w,A,B){if(w<this.Ea||w>=this.Fa)return;m<this.Ca&&(A-=this.Ca-m,m=this.Ca),m+A>this.Da&&(A=this.Da-m);let F=m+w*this.width;for(let m=0;m<A;m++)this.Ba[F+m]=B}static Ra(m,w,A,B,F){if(w<this.Ea||w>=this.Fa)return;m<this.Ca&&(A-=this.Ca-m,m=this.Ca),m+A>this.Da&&(A=this.Da-m);let j=256-F,L=(B>>16&255)*F,p=(B>>8&255)*F,t=(255&B)*F,M=(this.width,m+w*this.width);for(let m=0;m<A;m++){let m=(L+(this.Ba[M]>>16&255)*j>>8<<16)+(p+(this.Ba[M]>>8&255)*j>>8<<8)+(t+(255&this.Ba[M])*j>>8);this.Ba[M++]=m}}static Pa(m,w,A,B){if(m<this.Ca||m>=this.Da)return;w<this.Ea&&(A-=this.Ea-w,w=this.Ea),w+A>this.Fa&&(A=this.Fa-w);let F=m+w*this.width;for(let m=0;m<A;m++)this.Ba[F+m*this.width]=B}static Sa(m,w,A,B,F){if(m<this.Ca||m>=this.Da)return;w<this.Ea&&(A-=this.Ea-w,w=this.Ea),w+A>this.Fa&&(A=this.Fa-w);let j=256-F,L=(B>>16&255)*F,p=(B>>8&255)*F,t=(255&B)*F,M=m+w*this.width;for(let m=0;m<A;m++){let m=(L+(this.Ba[M]>>16&255)*j>>8<<16)+(p+(this.Ba[M]>>8&255)*j>>8<<8)+(t+(255&this.Ba[M])*j>>8);this.Ba[M]=m,M+=this.width}}static Ta(m,w,A,B,F){let j=256-F,L=(B>>16&255)*F,p=(B>>8&255)*F,t=(255&B)*F,M=w-A;M<0&&(M=0);let h=w+A;h>=this.height&&(h=this.height-1);for(let B=M;B<=h;B++){let F=B-w,M=0|Math.sqrt(A*A-F*F),h=m-M;h<0&&(h=0);let z=m+M;z>=this.width&&(z=this.width-1);let d=h+B*this.width;for(let m=h;m<=z;m++){let m=(L+(this.Ba[d]>>16&255)*j>>8<<16)+(p+(this.Ba[d]>>8&255)*j>>8<<8)+(t+(255&this.Ba[d])*j>>8);this.Ba[d++]=m}}}}class l extends d{data;Ua;Va;Wa;Xa;Ya;Za;$a;constructor(m,w,A){super(),this.data=new Int8Array(m*w),this.Va=this.Za=m,this.Wa=this.$a=w,this.Xa=this.Ya=0,this.Ua=A}static _a(m,w,A=0){let B=new j(m.read(w+".dat")),F=new j(m.read("index.dat"));F.J=B.O();let L=F.O(),p=F.O(),t=F.M(),M=new Int32Array(t);for(let m=0;m<t-1;m++)M[m+1]=F.R();for(let m=0;m<A;m++)F.J+=2,B.J+=F.O()*F.O(),F.J+=1;if(B.J>B.length||F.J>F.length)throw Error();let h=F.M(),z=F.M(),d=F.O(),c=F.O(),f=new l(d,c,M);f.Xa=h,f.Ya=z,f.Za=L,f.$a=p;let x=F.M();if(0===x)for(let m=0;m<f.Va*f.Wa;m++)f.data[m]=B.N();else if(1===x)for(let m=0;m<f.Va;m++)for(let w=0;w<f.Wa;w++)f.data[m+w*f.Va]=B.N();return f}ab(){this.Za|=0,this.$a|=0,this.Za/=2,this.$a/=2,this.Za|=0,this.$a|=0;let m=new Int8Array(this.Za*this.$a),w=0;for(let A=0;A<this.Wa;A++)for(let B=0;B<this.Va;B++)m[(B+this.Xa>>1)+(A+this.Ya>>1)*this.Za]=this.data[w++];this.data=m,this.Va=this.Za,this.Wa=this.$a,this.Xa=0,this.Ya=0}trim(){if(this.Va===this.Za&&this.Wa===this.$a)return;let m=new Int8Array(this.Za*this.$a),w=0;for(let A=0;A<this.Wa;A++)for(let B=0;B<this.Va;B++)m[B+this.Xa+(A+this.Ya)*this.Za]=this.data[w++];this.data=m,this.Va=this.Za,this.Wa=this.$a,this.Xa=0,this.Ya=0}bb(m,w,A){for(let B=0;B<this.Ua.length;B++){let F=this.Ua[B]>>16&255;F+=m,F<0?F=0:F>255&&(F=255);let j=this.Ua[B]>>8&255;j+=w,j<0?j=0:j>255&&(j=255);let L=255&this.Ua[B];L+=A,L<0?L=0:L>255&&(L=255),this.Ua[B]=(F<<16)+(j<<8)+L}}cb(){let m=this.data,w=this.Va,A=this.Wa;for(let B=0;B<A;B++){let A=w/2|0;for(let F=0;F<A;F++){let A=F+B*w,j=w-F-1+B*w,L=m[A];m[A]=m[j],m[j]=L}}}eb(){let m=this.data,w=this.Va,A=this.Wa;for(let B=0;B<(A/2|0);B++)for(let F=0;F<w;F++){let j=F+B*w,L=F+(A-B-1)*w,p=m[j];m[j]=m[L],m[L]=p}}fb(m,w){m|=0,w|=0;let A=(m+=this.Xa)+(w+=this.Ya)*d.width,B=0,F=this.Wa,j=this.Va,L=d.width-j,p=0;if(w<d.Ea){let m=d.Ea-w;F-=m,w=d.Ea,B+=m*j,A+=m*d.width}if(w+F>d.Fa&&(F-=w+F-d.Fa),m<d.Ca){let w=d.Ca-m;j-=w,m=d.Ca,B+=w,A+=w,p+=w,L+=w}if(m+j>d.Da){let w=m+j-d.Da;j-=w,p+=w,L+=w}j>0&&F>0&&this.gb(j,F,this.data,B,p,d.Ba,A,L)}gb(m,w,A,B,F,j,L,p){let t=-(m>>2);m=-(3&m);for(let M=-w;M<0;M++){for(let m=t;m<0;m++){let m=A[B++];0===m?L++:j[L++]=this.Ua[255&m],m=A[B++],0===m?L++:j[L++]=this.Ua[255&m],m=A[B++],0===m?L++:j[L++]=this.Ua[255&m],m=A[B++],0===m?L++:j[L++]=this.Ua[255&m]}for(let w=m;w<0;w++){let m=A[B++];0===m?L++:j[L++]=this.Ua[255&m]}L+=p,B+=F}}hb(m,w,A,B){try{let F=this.Va,j=(this.Wa,0),L=0,p=this.Za,t=this.$a,M=(p<<16)/A|0,h=(t<<16)/B|0;m=m+(this.Xa*A+p-1)/p|0,w=w+(this.Ya*B+t-1)/t|0,this.Xa*A%p!=0&&(j=(p-this.Xa*A%p<<16)/A|0),this.Ya*B%t!=0&&(L=(t-this.Ya*B%t<<16)/B|0),A=A*(this.Va-(j>>16))/p|0,B=B*(this.Wa-(L>>16))/t|0;let z,l=m+w*d.width,c=d.width-A;w<d.Ea&&(z=d.Ea-w,B-=z,w=0,l+=z*d.width,L+=h*z),w+B>d.Fa&&(B-=w+B-d.Fa),m<d.Ca&&(z=d.Ca-m,A-=z,m=0,l+=z,j+=M*z,c+=z),m+A>d.Da&&(z=m+A-d.Da,A-=z,c+=z),this.ib(d.Ba,this.data,this.Ua,j,L,l,c,A,B,M,h,F)}catch(m){}}ib(m,w,A,B,F,j,L,p,t,M,h,z){try{let d=B;for(let l=-t;l<0;l++){let t=(F>>16)*z;for(let F=-p;F<0;F++){let F=w[(B>>16)+t];0==F?j++:m[j++]=A[255&F],B+=M}F+=h,B=d,j+=L}}catch(m){}}}class c extends Array{constructor(m,w){super(m);for(let A=0;A<m;A++)this[A]=w}}class f extends Array{constructor(m,w,A){super(m);for(let B=0;B<m;B++){this[B]=Array(w);for(let m=0;m<w;m++)this[B][m]=A}}}class x extends Array{constructor(m,w){super(m);for(let A=0;A<m;A++)this[A]=new Int32Array(w)}}class Z extends d{static jb=!1;static kb=!0;static lb=new Int32Array(512);static mb=new Int32Array(2048);static nb=new Int32Array(2048);static ob=new Int32Array(2048);static pb=new Int32Array(65536);static qb=new c(50,null);static rb=new c(50,!1);static sb=new Int32Array(50);static tb=new c(50,null);static ub=new Int32Array(50);static wb=new c(50,null);static xb=0;static yb=0;static zb=0;static Ab=null;static Bb=0;static Cb=!1;static Db=0;static Eb=new Int32Array;static Fb=!1;static Gb=0;static{for(let m=1;m<512;m++)this.lb[m]=32768/m|0;for(let m=1;m<2048;m++)this.mb[m]=65536/m|0;for(let m=0;m<2048;m++)this.nb[m]=65536*Math.sin(.0030679615757712823*m)|0,this.ob[m]=65536*Math.cos(.0030679615757712823*m)|0}static Hb(){this.Eb=new Int32Array(d.height);for(let m=0;m<d.height;m++)this.Eb[m]=d.width*m;this.yb=d.width/2|0,this.zb=d.height/2|0}static Ja(m,w){this.Eb=new Int32Array(w);for(let A=0;A<w;A++)this.Eb[A]=m*A;this.yb=m/2|0,this.zb=w/2|0}static Ib(){this.Ab=null,this.tb.fill(null)}static Jb(m){this.Ab||(this.Bb=m,this.jb?this.Ab=new x(m,16384):this.Ab=new x(m,65536),this.tb.fill(null))}static Kb(m){this.xb=0;for(let w=0;w<50;w++)try{this.qb[w]=l._a(m,w.toString()),this.jb&&128===this.qb[w]?.Za?this.qb[w]?.ab():this.qb[w]?.trim(),this.xb++}catch(m){}}static Lb(m){if(0!==this.sb[m])return this.sb[m];let w=this.wb[m];if(!w)return 0;let A=0,B=0,F=0,j=w.length;for(let m=0;m<j;m++)A+=w[m]>>16&255,B+=w[m]>>8&255,F+=255&w[m];let L=(A/j<<16)+(B/j<<8)+(F/j|0);return L=this.Mb(L,1.4),0===L&&(L=1),this.sb[m]=L,L}static Nb(m){this.tb[m]&&this.Ab&&(this.Ab[this.Bb++]=this.tb[m],this.tb[m]=null)}static Ob(m){if(this.ub[m]=this.Db++,this.tb[m])return this.tb[m];let w;if(this.Bb>0&&this.Ab)w=this.Ab[--this.Bb],this.Ab[this.Bb]=null;else{let m=0,A=-1;for(let w=0;w<this.xb;w++)this.tb[w]&&(this.ub[w]<m||-1===A)&&(m=this.ub[w],A=w);w=this.tb[A],this.tb[A]=null}this.tb[m]=w;let A=this.qb[m],B=this.wb[m];if(!w||!A||!B)return null;if(this.jb){this.rb[m]=!1;for(let F=0;F<4096;F++){let j=w[F]=16316671&B[A.data[F]];0===j&&(this.rb[m]=!0),w[F+4096]=j-(j>>>3)&16316671,w[F+8192]=j-(j>>>2)&16316671,w[F+12288]=j-(j>>>2)-(j>>>3)&16316671}}else{if(64===A.Va)for(let m=0;m<128;m++)for(let F=0;F<128;F++)w[F+(m<<7)]=B[A.data[(F>>1)+(m>>1<<6)]];else for(let m=0;m<16384;m++)w[m]=B[A.data[m]];this.rb[m]=!1;for(let A=0;A<16384;A++){w[A]&=16316671;let B=w[A];0===B&&(this.rb[m]=!0),w[A+16384]=B-(B>>>3)&16316671,w[A+32768]=B-(B>>>2)&16316671,w[A+49152]=B-(B>>>2)-(B>>>3)&16316671}}return w}static Pb(m){let w=m+.03*Math.random()-.015,A=0;for(let m=0;m<512;m++){let B=(m/8|0)/64+.0078125,F=(7&m)/8+.0625;for(let m=0;m<128;m++){let j=m/128,L=j,p=j,t=j;if(0!==F){let m;m=j<.5?j*(F+1):j+F-j*F;let w=2*j-m,A=B+.3333333333333333;A>1&&A--;let M=B-.3333333333333333;M<0&&M++,L=6*A<1?w+6*(m-w)*A:2*A<1?m:3*A<2?w+(m-w)*(.6666666666666666-A)*6:w,p=6*B<1?w+6*(m-w)*B:2*B<1?m:3*B<2?w+(m-w)*(.6666666666666666-B)*6:w,t=6*M<1?w+6*(m-w)*M:2*M<1?m:3*M<2?w+(m-w)*(.6666666666666666-M)*6:w}let M=((256*L|0)<<16)+((256*p|0)<<8)+(256*t|0);this.pb[A++]=this.Mb(M,w)}}for(let m=0;m<50;m++){let A=this.qb[m];if(!A)continue;let B=A.Ua;this.wb[m]=new Int32Array(B.length);for(let A=0;A<B.length;A++){let F=this.wb[m];F&&(F[A]=this.Mb(B[A],w))}}for(let m=0;m<50;m++)this.Nb(m)}static Mb(m,w){let A=(m>>16)/256,B=(m>>8&255)/256,F=(255&m)/256;return((256*Math.pow(A,w)|0)<<16)+((256*Math.pow(B,w)|0)<<8)+(256*Math.pow(F,w)|0)}static Qb(m,w,A,B,F,j,L,p,t){let M=0,h=0;F!==B&&(M=(w-m<<16)/(F-B)|0,h=(p-L<<15)/(F-B)|0);let z=0,l=0;j!==F&&(z=(A-w<<16)/(j-F)|0,l=(t-p<<15)/(j-F)|0);let c=0,f=0;if(j!==B&&(c=(m-A<<16)/(B-j)|0,f=(L-t<<15)/(B-j)|0),B<=F&&B<=j){if(B>=d.Fa)return;if(F>d.Fa&&(F=d.Fa),j>d.Fa&&(j=d.Fa),F<j)if(A=m<<=16,t=L<<=15,B<0&&(A-=c*B,m-=M*B,t-=f*B,L-=h*B,B=0),w<<=16,p<<=15,F<0&&(w-=z*F,p-=l*F,F=0),B!==F&&c<M||B===F&&c>z)for(j-=F,F-=B,B=this.Eb[B];;){if(--F<0)for(;;){if(--j<0)return;this.Rb(A>>16,w>>16,t>>7,p>>7,d.Ba,B,0),A+=c,w+=z,t+=f,p+=l,B+=d.width}this.Rb(A>>16,m>>16,t>>7,L>>7,d.Ba,B,0),A+=c,m+=M,t+=f,L+=h,B+=d.width}else for(j-=F,F-=B,B=this.Eb[B];;){if(--F<0)for(;;){if(--j<0)return;this.Rb(w>>16,A>>16,p>>7,t>>7,d.Ba,B,0),A+=c,w+=z,t+=f,p+=l,B+=d.width}this.Rb(m>>16,A>>16,L>>7,t>>7,d.Ba,B,0),A+=c,m+=M,t+=f,L+=h,B+=d.width}else if(w=m<<=16,p=L<<=15,B<0&&(w-=c*B,m-=M*B,p-=f*B,L-=h*B,B=0),A<<=16,t<<=15,j<0&&(A-=z*j,t-=l*j,j=0),B!==j&&c<M||B===j&&z>M)for(F-=j,j-=B,B=this.Eb[B];;){if(--j<0)for(;;){if(--F<0)return;this.Rb(A>>16,m>>16,t>>7,L>>7,d.Ba,B,0),A+=z,m+=M,t+=l,L+=h,B+=d.width}this.Rb(w>>16,m>>16,p>>7,L>>7,d.Ba,B,0),w+=c,m+=M,p+=f,L+=h,B+=d.width}else for(F-=j,j-=B,B=this.Eb[B];;){if(--j<0)for(;;){if(--F<0)return;this.Rb(m>>16,A>>16,L>>7,t>>7,d.Ba,B,0),A+=z,m+=M,t+=l,L+=h,B+=d.width}this.Rb(m>>16,w>>16,L>>7,p>>7,d.Ba,B,0),w+=c,m+=M,p+=f,L+=h,B+=d.width}}else if(F<=j){if(F>=d.Fa)return;if(j>d.Fa&&(j=d.Fa),B>d.Fa&&(B=d.Fa),j<B)if(m=w<<=16,L=p<<=15,F<0&&(m-=M*F,w-=z*F,L-=h*F,p-=l*F,F=0),A<<=16,t<<=15,j<0&&(A-=c*j,t-=f*j,j=0),F!==j&&M<z||F===j&&M>c)for(B-=j,j-=F,F=this.Eb[F];;){if(--j<0)for(;;){if(--B<0)return;this.Rb(m>>16,A>>16,L>>7,t>>7,d.Ba,F,0),m+=M,A+=c,L+=h,t+=f,F+=d.width}this.Rb(m>>16,w>>16,L>>7,p>>7,d.Ba,F,0),m+=M,w+=z,L+=h,p+=l,F+=d.width}else for(B-=j,j-=F,F=this.Eb[F];;){if(--j<0)for(;;){if(--B<0)return;this.Rb(A>>16,m>>16,t>>7,L>>7,d.Ba,F,0),m+=M,A+=c,L+=h,t+=f,F+=d.width}this.Rb(w>>16,m>>16,p>>7,L>>7,d.Ba,F,0),m+=M,w+=z,L+=h,p+=l,F+=d.width}else if(A=w<<=16,t=p<<=15,F<0&&(A-=M*F,w-=z*F,t-=h*F,p-=l*F,F=0),m<<=16,L<<=15,B<0&&(m-=c*B,L-=f*B,B=0),j-=B,B-=F,F=this.Eb[F],M<z)for(;;){if(--B<0)for(;;){if(--j<0)return;this.Rb(m>>16,w>>16,L>>7,p>>7,d.Ba,F,0),m+=c,w+=z,L+=f,p+=l,F+=d.width}this.Rb(A>>16,w>>16,t>>7,p>>7,d.Ba,F,0),A+=M,w+=z,t+=h,p+=l,F+=d.width}else for(;;){if(--B<0)for(;;){if(--j<0)return;this.Rb(w>>16,m>>16,p>>7,L>>7,d.Ba,F,0),m+=c,w+=z,L+=f,p+=l,F+=d.width}this.Rb(w>>16,A>>16,p>>7,t>>7,d.Ba,F,0),A+=M,w+=z,t+=h,p+=l,F+=d.width}}else{if(j>=d.Fa)return;if(B>d.Fa&&(B=d.Fa),F>d.Fa&&(F=d.Fa),B<F)if(w=A<<=16,p=t<<=15,j<0&&(w-=z*j,A-=c*j,p-=l*j,t-=f*j,j=0),m<<=16,L<<=15,B<0&&(m-=M*B,L-=h*B,B=0),F-=B,B-=j,j=this.Eb[j],z<c)for(;;){if(--B<0)for(;;){if(--F<0)return;this.Rb(w>>16,m>>16,p>>7,L>>7,d.Ba,j,0),w+=z,m+=M,p+=l,L+=h,j+=d.width}this.Rb(w>>16,A>>16,p>>7,t>>7,d.Ba,j,0),w+=z,A+=c,p+=l,t+=f,j+=d.width}else for(;;){if(--B<0)for(;;){if(--F<0)return;this.Rb(m>>16,w>>16,L>>7,p>>7,d.Ba,j,0),w+=z,m+=M,p+=l,L+=h,j+=d.width}this.Rb(A>>16,w>>16,t>>7,p>>7,d.Ba,j,0),w+=z,A+=c,p+=l,t+=f,j+=d.width}else if(m=A<<=16,L=t<<=15,j<0&&(m-=z*j,A-=c*j,L-=l*j,t-=f*j,j=0),w<<=16,p<<=15,F<0&&(w-=M*F,p-=h*F,F=0),B-=F,F-=j,j=this.Eb[j],z<c)for(;;){if(--F<0)for(;;){if(--B<0)return;this.Rb(w>>16,A>>16,p>>7,t>>7,d.Ba,j,0),w+=M,A+=c,p+=h,t+=f,j+=d.width}this.Rb(m>>16,A>>16,L>>7,t>>7,d.Ba,j,0),m+=z,A+=c,L+=l,t+=f,j+=d.width}else for(;;){if(--F<0)for(;;){if(--B<0)return;this.Rb(A>>16,w>>16,t>>7,p>>7,d.Ba,j,0),w+=M,A+=c,p+=h,t+=f,j+=d.width}this.Rb(A>>16,m>>16,t>>7,L>>7,d.Ba,j,0),m+=z,A+=c,L+=l,t+=f,j+=d.width}}}static Rb(m,w,A,B,F,j,L){let p;if(this.kb){let t;if(this.Fb){if(t=w-m>3?(B-A)/(w-m)|0:0,w>d.sizeX&&(w=d.sizeX),m<0&&(A-=m*t,m=0),m>=w)return;j+=m,L=w-m>>2,t<<=2}else{if(!(m<w))return;j+=m,t=(L=w-m>>2)>0?(B-A)*this.lb[L]>>15:0}if(0===this.Gb)for(;;){if(--L<0){if((L=w-m&3)>0){p=this.pb[A>>8];do{F[j++]=p,L--}while(L>0);return}break}p=this.pb[A>>8],A+=t,F[j++]=p,F[j++]=p,F[j++]=p,F[j++]=p}else{let B=this.Gb,M=256-this.Gb;for(;;){if(--L<0){if((L=w-m&3)>0){p=this.pb[A>>8],p=((16711935&p)*M>>8&16711935)+((65280&p)*M>>8&65280);do{F[j++]=p+((16711935&F[j])*B>>8&16711935)+((65280&F[j])*B>>8&65280),L--}while(L>0)}break}p=this.pb[A>>8],A+=t,p=((16711935&p)*M>>8&16711935)+((65280&p)*M>>8&65280),F[j++]=p+((16711935&F[j])*B>>8&16711935)+((65280&F[j])*B>>8&65280),F[j++]=p+((16711935&F[j])*B>>8&16711935)+((65280&F[j])*B>>8&65280),F[j++]=p+((16711935&F[j])*B>>8&16711935)+((65280&F[j])*B>>8&65280),F[j++]=p+((16711935&F[j])*B>>8&16711935)+((65280&F[j])*B>>8&65280)}}}else if(m<w){let t=(B-A)/(w-m)|0;if(this.Fb&&(w>d.sizeX&&(w=d.sizeX),m<0&&(A-=m*t,m=0),m>=w))return;if(j+=m,L=w-m,0===this.Gb)do{F[j++]=this.pb[A>>8],A+=t,L--}while(L>0);else{let m=this.Gb,w=256-this.Gb;do{p=this.pb[A>>8],A+=t,p=((16711935&p)*w>>8&16711935)+((65280&p)*w>>8&65280),F[j++]=p+((16711935&F[j])*m>>8&16711935)+((65280&F[j])*m>>8&65280),L--}while(L>0)}}}static Sb(m,w,A,B,F,j,L){let p=0;F!==B&&(p=(w-m<<16)/(F-B)|0);let t=0;j!==F&&(t=(A-w<<16)/(j-F)|0);let M=0;if(j!==B&&(M=(m-A<<16)/(B-j)|0),B<=F&&B<=j){if(B>=d.Fa)return;if(F>d.Fa&&(F=d.Fa),j>d.Fa&&(j=d.Fa),F<j)if(A=m<<=16,B<0&&(A-=M*B,m-=p*B,B=0),w<<=16,F<0&&(w-=t*F,F=0),B!==F&&M<p||B===F&&M>t)for(j-=F,F-=B,B=this.Eb[B];;){if(--F<0)for(;;){if(--j<0)return;this.Tb(A>>16,w>>16,d.Ba,B,L),A+=M,w+=t,B+=d.width}this.Tb(A>>16,m>>16,d.Ba,B,L),A+=M,m+=p,B+=d.width}else for(j-=F,F-=B,B=this.Eb[B];;){if(--F<0)for(;;){if(--j<0)return;this.Tb(w>>16,A>>16,d.Ba,B,L),A+=M,w+=t,B+=d.width}this.Tb(m>>16,A>>16,d.Ba,B,L),A+=M,m+=p,B+=d.width}else if(w=m<<=16,B<0&&(w-=M*B,m-=p*B,B=0),A<<=16,j<0&&(A-=t*j,j=0),B!==j&&M<p||B===j&&t>p)for(F-=j,j-=B,B=this.Eb[B];;){if(--j<0)for(;;){if(--F<0)return;this.Tb(A>>16,m>>16,d.Ba,B,L),A+=t,m+=p,B+=d.width}this.Tb(w>>16,m>>16,d.Ba,B,L),w+=M,m+=p,B+=d.width}else for(F-=j,j-=B,B=this.Eb[B];;){if(--j<0)for(;;){if(--F<0)return;this.Tb(m>>16,A>>16,d.Ba,B,L),A+=t,m+=p,B+=d.width}this.Tb(m>>16,w>>16,d.Ba,B,L),w+=M,m+=p,B+=d.width}}else if(F<=j){if(F>=d.Fa)return;if(j>d.Fa&&(j=d.Fa),B>d.Fa&&(B=d.Fa),j<B)if(m=w<<=16,F<0&&(m-=p*F,w-=t*F,F=0),A<<=16,j<0&&(A-=M*j,j=0),F!==j&&p<t||F===j&&p>M)for(B-=j,j-=F,F=this.Eb[F];;){if(--j<0)for(;;){if(--B<0)return;this.Tb(m>>16,A>>16,d.Ba,F,L),m+=p,A+=M,F+=d.width}this.Tb(m>>16,w>>16,d.Ba,F,L),m+=p,w+=t,F+=d.width}else for(B-=j,j-=F,F=this.Eb[F];;){if(--j<0)for(;;){if(--B<0)return;this.Tb(A>>16,m>>16,d.Ba,F,L),m+=p,A+=M,F+=d.width}this.Tb(w>>16,m>>16,d.Ba,F,L),m+=p,w+=t,F+=d.width}else if(A=w<<=16,F<0&&(A-=p*F,w-=t*F,F=0),m<<=16,B<0&&(m-=M*B,B=0),j-=B,B-=F,F=this.Eb[F],p<t)for(;;){if(--B<0)for(;;){if(--j<0)return;this.Tb(m>>16,w>>16,d.Ba,F,L),m+=M,w+=t,F+=d.width}this.Tb(A>>16,w>>16,d.Ba,F,L),A+=p,w+=t,F+=d.width}else for(;;){if(--B<0)for(;;){if(--j<0)return;this.Tb(w>>16,m>>16,d.Ba,F,L),m+=M,w+=t,F+=d.width}this.Tb(w>>16,A>>16,d.Ba,F,L),A+=p,w+=t,F+=d.width}}else{if(j>=d.Fa)return;if(B>d.Fa&&(B=d.Fa),F>d.Fa&&(F=d.Fa),B<F)if(w=A<<=16,j<0&&(w-=t*j,A-=M*j,j=0),m<<=16,B<0&&(m-=p*B,B=0),F-=B,B-=j,j=this.Eb[j],t<M)for(;;){if(--B<0)for(;;){if(--F<0)return;this.Tb(w>>16,m>>16,d.Ba,j,L),w+=t,m+=p,j+=d.width}this.Tb(w>>16,A>>16,d.Ba,j,L),w+=t,A+=M,j+=d.width}else for(;;){if(--B<0)for(;;){if(--F<0)return;this.Tb(m>>16,w>>16,d.Ba,j,L),w+=t,m+=p,j+=d.width}this.Tb(A>>16,w>>16,d.Ba,j,L),w+=t,A+=M,j+=d.width}else if(m=A<<=16,j<0&&(m-=t*j,A-=M*j,j=0),w<<=16,F<0&&(w-=p*F,F=0),B-=F,F-=j,j=this.Eb[j],t<M)for(;;){if(--F<0)for(;;){if(--B<0)return;this.Tb(w>>16,A>>16,d.Ba,j,L),w+=p,A+=M,j+=d.width}this.Tb(m>>16,A>>16,d.Ba,j,L),m+=t,A+=M,j+=d.width}else for(;;){if(--F<0)for(;;){if(--B<0)return;this.Tb(A>>16,w>>16,d.Ba,j,L),w+=p,A+=M,j+=d.width}this.Tb(A>>16,m>>16,d.Ba,j,L),m+=t,A+=M,j+=d.width}}}static Tb(m,w,A,B,F){if(this.Fb&&(w>d.sizeX&&(w=d.sizeX),m<0&&(m=0)),m>=w)return;B+=m;let j=w-m>>2;if(0===this.Gb)for(;;){if(j--,j<0)for(j=w-m&3;;){if(j--,j<0)return;A[B++]=F}A[B++]=F,A[B++]=F,A[B++]=F,A[B++]=F}else{let L=this.Gb,p=256-this.Gb;for(F=((16711935&F)*p>>8&16711935)+((65280&F)*p>>8&65280);;){if(j--,j<0)for(j=w-m&3;;){if(j--,j<0)return;A[B++]=F+((16711935&A[B])*L>>8&16711935)+((65280&A[B])*L>>8&65280)}A[B++]=F+((16711935&A[B])*L>>8&16711935)+((65280&A[B])*L>>8&65280),A[B++]=F+((16711935&A[B])*L>>8&16711935)+((65280&A[B])*L>>8&65280),A[B++]=F+((16711935&A[B])*L>>8&16711935)+((65280&A[B])*L>>8&65280),A[B++]=F+((16711935&A[B])*L>>8&16711935)+((65280&A[B])*L>>8&65280)}}}static Ub(m,w,A,B,F,j,L,p,t,M,h,z,l,c,f,x,Z,G,Y){let e=this.Ob(Y);this.Cb=!this.rb[Y];let b=M-l,u=h-f,q=z-Z,E=c-M,J=x-h,W=G-z,s=E*h-J*M<<14,H=J*z-W*h<<8,P=W*M-E*z<<5,v=b*h-u*M<<14,S=u*z-q*h<<8,U=q*M-b*z<<5,C=u*E-b*J<<14,a=q*J-u*W<<8,I=b*W-q*E<<5,R=0,y=0;F!==B&&(R=(w-m<<16)/(F-B)|0,y=(p-L<<16)/(F-B)|0);let i=0,T=0;j!==F&&(i=(A-w<<16)/(j-F)|0,T=(t-p<<16)/(j-F)|0);let V=0,X=0;if(j!==B&&(V=(m-A<<16)/(B-j)|0,X=(L-t<<16)/(B-j)|0),B<=F&&B<=j){if(B>=d.Fa)return;if(F>d.Fa&&(F=d.Fa),j>d.Fa&&(j=d.Fa),F<j){A=m<<=16,t=L<<=16,B<0&&(A-=V*B,m-=R*B,t-=X*B,L-=y*B,B=0),w<<=16,p<<=16,F<0&&(w-=i*F,p-=T*F,F=0);let M=B-this.zb;if(s+=P*M,v+=U*M,C+=I*M,s|=0,v|=0,C|=0,B!==F&&V<R||B===F&&V>i)for(j-=F,F-=B,B=this.Eb[B];;){if(--F<0)for(;;){if(--j<0)return;this.Vb(A>>16,w>>16,d.Ba,B,e,0,0,s,v,C,H,S,a,t>>8,p>>8),A+=V,w+=i,t+=X,p+=T,B+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}this.Vb(A>>16,m>>16,d.Ba,B,e,0,0,s,v,C,H,S,a,t>>8,L>>8),A+=V,m+=R,t+=X,L+=y,B+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}else for(j-=F,F-=B,B=this.Eb[B];;){if(--F<0)for(;;){if(--j<0)return;this.Vb(w>>16,A>>16,d.Ba,B,e,0,0,s,v,C,H,S,a,p>>8,t>>8),A+=V,w+=i,t+=X,p+=T,B+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}this.Vb(m>>16,A>>16,d.Ba,B,e,0,0,s,v,C,H,S,a,L>>8,t>>8),A+=V,m+=R,t+=X,L+=y,B+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}}else{w=m<<=16,p=L<<=16,B<0&&(w-=V*B,m-=R*B,p-=X*B,L-=y*B,B=0),A<<=16,t<<=16,j<0&&(A-=i*j,t-=T*j,j=0);let M=B-this.zb;if(s+=P*M,v+=U*M,C+=I*M,s|=0,v|=0,C|=0,(B===j||V>=R)&&(B!==j||i<=R))for(F-=j,j-=B,B=this.Eb[B];;){if(--j<0)for(;;){if(--F<0)return;this.Vb(m>>16,A>>16,d.Ba,B,e,0,0,s,v,C,H,S,a,L>>8,t>>8),A+=i,m+=R,t+=T,L+=y,B+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}this.Vb(m>>16,w>>16,d.Ba,B,e,0,0,s,v,C,H,S,a,L>>8,p>>8),w+=V,m+=R,p+=X,L+=y,B+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}else for(F-=j,j-=B,B=this.Eb[B];;){if(--j<0)for(;;){if(--F<0)return;this.Vb(A>>16,m>>16,d.Ba,B,e,0,0,s,v,C,H,S,a,t>>8,L>>8),A+=i,m+=R,t+=T,L+=y,B+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}this.Vb(w>>16,m>>16,d.Ba,B,e,0,0,s,v,C,H,S,a,p>>8,L>>8),w+=V,m+=R,p+=X,L+=y,B+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}}}else if(F<=j){if(F>=d.Fa)return;if(j>d.Fa&&(j=d.Fa),B>d.Fa&&(B=d.Fa),j<B){m=w<<=16,L=p<<=16,F<0&&(m-=R*F,w-=i*F,L-=y*F,p-=T*F,F=0),A<<=16,t<<=16,j<0&&(A-=V*j,t-=X*j,j=0);let M=F-this.zb;if(s+=P*M,v+=U*M,C+=I*M,s|=0,v|=0,C|=0,F!==j&&R<i||F===j&&R>V)for(B-=j,j-=F,F=this.Eb[F];;){if(--j<0)for(;;){if(--B<0)return;this.Vb(m>>16,A>>16,d.Ba,F,e,0,0,s,v,C,H,S,a,L>>8,t>>8),m+=R,A+=V,L+=y,t+=X,F+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}this.Vb(m>>16,w>>16,d.Ba,F,e,0,0,s,v,C,H,S,a,L>>8,p>>8),m+=R,w+=i,L+=y,p+=T,F+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}else for(B-=j,j-=F,F=this.Eb[F];;){if(--j<0)for(;;){if(--B<0)return;this.Vb(A>>16,m>>16,d.Ba,F,e,0,0,s,v,C,H,S,a,t>>8,L>>8),m+=R,A+=V,L+=y,t+=X,F+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}this.Vb(w>>16,m>>16,d.Ba,F,e,0,0,s,v,C,H,S,a,p>>8,L>>8),m+=R,w+=i,L+=y,p+=T,F+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}}else{A=w<<=16,t=p<<=16,F<0&&(A-=R*F,w-=i*F,t-=y*F,p-=T*F,F=0),m<<=16,L<<=16,B<0&&(m-=V*B,L-=X*B,B=0);let M=F-this.zb;if(s+=P*M,v+=U*M,C+=I*M,s|=0,v|=0,C|=0,j-=B,B-=F,F=this.Eb[F],R<i)for(;;){if(--B<0)for(;;){if(--j<0)return;this.Vb(m>>16,w>>16,d.Ba,F,e,0,0,s,v,C,H,S,a,L>>8,p>>8),m+=V,w+=i,L+=X,p+=T,F+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}this.Vb(A>>16,w>>16,d.Ba,F,e,0,0,s,v,C,H,S,a,t>>8,p>>8),A+=R,w+=i,t+=y,p+=T,F+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}else for(;;){if(--B<0)for(;;){if(--j<0)return;this.Vb(w>>16,m>>16,d.Ba,F,e,0,0,s,v,C,H,S,a,p>>8,L>>8),m+=V,w+=i,L+=X,p+=T,F+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}this.Vb(w>>16,A>>16,d.Ba,F,e,0,0,s,v,C,H,S,a,p>>8,t>>8),A+=R,w+=i,t+=y,p+=T,F+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}}}else{if(j>=d.Fa)return;if(B>d.Fa&&(B=d.Fa),F>d.Fa&&(F=d.Fa),B<F){w=A<<=16,p=t<<=16,j<0&&(w-=i*j,A-=V*j,p-=T*j,t-=X*j,j=0),m<<=16,L<<=16,B<0&&(m-=R*B,L-=y*B,B=0);let M=j-this.zb;if(s+=P*M,v+=U*M,C+=I*M,s|=0,v|=0,C|=0,F-=B,B-=j,j=this.Eb[j],i<V)for(;;){if(--B<0)for(;;){if(--F<0)return;this.Vb(w>>16,m>>16,d.Ba,j,e,0,0,s,v,C,H,S,a,p>>8,L>>8),w+=i,m+=R,p+=T,L+=y,j+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}this.Vb(w>>16,A>>16,d.Ba,j,e,0,0,s,v,C,H,S,a,p>>8,t>>8),w+=i,A+=V,p+=T,t+=X,j+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}else for(;;){if(--B<0)for(;;){if(--F<0)return;this.Vb(m>>16,w>>16,d.Ba,j,e,0,0,s,v,C,H,S,a,L>>8,p>>8),w+=i,m+=R,p+=T,L+=y,j+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}this.Vb(A>>16,w>>16,d.Ba,j,e,0,0,s,v,C,H,S,a,t>>8,p>>8),w+=i,A+=V,p+=T,t+=X,j+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}}else{m=A<<=16,L=t<<=16,j<0&&(m-=i*j,A-=V*j,L-=T*j,t-=X*j,j=0),w<<=16,p<<=16,F<0&&(w-=R*F,p-=y*F,F=0);let M=j-this.zb;if(s+=P*M,v+=U*M,C+=I*M,s|=0,v|=0,C|=0,B-=F,F-=j,j=this.Eb[j],i<V)for(;;){if(--F<0)for(;;){if(--B<0)return;this.Vb(w>>16,A>>16,d.Ba,j,e,0,0,s,v,C,H,S,a,p>>8,t>>8),w+=R,A+=V,p+=y,t+=X,j+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}this.Vb(m>>16,A>>16,d.Ba,j,e,0,0,s,v,C,H,S,a,L>>8,t>>8),m+=i,A+=V,L+=T,t+=X,j+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}else for(;;){if(--F<0)for(;;){if(--B<0)return;this.Vb(A>>16,w>>16,d.Ba,j,e,0,0,s,v,C,H,S,a,t>>8,p>>8),w+=R,A+=V,p+=y,t+=X,j+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}this.Vb(A>>16,m>>16,d.Ba,j,e,0,0,s,v,C,H,S,a,t>>8,L>>8),m+=i,A+=V,L+=T,t+=X,j+=d.width,s+=P,v+=U,C+=I,s|=0,v|=0,C|=0}}}}static Vb(m,w,A,B,F,j,L,p,t,M,h,z,l,c,f){if(!F)return;if(m>=w)return;let x,Z,G,Y,e,b,u,q,E;if(this.Fb){if(x=(f-c)/(w-m)|0,w>d.sizeX&&(w=d.sizeX),m<0&&(c-=m*x,m=0),m>=w)return;Z=w-m>>3,x<<=12}else w-m>7?(Z=w-m>>3,x=(f-c)*this.lb[Z]>>6):(Z=0,x=0);if(c<<=9,B+=m,this.jb)if(G=0,Y=0,b=m-this.yb,p+=(h>>3)*b,t+=(z>>3)*b,M+=(l>>3)*b,p|=0,t|=0,e=(M|=0)>>12,0!==e&&(L=t/e|0,(j=p/e|0)<0?j=0:j>4032&&(j=4032)),p+=h,t+=z,M+=l,p|=0,t|=0,e=(M|=0)>>12,0!==e&&(G=p/e|0,Y=t/e|0,G<7?G=7:G>4032&&(G=4032)),u=G-j>>3,q=Y-L>>3,j+=c>>3&786432,E=c>>23,this.Cb){for(;Z-- >0;)A[B++]=F[(4032&L)+(j>>6)]>>>E,j+=u,L+=q,A[B++]=F[(4032&L)+(j>>6)]>>>E,j+=u,L+=q,A[B++]=F[(4032&L)+(j>>6)]>>>E,j+=u,L+=q,A[B++]=F[(4032&L)+(j>>6)]>>>E,j+=u,L+=q,A[B++]=F[(4032&L)+(j>>6)]>>>E,j+=u,L+=q,A[B++]=F[(4032&L)+(j>>6)]>>>E,j+=u,L+=q,A[B++]=F[(4032&L)+(j>>6)]>>>E,j+=u,L+=q,A[B++]=F[(4032&L)+(j>>6)]>>>E,j=G,L=Y,p+=h,t+=z,M+=l,p|=0,t|=0,e=(M|=0)>>12,0!==e&&(G=p/e|0,Y=t/e|0,G<7?G=7:G>4032&&(G=4032)),u=G-j>>3,q=Y-L>>3,j+=(c+=x)>>3&786432,E=c>>23;for(Z=w-m&7;Z-- >0;)A[B++]=F[(4032&L)+(j>>6)]>>>E,j+=u,L+=q}else{for(;Z-- >0;){let m;0!==(m=F[(4032&L)+(j>>6)]>>>E)&&(A[B]=m),B++,0!==(m=F[(4032&(L+=q))+((j+=u)>>6)]>>>E)&&(A[B]=m),B++,0!==(m=F[(4032&(L+=q))+((j+=u)>>6)]>>>E)&&(A[B]=m),B++,0!==(m=F[(4032&(L+=q))+((j+=u)>>6)]>>>E)&&(A[B]=m),B++,0!==(m=F[(4032&(L+=q))+((j+=u)>>6)]>>>E)&&(A[B]=m),B++,0!==(m=F[(4032&(L+=q))+((j+=u)>>6)]>>>E)&&(A[B]=m),B++,0!==(m=F[(4032&(L+=q))+((j+=u)>>6)]>>>E)&&(A[B]=m),B++,0!==(m=F[(4032&(L+=q))+((j+=u)>>6)]>>>E)&&(A[B]=m),B++,j=G,L=Y,p+=h,t+=z,M+=l,p|=0,t|=0,e=(M|=0)>>12,0!==e&&(G=p/e|0,Y=t/e|0,G<7?G=7:G>4032&&(G=4032)),u=G-j>>3,q=Y-L>>3,j+=(c+=x)>>3&786432,E=c>>23}for(Z=w-m&7;Z-- >0;){let m;0!==(m=F[(4032&L)+(j>>6)]>>>E)&&(A[B]=m),B++,j+=u,L+=q}}else if(G=0,Y=0,b=m-this.yb,p+=(h>>3)*b,t+=(z>>3)*b,M+=(l>>3)*b,p|=0,t|=0,e=(M|=0)>>14,0!==e&&(L=t/e|0,(j=p/e|0)<0?j=0:j>16256&&(j=16256)),p+=h,t+=z,M+=l,p|=0,t|=0,e=(M|=0)>>14,0!==e&&(G=p/e|0,Y=t/e|0,G<7?G=7:G>16256&&(G=16256)),u=G-j>>3,q=Y-L>>3,j+=6291456&c,E=c>>23,this.Cb){for(;Z-- >0;)A[B++]=F[(16256&L)+(j>>7)]>>>E,j+=u,L+=q,A[B++]=F[(16256&L)+(j>>7)]>>>E,j+=u,L+=q,A[B++]=F[(16256&L)+(j>>7)]>>>E,j+=u,L+=q,A[B++]=F[(16256&L)+(j>>7)]>>>E,j+=u,L+=q,A[B++]=F[(16256&L)+(j>>7)]>>>E,j+=u,L+=q,A[B++]=F[(16256&L)+(j>>7)]>>>E,j+=u,L+=q,A[B++]=F[(16256&L)+(j>>7)]>>>E,j+=u,L+=q,A[B++]=F[(16256&L)+(j>>7)]>>>E,j=G,L=Y,p+=h,t+=z,M+=l,p|=0,t|=0,e=(M|=0)>>14,0!==e&&(G=p/e|0,Y=t/e|0,G<7?G=7:G>16256&&(G=16256)),u=G-j>>3,q=Y-L>>3,j+=6291456&(c+=x),E=c>>23;for(Z=w-m&7;Z-- >0;)A[B++]=F[(16256&L)+(j>>7)]>>>E,j+=u,L+=q}else{for(;Z-- >0&&F;){let m;0!==(m=F[(16256&L)+(j>>7)]>>>E)&&(A[B]=m),B++,0!==(m=F[(16256&(L+=q))+((j+=u)>>7)]>>>E)&&(A[B]=m),B++,0!==(m=F[(16256&(L+=q))+((j+=u)>>7)]>>>E)&&(A[B]=m),B++,0!==(m=F[(16256&(L+=q))+((j+=u)>>7)]>>>E)&&(A[B]=m),B++,0!==(m=F[(16256&(L+=q))+((j+=u)>>7)]>>>E)&&(A[B]=m),B++,0!==(m=F[(16256&(L+=q))+((j+=u)>>7)]>>>E)&&(A[B]=m),B++,0!==(m=F[(16256&(L+=q))+((j+=u)>>7)]>>>E)&&(A[B]=m),B++,0!==(m=F[(16256&(L+=q))+((j+=u)>>7)]>>>E)&&(A[B]=m),B++,j=G,L=Y,p+=h,t+=z,M+=l,p|=0,t|=0,e=(M|=0)>>14,0!==e&&(G=p/e|0,Y=t/e|0,G<7?G=7:G>16256&&(G=16256)),u=G-j>>3,q=Y-L>>3,j+=6291456&(c+=x),E=c>>23}for(Z=w-m&7;Z-- >0&&F;){let m;0!==(m=F[(16256&L)+(j>>7)]>>>E)&&(A[B]=m),B++,j+=u,L+=q}}}}class G{data;width;height;Wb;Xb;Yb;constructor(m,w,A=h){this.width=m,this.height=w,this.data=new Int32Array(m*w),this.Xb=A,this.Wb=this.Xb.createImageData(m,w),this.Yb=new Uint32Array(this.Wb.data.buffer),this.Ia()}Ia(){d.Ia(this.data,this.width,this.height)}draw(m,w){this.Zb(),this.Xb.putImageData(this.Wb,m,w)}Zb(){let m=this.data,w=this.Yb,A=m.length,B=0,F=A-A%4;for(;B<F;B+=4){let A=m[B],F=m[B+1],j=m[B+2],L=m[B+3];w[B]=(16711680&A)>>16|65280&A|(255&A)<<16|4278190080,w[B+1]=(16711680&F)>>16|65280&F|(255&F)<<16|4278190080,w[B+2]=(16711680&j)>>16|65280&j|(255&j)<<16|4278190080,w[B+3]=(16711680&L)>>16|65280&L|(255&L)<<16|4278190080}for(;B<A;B++){let A=m[B];w[B]=(16711680&A)>>16|65280&A|(255&A)<<16|4278190080}}}class Y{static $b=1;state=0;_b=20;ac=1;bc=[,,,,,,,,,,];cc=0;debug=!1;dc=null;ec=!0;focus=!0;fc=performance.now();gc=0;hc=-1;jc=-1;kc=0;lc=-1;mc=-1;nc=0;oc=-1;qc=-1;rc=0;sc=0;tc=[];uc=[];vc=0;wc=0;xc=!1;yc=50;async zc(){}async Ac(){}async Bc(){}refresh(){}constructor(m=!1){M.tabIndex=-1,h.fillStyle="black",h.fillRect(0,0,M.width,M.height),this.xc=m,this.xc?this.resize(window.innerWidth,window.innerHeight):this.resize(M.width,M.height)}get Cc(){return M.width}get Dc(){return M.height}resize(m,w){M.width=m,M.height=w,this.dc=new G(m,w),Z.Hb()}async run(){M.addEventListener("resize",()=>{this.xc&&this.resize(window.innerWidth,window.innerHeight)},!1),M.onfocus=this.onfocus.bind(this),M.onblur=this.onblur.bind(this),M.onkeydown=this.onkeydown.bind(this),M.onkeyup=this.onkeyup.bind(this),M.onwheel=this.onwheel.bind(this),M.onmousedown=this.onmousedown.bind(this),M.onpointerdown=this.onpointerdown.bind(this),M.onmouseup=this.onmouseup.bind(this),M.onpointerup=this.onpointerup.bind(this),M.onpointerenter=this.onpointerenter.bind(this),M.onpointerleave=this.onpointerleave.bind(this),M.onpointermove=this.onpointermove.bind(this),window.onmouseup=this.Ec.bind(this),window.onmousemove=this.Fc.bind(this),this.Gc&&(this.Hc?M.ontouchstart=this.ontouchstart.bind(this):M.style.touchAction="none"),M.oncontextmenu=m=>{m.preventDefault()},window.oncontextmenu=m=>{m.preventDefault()},await this.Ic("Loading...",0),await this.zc();let m=0,w=0,A=256,F=1,j=0;for(let m=0;m<10;m++)this.bc[m]=performance.now();for(;this.state>=0;){if(this.state>0&&(this.state--,0===this.state))return void this.Jc();let L=A,p=F;A=300,F=1,m=performance.now();let t=this.bc[w];if(0===t?(A=L,F=p):m>t&&(A=2560*this._b/(m-t)|0),A<25?A=25:A>256&&(A=256,F=this._b-(m-t)/10|0),this.bc[w]=m,w=(w+1)%10,F>1)for(let m=0;m<10;m++)0!==this.bc[m]&&(this.bc[m]+=F);for(F<this.ac&&(F=this.ac),await B(F);j<256;)this.nc=this.kc,this.oc=this.lc,this.qc=this.mc,this.sc=this.rc,this.kc=0,await this.Ac(),j+=A;if(j&=255,this._b>0&&(this.cc=1e3*A/(256*this._b)|0),await this.Bc(),this.yc<50){let w=1e3/this.yc-(performance.now()-m);w>0&&await B(w)}if(this.debug){for(let m=0;m<10;m++){}this.debug=!1}}-1===this.state&&this.Jc()}Jc(){this.state=-2}Kc(m){this._b=1e3/m|0}Lc(m){this.yc=Math.max(Math.min(50,0|m),0)}start(){this.state>=0&&(this.state=0)}stop(){this.state>=0&&(this.state=4e3/this._b|0)}async Ic(m,w){let A=this.Cc,F=this.Dc;this.ec&&(h.fillStyle="black",h.fillRect(0,0,A,F),this.ec=!1);let j=F/2-18;h.strokeStyle="rgb(140, 17, 17)",h.strokeRect((A/2|0)-152,j,304,34),h.fillStyle="rgb(140, 17, 17)",h.fillRect((A/2|0)-150,j+2,3*w,30),h.fillStyle="black",h.fillRect((A/2|0)-150+3*w,j+2,300-3*w,30),h.font="bold 13px helvetica, sans-serif",h.textAlign="center",h.fillStyle="white",h.fillText(m,A/2|0,j+22),await B(5)}onmousedown(m){if(m.clientX<0||m.clientY<0)return;let{x:w,y:A}=this.Mc(m);this.Nc(w,A,m)}onwheel(m){m.deltaY>0?Y.$b=Math.min(3,Y.$b+.5):Y.$b=Math.max(0,Y.$b-.5)}Nc(m,w,A){this.fc=performance.now(),this.lc=m,this.mc=w,this.rc=performance.now(),this.hc=m,this.jc=w,2===A.button?(this.kc=2,this.gc=2):(this.kc=1,this.gc=1),L.active&&L.ra(m,w,A.button,"mouse")}onpointerdown(m){if(m.clientX<0||m.clientY<0)return;let{x:w,y:A}=this.Mc(m);this.Oc(w,A,m)}Oc(m,w,A){}onmouseup(m){let{x:w,y:A}=this.Mc(m);this.Pc(w,A,m)}Pc(m,w,A){this.fc=performance.now(),this.gc=0,L.active&&L.sa(A.button,"mouse"),this.hc=m,this.jc=w}onpointerup(m){let{x:w,y:A}=this.Mc(m);this.Qc(w,A,m)}Qc(m,w,A){}onpointerenter(m){if(m.clientX<0||m.clientY<0)return;let{x:w,y:A}=this.Mc(m);this.Rc(w,A,m)}Rc(m,w,A){this.hc=m,this.jc=w,L.active&&L.ya()}onpointerleave(m){this.Sc(m)}Sc(m){this.fc=performance.now(),this.hc=-1,this.jc=-1,L.active&&L.za(),this.lc=-1,this.mc=-1,this.kc=0,this.gc=0}onpointermove(m){if(m.clientX<0||m.clientY<0)return;let{x:w,y:A}=this.Mc(m);this.Tc(w,A,m)}Tc(m,w,A){this.fc=performance.now(),this.hc=m,this.jc=w,L.active&&L.ta(m,w,A.pointerType)}Ec(m){}Fc(m){}ontouchstart(m){this.Uc(m)}Uc(m){m.touches.length<2&&m.preventDefault()}onkeydown(m){this.fc=performance.now();let w=t.get(m.key);if(!w||0===m.code.length&&!m.isTrusted)return;let A=w.ch;m.ctrlKey&&(A>=65&&A<=93||95==A?A-=64:A>=97&&A<=122&&(A-=96)),A>0&&A<128&&(this.tc[A]=1),A>4&&(this.uc[this.wc]=A,this.wc=this.wc+1&127),L.active&&L.ua(A),p.includes(m.key)||m.preventDefault()}onkeyup(m){this.fc=performance.now();let w=t.get(m.key);if(!w||0===m.code.length&&!m.isTrusted)return;let A=w.ch;m.ctrlKey&&(A>=65&&A<=93||95==A?A-=64:A>=97&&A<=122&&(A-=96)),A>0&&A<128&&(this.tc[A]=0),L.active&&L.va(A),p.includes(m.key)||m.preventDefault()}Vc(){let m=-1;return this.wc!==this.vc&&(m=this.uc[this.vc],this.vc=this.vc+1&127),m}onfocus(m){this.focus=!0,this.ec=!0,this.refresh(),L.active&&L.wa()}onblur(m){this.focus=!1;for(let m=0;m<128;m++)this.tc[m]=0;L.active&&L.xa()}get Hc(){return"ontouchstart"in window}get Gc(){return this.Hc||navigator.maxTouchPoints>0||navigator.msMaxTouchPoints>0}get Wc(){return!!/Android|webOS|iPhone|iPad|iPod|BlackBerry|Windows Phone|Mobile/i.test(navigator.userAgent)||this.Gc}Xc(){return null!==document.fullscreenElement}Mc(m){let w=this.Cc,A=this.Dc,B=M.getBoundingClientRect(),F=m.clientX-B.left,j=m.clientY-B.top,L=0,p=0;if(this.Xc()){let m=w/A,B=0,t=0,M=0,h=0;window.innerWidth/window.innerHeight>=m?(B=window.innerHeight*m,t=window.innerHeight,M=(window.innerWidth-B)/2):(B=window.innerWidth,t=window.innerWidth/m,h=(window.innerHeight-t)/2),L=(F-M)*(w/B)|0,p=(j-h)*(A/t)|0}else{L=F*(M.width/B.width)|0,p=j*(M.height/B.height)|0}return L<0&&(L=0),L>w&&(L=w),p<0&&(p=0),p>A&&(p=A),{x:L,y:p}}}var e=document.createElement("canvas"),b=document.createElement("img"),u=e.getContext("2d",{willReadFrequently:!0});class q extends d{data;Va;Wa;Xa;Ya;Za;$a;constructor(m,w){super(),this.data=new Int32Array(m*w),this.Va=this.Za=m,this.Wa=this.$a=w,this.Xa=this.Ya=0}static async Yc(m,w){let A=m.read(w+".dat");if(!A)throw Error();let B=await async function(m){255!==m[0]&&(m[0]=255),URL.revokeObjectURL(b.src),b.src=URL.createObjectURL(new Blob([m],{type:"image/jpeg"})),await new Promise(m=>b.onload=()=>m()),u.clearRect(0,0,e.width,e.height);let{naturalWidth:w,naturalHeight:A}=b;return e.width=w,e.height=A,u.drawImage(b,0,0),u.getImageData(0,0,w,A)}(A),F=new q(B.width,B.height),j=new Uint32Array(B.data.buffer);for(let m=0;m<F.data.length;m++){let w=j[m];F.data[m]=(w>>24&255)<<24|(255&w)<<16|(w>>8&255)<<8|w>>16&255}return F}static _a(m,w,A=0){let B=new j(m.read(w+".dat")),F=new j(m.read("index.dat"));F.J=B.O();let L=F.O(),p=F.O(),t=F.M(),M=new Int32Array(t);for(let m=0;m<t-1;m++)M[m+1]=F.R(),0===M[m+1]&&(M[m+1]=1);for(let m=0;m<A;m++)F.J+=2,B.J+=F.O()*F.O(),F.J+=1;if(B.J>B.length||F.J>F.length)throw Error();let h=F.M(),z=F.M(),d=F.O(),l=F.O(),c=new q(d,l);c.Xa=h,c.Ya=z,c.Za=L,c.$a=p;let f=F.M();if(0===f)for(let m=0;m<c.Va*c.Wa;m++)c.data[m]=M[B.M()];else if(1===f)for(let m=0;m<c.Va;m++)for(let w=0;w<c.Wa;w++)c.data[m+w*c.Va]=M[B.M()];return c}Ia(){d.Ia(this.data,this.Va,this.Wa)}bb(m,w,A){for(let B=0;B<this.data.length;B++){let F=this.data[B];if(0!==F){let j=F>>16&255;j+=m,j<1?j=1:j>255&&(j=255);let L=F>>8&255;L+=w,L<1?L=1:L>255&&(L=255);let p=255&F;p+=A,p<1?p=1:p>255&&(p=255),this.data[B]=(j<<16)+(L<<8)+p}}}trim(){let m=new Int32Array(this.Za*this.$a);for(let w=0;w<this.Wa;w++)for(let A=0;A<this.Va;A++)m[(this.Ya+w)*this.Za+this.Xa+A]=this.data[this.Va*w+A];this.data=m,this.Va=this.Za,this.Wa=this.$a,this.Xa=0,this.Ya=0}cb(){let m=this.data,w=this.Va,A=this.Wa;for(let B=0;B<A;B++){let A=w/2|0;for(let F=0;F<A;F++){let A=F+B*w,j=w-F-1+B*w,L=m[A];m[A]=m[j],m[j]=L}}}eb(){let m=this.data,w=this.Va,A=this.Wa;for(let B=0;B<(A/2|0);B++)for(let F=0;F<w;F++){let j=F+B*w,L=F+(A-B-1)*w,p=m[j];m[j]=m[L],m[L]=p}}Zc(m,w){m|=0,w|=0;let A=(m+=this.Xa)+(w+=this.Ya)*d.width,B=0,F=this.Wa,j=this.Va,L=d.width-j,p=0;if(w<d.Ea){let m=d.Ea-w;F-=m,w=d.Ea,B+=m*j,A+=m*d.width}if(w+F>d.Fa&&(F-=w+F-d.Fa),m<d.Ca){let w=d.Ca-m;j-=w,m=d.Ca,B+=w,A+=w,p+=w,L+=w}if(m+j>d.Da){let w=m+j-d.Da;j-=w,p+=w,L+=w}j>0&&F>0&&this.$c(j,F,this.data,B,p,d.Ba,A,L)}$c(m,w,A,B,F,j,L,p){let t=-(m>>2);m=-(3&m);for(let M=-w;M<0;M++){for(let m=t;m<0;m++)j[L++]=A[B++],j[L++]=A[B++],j[L++]=A[B++],j[L++]=A[B++];for(let w=m;w<0;w++)j[L++]=A[B++];L+=p,B+=F}}fb(m,w){m|=0,w|=0;let A=(m+=this.Xa)+(w+=this.Ya)*d.width,B=0,F=this.Wa,j=this.Va,L=d.width-j,p=0;if(w<d.Ea){let m=d.Ea-w;F-=m,w=d.Ea,B+=m*j,A+=m*d.width}if(w+F>d.Fa&&(F-=w+F-d.Fa),m<d.Ca){let w=d.Ca-m;j-=w,m=d.Ca,B+=w,A+=w,p+=w,L+=w}if(m+j>d.Da){let w=m+j-d.Da;j-=w,p+=w,L+=w}j>0&&F>0&&this.gb(j,F,this.data,B,p,d.Ba,A,L)}gb(m,w,A,B,F,j,L,p){let t=-(m>>2);m=-(3&m);for(let M=-w;M<0;M++){for(let m=t;m<0;m++){let m=A[B++];0===m?L++:j[L++]=m,m=A[B++],0===m?L++:j[L++]=m,m=A[B++],0===m?L++:j[L++]=m,m=A[B++],0===m?L++:j[L++]=m}for(let w=m;w<0;w++){let m=A[B++];0===m?L++:j[L++]=m}L+=p,B+=F}}_c(m,w,A){m|=0,w|=0;let B=(m+=this.Xa)+(w+=this.Ya)*d.width,F=0,j=this.Wa,L=this.Va,p=d.width-L,t=0;if(w<d.Ea){let m=d.Ea-w;j-=m,w=d.Ea,F+=m*L,B+=m*d.width}if(w+j>d.Fa&&(j-=w+j-d.Fa),m<d.Ca){let w=d.Ca-m;L-=w,m=d.Ca,F+=w,B+=w,t+=w,p+=w}if(m+L>d.Da){let w=m+L-d.Da;L-=w,t+=w,p+=w}L>0&&j>0&&this.ad(d.Ba,this.data,F,B,L,j,p,t,A)}ad(m,w,A,B,F,j,L,p,t){let M=256-t;for(let h=-j;h<0;h++){for(let j=-F;j<0;j++){let F=w[A++];if(0===F)B++;else{let w=m[B];m[B++]=((16711935&F)*t+(16711935&w)*M&4278255360)+((65280&F)*t+(65280&w)*M&16711680)>>8}}B+=L,A+=p}}bd(m,w,A,B,F,j,L,p,t,M){m|=0,w|=0,A|=0,B|=0;try{let h=-A/2|0,z=-B/2|0,l=65536*Math.sin(L/326.11)|0,c=65536*Math.cos(L/326.11)|0,f=l*p>>8,x=c*p>>8,Z=(F<<16)+z*f+h*x,G=z*x-h*f+(j<<16),Y=m+w*d.width;for(let m=0;m<B;m++){let w=t[m],A=Y+w,B=Z+x*w,F=G-f*w;for(let w=-M[m];w<0;w++)d.Ba[A++]=this.data[(B>>16)+(F>>16)*this.Va],B+=x,F-=f;Z+=f,G+=x,Y+=d.width}}catch(m){}}dd(m,w,A,B,F,j,L,p){m|=0,w|=0,A|=0,B|=0;try{let t=-A/2|0,M=-B/2|0,h=65536*Math.sin(L)|0,z=65536*Math.cos(L)|0,l=h*p>>8,c=z*p>>8,f=M*l+t*c+(F<<16),x=M*c-t*l+(j<<16),Z=m+w*d.width;for(let m=0;m<B;m++){let m=Z,w=f,B=x;for(let F=-A;F<0;F++){let A=this.data[(w>>16)+(B>>16)*this.Za];0==A?m++:d.Ba[m++]=A,w+=c,B-=l}f+=l,x+=c,Z+=d.width}}catch(m){}}ed(m,w,A){w|=0,A|=0;let B=(w+=this.Xa)+(A+=this.Ya)*d.width,F=0,j=this.Wa,L=this.Va,p=d.width-L,t=0;if(A<d.Ea){let m=d.Ea-A;j-=m,A=d.Ea,F+=m*L,B+=m*d.width}if(A+j>d.Fa&&(j-=A+j-d.Fa),w<d.Ca){let m=d.Ca-w;L-=m,w=d.Ca,F+=m,B+=m,t+=m,p+=m}if(w+L>d.Da){let m=w+L-d.Da;L-=m,t+=m,p+=m}L>0&&j>0&&this.fd(d.Ba,this.data,F,B,L,j,p,t,m.data)}fd(m,w,A,B,F,j,L,p,t){let M=-(F>>2);F=-(3&F);for(let h=-j;h<0;h++){for(let F=M;F<0;F++){let F=w[A++];0!==F&&0===t[B]?m[B++]=F:B++,F=w[A++],0!==F&&0===t[B]?m[B++]=F:B++,F=w[A++],0!==F&&0===t[B]?m[B++]=F:B++,F=w[A++],0!==F&&0===t[B]?m[B++]=F:B++}for(let j=F;j<0;j++){let F=w[A++];0!==F&&0===t[B]?m[B++]=F:B++}B+=L,A+=p}}}var E=Math.pow(2,53),[J,W,s]=[5,57068,58989],H=0,P=0,v=0;function S(){let m=11,w=v*s+m;m=w>>>16,w&=65535;let A=P*s+v*W+m;m=A>>>16,A&=65535;let B=H*s+P*W+v*J+m;return B&=65535,[H,P,v]=[B,A,w],65536*H+P}function U(m){return S()>>32-m}function C(m){return S()>>>32-m}function a(m,w=Number.MAX_SAFE_INTEGER){if(m<0||m>w)throw RangeError("number must be > 0")}class I{constructor(m){typeof m>"u"&&(m=Math.floor(281474976710656*Math.random())),this.gd(m)}gd(m){a(m),v=65535&m^s,P=m/65536&65535^W,H=m/4294967296&65535^J}Z(m){if(void 0===m)return U(32);if(a(m,2147483647),(m&-m)===m){return~~(m*(C(31)/2147483648))}let w,A;do{w=C(31),A=w%m}while(w-A+(m-1)<0);return A}hd(){let m=BigInt(U(32)),w=BigInt(U(32));return m*BigInt(4294967296)+w}jd(){return 0!=C(1)}kd(){return C(24)/16777216}ld(){return(134217728*C(26)+C(27))/E}}class R extends w{static md="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"£$%^&*()-_=+[{]};:'@#~,<.>/?\\| ";static nd=[];od=[];pd=new Int32Array(94);qd=new Int32Array(94);rd=new Int32Array(94);sd=new Int32Array(94);td=new Int32Array(95);ud=new Int32Array(256);vd=new I(Date.now());wd=!1;xd=0;static{let m=navigator.userAgent.includes("Capacitor");for(let w=0;w<256;w++){let A=R.md.indexOf(String.fromCharCode(w));m&&A>=63&&A--,-1===A&&(A=74),R.nd[w]=A}}static _a(m,w){let A=new j(m.read(w+".dat")),B=new j(m.read("index.dat"));B.J=A.O()+4;let F=B.M();F>0&&(B.J+=3*(F-1));let L=new R;for(let m=0;m<94;m++){L.rd[m]=B.M(),L.sd[m]=B.M();let w=L.pd[m]=B.O(),F=L.qd[m]=B.O(),j=B.M(),p=w*F;if(L.od[m]=new Int8Array(p),0===j)for(let B=0;B<w*F;B++)L.od[m][B]=A.N();else if(1===j)for(let B=0;B<w;B++)for(let j=0;j<F;j++)L.od[m][B+j*w]=A.N();F>L.xd&&(L.xd=F),L.rd[m]=1,L.td[m]=w+2;{let A=0;for(let B=F/7|0;B<F;B++)A+=L.od[m][B*w];A<=(F/7|0)&&(L.td[m]--,L.rd[m]=0)}{let A=0;for(let B=F/7|0;B<F;B++)A+=L.od[m][w+B*w-1];A<=(F/7|0)&&L.td[m]--}}L.td[94]=L.td[8];for(let m=0;m<256;m++)L.ud[m]=L.td[R.nd[m]];return L}yd(m,w,A,B){m&&(w|=0,A|=0,this.zd(m,w-(this.Ad(m)/2|0),A,B))}Bd(m,w,A,B,F){w|=0,A|=0,this.Cd(m,w-(this.Ad(m)/2|0),A,B,F)}Ad(m){if(!m)return 0;let w=m.length,A=0;for(let B=0;B<w;B++)"@"===m.charAt(B)&&B+4<w&&"@"===m.charAt(B+4)?B+=4:A+=this.ud[m.charCodeAt(B)];return A}zd(m,w,A,B){if(m){w|=0,A|=0,A-=this.xd;for(let F=0;F<m.length;F++){let j=R.nd[m.charCodeAt(F)];94!==j&&this.Dd(this.od[j],w+this.rd[j],A+this.sd[j],this.pd[j],this.qd[j],B),w+=this.td[j]}}}Ed(m,w,A,B,F){if(!m)return;w|=0,A|=0,w-=this.Ad(m)/2|0;let j=A-this.xd;for(let A=0;A<m.length;A++){let L=R.nd[m.charCodeAt(A)];94!=L&&this.Dd(this.od[L],w+this.rd[L],j+this.sd[L]+(5*Math.sin(A/2+F/5)|0),this.pd[L],this.qd[L],B),w+=this.td[L]}}Cd(m,w,A,B,F){w|=0,A|=0,this.wd=!1;let j=w,L=m.length;A-=this.xd;for(let j=0;j<L;j++)if("@"===m.charAt(j)&&j+4<L&&"@"===m.charAt(j+4)){let w=this.Fd(m.substring(j+1,j+4));-1!==w&&(B=w),j+=4}else{let L=R.nd[m.charCodeAt(j)];94!==L&&(F&&this.Dd(this.od[L],w+this.rd[L]+1,A+this.sd[L]+1,this.pd[L],this.qd[L],0),this.Dd(this.od[L],w+this.rd[L],A+this.sd[L],this.pd[L],this.qd[L],B)),w+=this.td[L]}this.wd&&d.Oa(j,A+(.7*this.xd|0),w-j,8388608)}Gd(m,w,A,B,F,j){w|=0,A|=0,this.vd.gd(j);let L=192+(31&this.vd.Z()),p=A-this.xd;for(let A=0;A<m.length;A++)if("@"===m.charAt(A)&&A+4<m.length&&"@"===m.charAt(A+4)){let w=this.Fd(m.substring(A+1,A+4));-1!==w&&(B=w),A+=4}else{let j=R.nd[m.charCodeAt(A)];94!==j&&(F&&this.Hd(this.od[j],w+this.rd[j]+1,p+this.sd[j]+1,this.pd[j],this.qd[j],0,192),this.Hd(this.od[j],w+this.rd[j],p+this.sd[j],this.pd[j],this.qd[j],B,L)),w+=this.td[j],3&this.vd.Z()||w++}}Fd(m){return"red"===m?16711680:"gre"===m?65280:"blu"===m?255:"yel"===m?16776960:"cya"===m?65535:"mag"===m?16711935:"whi"===m?16777215:"bla"===m?0:"lre"===m?16748608:"dre"===m?8388608:"dbl"===m?128:"or1"===m?16756736:"or2"===m?16740352:"or3"===m?16723968:"gr1"===m?12648192:"gr2"===m?8453888:"gr3"===m?4259584:("str"===m&&(this.wd=!0),-1)}Id(m,w,A,B,F=!0){w|=0,A|=0,F&&this.zd(m,w-this.Ad(m)+1,A+1,0),this.zd(m,w-this.Ad(m),A,B)}Dd(m,w,A,B,F,j){B|=0,F|=0;let L=(w|=0)+(A|=0)*d.width,p=d.width-B,t=0,M=0;if(A<d.Ea){let m=d.Ea-A;F-=m,A=d.Ea,M+=m*B,L+=m*d.width}if(A+F>=d.Fa&&(F-=A+F+1-d.Fa),w<d.Ca){let m=d.Ca-w;B-=m,w=d.Ca,M+=m,L+=m,t+=m,p+=m}if(w+B>=d.Da){let m=w+B+1-d.Da;B-=m,t+=m,p+=m}B>0&&F>0&&this.gb(d.Ba,m,j,M,L,B,F,p,t)}gb(m,w,A,B,F,j,L,p,t){let M=-((j|=0)>>2);j=-(3&j);for(let h=-(L|=0);h<0;h++){for(let j=M;j<0;j++)0===w[B++]?F++:m[F++]=A,0===w[B++]?F++:m[F++]=A,0===w[B++]?F++:m[F++]=A,0===w[B++]?F++:m[F++]=A;for(let L=j;L<0;L++)0===w[B++]?F++:m[F++]=A;F+=p,B+=t}}Hd(m,w,A,B,F,j,L){B|=0,F|=0;let p=(w|=0)+(A|=0)*d.width,t=d.width-B,M=0,h=0;if(A<d.Ea){let m=d.Ea-A;F-=m,A=d.Ea,h+=m*B,p+=m*d.width}if(A+F>=d.Fa&&(F-=A+F+1-d.Fa),w<d.Ca){let m=d.Ca-w;B-=m,w=d.Ca,h+=m,p+=m,M+=m,t+=m}if(w+B>=d.Da){let m=w+B+1-d.Da;B-=m,M+=m,t+=m}B>0&&F>0&&this.Jd(d.Ba,m,j,h,p,B,F,t,M,L)}Jd(m,w,A,B,F,j,L,p,t,M){j|=0;let h=((16711935&A)*M&4278255360)+((65280&A)*M&16711680)>>8,z=256-M;for(let A=-(L|=0);A<0;A++){for(let A=-j;A<0;A++)if(0===w[B++])F++;else{let w=m[F];m[F++]=(((16711935&w)*z&4278255360)+((65280&w)*z&16711680)>>8)+h}F+=p,B+=t}}}var y=[0,79764919,159529838,222504665,319059676,398814059,445009330,507990021,638119352,583659535,797628118,726387553,890018660,835552979,1015980042,944750013,1276238704,1221641927,1167319070,1095957929,1595256236,1540665371,1452775106,1381403509,1780037320,1859660671,1671105958,1733955601,2031960084,2111593891,1889500026,1952343757,2552477408,2632100695,2443283854,2506133561,2334638140,2414271883,2191915858,2254759653,3190512472,3135915759,3081330742,3009969537,2905550212,2850959411,2762807018,2691435357,3560074640,3505614887,3719321342,3648080713,3342211916,3287746299,3467911202,3396681109,4063920168,4143685023,4223187782,4286162673,3779000052,3858754371,3904687514,3967668269,881225847,809987520,1023691545,969234094,662832811,591600412,771767749,717299826,311336399,374308984,453813921,533576470,25881363,88864420,134795389,214552010,2023205639,2086057648,1897238633,1976864222,1804852699,1867694188,1645340341,1724971778,1587496639,1516133128,1461550545,1406951526,1302016099,1230646740,1142491917,1087903418,2896545431,2825181984,2770861561,2716262478,3215044683,3143675388,3055782693,3001194130,2326604591,2389456536,2200899649,2280525302,2578013683,2640855108,2418763421,2498394922,3769900519,3832873040,3912640137,3992402750,4088425275,4151408268,4197601365,4277358050,3334271071,3263032808,3476998961,3422541446,3585640067,3514407732,3694837229,3640369242,1762451694,1842216281,1619975040,1682949687,2047383090,2127137669,1938468188,2001449195,1325665622,1271206113,1183200824,1111960463,1543535498,1489069629,1434599652,1363369299,622672798,568075817,748617968,677256519,907627842,853037301,1067152940,995781531,51762726,131386257,177728840,240578815,269590778,349224269,429104020,491947555,4046411278,4126034873,4172115296,4234965207,3794477266,3874110821,3953728444,4016571915,3609705398,3555108353,3735388376,3664026991,3290680682,3236090077,3449943556,3378572211,3174993278,3120533705,3032266256,2961025959,2923101090,2868635157,2813903052,2742672763,2604032198,2683796849,2461293480,2524268063,2284983834,2364738477,2175806836,2238787779,1569362073,1498123566,1409854455,1355396672,1317987909,1246755826,1192025387,1137557660,2072149281,2135122070,1912620623,1992383480,1753615357,1816598090,1627664531,1707420964,295390185,358241886,404320391,483945776,43990325,106832002,186451547,266083308,932423249,861060070,1041341759,986742920,613929101,542559546,756411363,701822548,3316196985,3244833742,3425377559,3370778784,3601682597,3530312978,3744426955,3689838204,3819031489,3881883254,3928223919,4007849240,4037393693,4100235434,4180117107,4259748804,2310601993,2373574846,2151335527,2231098320,2596047829,2659030626,2470359227,2550115596,2947551409,2876312838,2788305887,2733848168,3165939309,3094707162,3040238851,2985771188],i=[0,1,3,7,15,31,63,127,255,511,1023,2047,4095,8191,16383,32767,65535,131071,262143,524287,1048575,2097151,4194303,8388607,16777215,33554431,67108863,134217727,268435455,536870911,1073741823,-2147483648];function T(m){let w=[];for(let A=0;A<m.length;A+=1)w.push([A,m[A]]);w.push([m.length,-1]);let A=[],B=w[0][0],F=w[0][1];for(let m=0;m<w.length;m+=1){let j=w[m][0],L=w[m][1];if(F)for(let m=B;m<j;m+=1)A.push({code:m,ea:F,Kd:void 0});if(B=j,F=L,-1===L)break}A.sort((m,w)=>m.ea-w.ea||m.code-w.code);let j,L=0,p=-1,t=[];for(let m=0;m<A.length;m+=1){let w=A[m];p+=1,w.ea!==L&&(p<<=w.ea-L,L=w.ea,j=t[L]={}),w.Kd=p,j[p]=w}return{table:A,Ld:t}}function V(m,w){if(w<0||w>=m.length)throw RangeError("Out of bound");let A=m.slice();m.sort((m,w)=>m-w);let B={};for(let w=m.length-1;w>=0;w-=1)B[m[w]]=w;let F=[];for(let w=0;w<m.length;w+=1)F.push(B[A[w]]++);let j,L=m[j=w],p=[];for(let w=1;w<m.length;w+=1){let w=m[j=F[j]];void 0===w?p.push(255):p.push(w)}return p.push(L),p.reverse(),p}function X(m,w=!1,A=!1){let B=0,F=0,j=0,L=w=>{if(w>=32){let m=w>>1;return L(m)*(1<<m)+L(w-m)}for(;j<w;)F=(F<<8)+m[B],B+=1,j+=8;let A=i[w],p=F>>j-w&A;return j-=w,F&=~(A<<j),p},p=1;if(w){if(16986!==L(16))throw Error("Invalid magic");if(104!==L(8))throw Error("Invalid method");if(p=L(8),!(p>=49&&p<=57))throw Error("Invalid blocksize");p-=48}let t=new Uint8Array(1.5*m.length),M=0,h=-1;for(;;){let w=L(48),p=0|L(32);if(54156738319193!==w){if(25779555029136===w){L(7&j);break}throw Error("Invalid bz2 blocktype")}{if(L(1))throw Error("do not support randomised");let w=L(24),z=[],d=L(16);for(let m=32768;m>0;m>>=1){if(!(d&m)){for(let m=0;m<16;m+=1)z.push(!1);continue}let w=L(16);for(let m=32768;m>0;m>>=1)z.push(!!(w&m))}let l=L(3);if(l<2||l>6)throw Error("Invalid number of huffman groups");let c=L(15),f=[],x=Array.from({length:l},(m,w)=>w);for(let m=0;m<c;m+=1){let m=0;for(;L(1);)if(m+=1,m>=l)throw Error("MTF table out of range");let w=x[m];for(let w=m;w>0;x[w]=x[--w]);f.push(w),x[0]=w}let Z=z.reduce((m,w)=>m+w,0)+2,G=[];for(let m=0;m<l;m+=1){let m=L(5),w=[];for(let A=0;A<Z;A+=1){if(m<0||m>20)throw Error("Huffman group length outside range");for(;L(1);)m-=2*L(1)-1;w.push(m)}G.push(T(w))}let Y=[];for(let m=0;m<z.length-1;m+=1)z[m]&&Y.push(m);let e,b,u=0,q=0,E=0,J=0,W=[];for(;;){u-=1,u<=0&&(u=50,q<=f.length&&(e=G[f[q]],q+=1));for(let w in e.Ld)if(Object.prototype.hasOwnProperty.call(e.Ld,w)&&(j<w&&(F=(F<<8)+m[B],B+=1,j+=8),b=e.Ld[w][F>>j-w],b)){F&=i[j-=w],b=b.code;break}if(b>=0&&b<=1)0===E&&(J=1),E+=J<<b,J<<=1;else{{let m=Y[0];for(;E>0;E-=1)W.push(m)}if(b===Z-1)break;{let m=Y[b-1];for(let m=b-1;m>0;Y[m]=Y[--m]);Y[0]=m,W.push(m)}}}let s=V(W,w),H=0;for(;H<s.length;){let m=s[H],w=1;if(H<s.length-4&&s[H+1]===m&&s[H+2]===m&&s[H+3]===m?(w=s[H+4]+4,H+=5):H+=1,M+w>=t.length){let m=t;t=new Uint8Array(2*m.length),t.set(m)}for(let B=0;B<w;B+=1)A&&(h=h<<8^y[255&(h>>24^m)]),t[M]=m,M+=1}if(A){let m=-1^h;if(m!==p)throw Error(`CRC mismatch: ${m} !== ${p}`);h=-1}}}return t.subarray(0,M)}class O{static Md(m){let w=0;m=m.toUpperCase();for(let A=0;A<m.length;A++)w=61*w+m.charCodeAt(A)-32|0;return w}data;Nd;Od;Pd;Qd;Rd;Sd;Td=[];constructor(m){let w=new j(new Uint8Array(m));w.R()===w.R()?(this.data=m,this.Nd=!1):(this.data=X(m.subarray(6)),w=new j(new Uint8Array(this.data)),this.Nd=!0),this.Od=w.O(),this.Pd=[],this.Qd=[],this.Rd=[],this.Sd=[];let A=w.J+10*this.Od;for(let m=0;m<this.Od;m++)this.Pd.push(w.S()),this.Qd.push(w.R()),this.Rd.push(w.R()),this.Sd.push(A),A+=this.Rd[m]}read(m){let w=O.Md(m),A=this.Pd.indexOf(w);return-1===A?null:this.Ud(A)}Ud(m){if(m<0||m>=this.Od)return null;if(this.Td[m])return this.Td[m];let w=this.Sd[m],A=this.Rd[m],B=new Uint8Array(this.data.subarray(w,w+A));if(this.Nd)return this.Td[m]=B,B;{let w=X(B);return this.Td[m]=w,w}}}class n extends d{static md="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"£$%^&*()-_=+[{]};:'@#~,<.>/?\\| ";static Vd=new c(256,0);static fonts="Arial, Helvetica, sans-serif";static{for(let m=0;m<256;m++){let w=n.md.indexOf(String.fromCharCode(m));-1===w&&(w=74),n.Vd[m]=9*w}}Wd=!1;Xd=0;Yd=new Uint8Array(1e5);canvas;Xb;static load(m,w){let A=new n,B=m.read(`${w}.dat`);if(!B)throw Error();return A.Wd=!1,A.Yd=B,A.Xd=B.length,A}static Zd(m,w){let A=new n;A.Xd=855,A.Wd=!1,A.canvas=document.createElement("canvas"),A.canvas.width=m+50,A.canvas.height=m+50,A.Xb=A.canvas.getContext("2d",{willReadFrequently:!0});let B=w?"bold":"";A.Xb.font=`${B} ${m}px ${n.fonts}`;for(let m=0;m<95;m++)A.$d(n.md[m],m,!1);if(w&&A.Wd){A.Xb.font=`${m}px ${n.fonts}`;for(let m=0;m<95;m++)A.$d(n.md[m],m,!1);if(!A.Wd){A.Xd=855,A.Wd=!1;for(let m=0;m<95;m++)A.$d(n.md[m],m,!0)}}return A.Yd=A.Yd.slice(0,A.Xd),A}$d(m,w,A){let B=this.Xb.measureText(m),F=Math.ceil(B.width),j=F;A&&("/"===m&&(A=!1),"f"!==m&&"t"!==m&&"w"!==m&&"v"!==m&&"k"!==m&&"x"!==m&&"y"!==m&&"A"!==m&&"V"!==m&&"W"!==m||F++);let L=Math.ceil(B.actualBoundingBoxAscent),p=L+Math.ceil(B.actualBoundingBoxDescent),t=B.fontBoundingBoxAscent+B.fontBoundingBoxDescent;this.Xb.fillStyle="black",this.Xb.fillRect(0,0,F,t),this.Xb.fillStyle="white",this.Xb.fillText(m,0,L),A&&this.Xb.fillText(m,1,L);let M=this.Xb.getImageData(0,0,F,t).data,h=p,z=F,d=0,l=0;for(let m=0;m<p;m++)for(let w=0;w<F;w++)0!==M[4*(w+m*F)]&&(h=Math.min(h,m),d=Math.max(d,m+1),z=Math.min(z,w),l=Math.max(l,w+1));this.Yd[9*w+0]=this.Xd>>14,this.Yd[9*w+1]=this.Xd>>7&127,this.Yd[9*w+2]=127&this.Xd,this.Yd[9*w+3]=l-z,this.Yd[9*w+4]=d-h,this.Yd[9*w+5]=z,this.Yd[9*w+6]=L-h,this.Yd[9*w+7]=j,this.Yd[9*w+8]=t;for(let m=h;m<d;m++)for(let w=z;w<l;w++){let A=255&M[4*(w+m*F)];A>30&&A<230&&(this.Wd=!0),this.Yd[this.Xd++]=A}}yd(m,w,A,B,F){this.zd(m,w-(this.Ad(m)/2|0),A,B,F)}Ad(m){let w=m.length,A=0;for(let B=0;B<w;B++)if("@"===m.charAt(B)&&B+4<w&&"@"===m.charAt(B+4))B+=4;else if("~"===m.charAt(B)&&B+4<w&&"~"===m.charAt(B+4))B+=4;else{let w=n.Vd[m.charCodeAt(B)];A+=this.Yd[w+7]}return A}zd(m,w,A,B,F){(this.Wd||0===B)&&(F=!1);for(let j=0;j<m.length;j++){let L=n.Vd[m.charCodeAt(j)];F&&(this._d(L,w+1,A,0),this._d(L,w,A+1,0)),this._d(L,w,A,B),w+=this.Yd[L+7]}}_d(m,w,A,B){let F=this.Yd,j=w+F[m+5],L=A-F[m+6],p=F[m+3],t=F[m+4],M=F[m]<<14|F[m+1]<<7|F[m+2],h=0,z=j+L*d.width,l=d.width-p;if(A<d.Ea){let m=d.Ea-A;t-=m,A=d.Ea,M+=m*p,z+=m*d.width}if(A+t>d.Fa&&(t-=A+t-d.Fa),w<d.Ca){let m=d.Ca-w;p-=m,w=d.Ca,M+=m,z+=m,h+=m,l+=m}if(w+p>d.Da){let m=w+p-d.Da;p-=m,h+=m,l+=m}p>0&&t>0&&(this.Wd?this.Hd(p,t,F,B,M,h,d.Ba,z,l):this.Dd(p,t,F,B,M,h,d.Ba,z,l))}Dd(m,w,A,B,F,j,L,p,t){let M=-(m>>2);m=-(3&m);for(let h=-w;h<0;h++){for(let m=M;m<0;m++)0===A[F++]?p++:L[p++]=B,0===A[F++]?p++:L[p++]=B,0===A[F++]?p++:L[p++]=B,0===A[F++]?p++:L[p++]=B;for(let w=m;w<0;w++)0===A[F++]?p++:L[p++]=B;p+=t,F+=j}}Hd(m,w,A,B,F,j,L,p,t){for(let M=-w;M<0;M++){for(let w=-m;w<0;w++){let m=255&A[F++];if(0===m)p++;else if(m>=230)L[p++]=B;else{let w=L[p];L[p++]=((16711935&B)*m+(16711935&w)*(256-m)&4278255360)+((65280&B)*m+(65280&w)*(256-m)&16711680)>>8}}p+=t,F+=j}}ae(){return this.Yd[8]-1}be(){return this.Yd[6]}}class Q extends Y{static ce=!1;static de=!0;static ee=!1;static fe=!1;static ge=!1;static he=!1;ie=3200;je=3200;ke=1280;le=1216;me=2304;ne=2816;oe=this.ie-this.me;pe=this.ne+this.le-this.je;qe=0;re=!1;se=1e3;te=0;ue=[];ve=[];we=[];xe=[];ye=[0];ze=[0];Ae=[];Be=[];Ce=[];De=[];Ee=[];Fe=[];Ge=[];He=[];Ie=[];Je=[];Ke=[];Le=[];Me=null;Ne=null;Oe=null;Pe=null;Qe=null;Re=null;Se=null;Te=null;Ue=null;Ve=null;We=null;Xe=[];Ye=!0;Ze=0;$e=-1;_e=-1;af=5;bf=13;cf=140;df=470;ef=!1;ff=0;gf=0;hf=-1;if=0;jf=0;kf=0;lf=new Int32Array(2e3);mf=new Int32Array(2e3);nf=new Int32Array(2e3);pf=new Int32Array(2e3);qf=new Int32Array(2e3);rf=new Int32Array(2e3);sf=0;tf=null;uf=200;vf=this.uf*this.ke/this.le|0;wf=635-this.vf-5;xf=503-this.uf-20;yf=!1;zf=8943445;Af=7824964;Bf=6706483;Cf=11141120;ACTIVE=10027008;Df=8912896;zoom=4;Ef=4;Ff=["General Store","Sword Shop","Magic Shop","Axe Shop","Helmet Shop","Bank","Quest Start","Amulet Shop","Mining Site","Furnace","Anvil","Combat Training","Dungeon","Staff Shop","Platebody Shop","Platelegs Shop","Scimitar Shop","Archery Shop","Shield Shop","Altar","Herbalist","Jewelery","Gem Shop","Crafting Shop","Candle Shop","Fishing Shop","Fishing Spot","Clothes Shop","Apothecary","Silk Trader","Kebab Seller","Pub/Bar","Mace Shop","Tannery","Rare Trees","Spinning Wheel","Food Shop","Cookery Shop","???","Water Source","Cooking Range","Skirt Shop","Potters Wheel","Windmill","Mining Shop","Chainmail Shop","Silver Shop","Fur Trader","Spice Shop"];constructor(){super(!0),this.run()}async zc(){this.df=this.Dc-this.bf-20,this.wf=this.Cc-this.vf-5,this.xf=this.Dc-this.uf-20,this.ec=!0,M.style.cursor="grab";let m=await this.Gf();await this.Ic("Please wait... Rendering Map",100);let w=new j(m.read("labels.dat"));this.te=w.O();for(let m=0;m<this.te;m++)this.ue[m]=w.W(),this.ve[m]=w.O(),this.we[m]=w.O(),this.xe[m]=w.M();let A=new j(m.read("floorcol.dat")),B=A.O();for(let m=0;m<B;m++)this.ye[m+1]=A.S(),this.ze[m+1]=A.S();let F=new j(m.read("underlay.dat"));this.Ae=new f(this.ke,this.le,0),this.Hf(F);let L=new j(m.read("overlay.dat"));this.Be=new f(this.ke,this.le,0),this.Ce=new f(this.ke,this.le,0),this.If(L);let p=new j(m.read("loc.dat"));this.De=new f(this.ke,this.le,0),this.Ee=new f(this.ke,this.le,0),this.Fe=new f(this.ke,this.le,0),this.Jf(p);try{let w=new j(m.read("obj.dat"));this.Ge=new f(this.ke,this.le,!1),this.Kf(w);let A=new j(m.read("npc.dat"));this.He=new f(this.ke,this.le,!1),this.Lf(A);let B=new j(m.read("multi.dat"));this.Ie=new f(this.ke,this.le,!1),this.Mf(B);let F=new j(m.read("free.dat"));this.Je=new f(this.ke,this.le,!1),this.Nf(F)}catch(m){}try{for(let w=0;w<100;w++)this.Ke[w]=l._a(m,"mapscene",w)}catch(m){}try{for(let w=0;w<100;w++)this.Le[w]=q._a(m,"mapfunction",w)}catch(m){}try{this.Me=q._a(m,"mapdots",0),this.Ne=q._a(m,"mapdots",1)}catch(m){}this.Oe=R._a(m,"b12");try{this.Pe=n.load(m,"f11"),this.Qe=n.load(m,"f12"),this.Re=n.load(m,"f14"),this.Se=n.load(m,"f17"),this.Te=n.load(m,"f19"),this.Ue=n.load(m,"f22"),this.Ve=n.load(m,"f26"),this.We=n.load(m,"f30")}catch(m){this.Pe=n.Zd(11,!0),this.Qe=n.Zd(12,!0),this.Re=n.Zd(14,!0),this.Se=n.Zd(17,!0),this.Te=n.Zd(19,!0),this.Ue=n.Zd(22,!0),this.Ve=n.Zd(26,!0),this.We=n.Zd(30,!0)}this.Xe=new f(this.ke,this.le,0),this.Of(),this.tf=new q(this.vf,this.uf),this.tf.Ia(),this.Pf(0,0,this.ke,this.le,0,0,this.vf,this.uf),d.Na(0,0,this.vf,this.uf,0),d.Na(1,1,this.vf-2,this.uf-2,this.zf),this.dc?.Ia();let t=new URLSearchParams(window.location.search);if(t.has("nolabels")&&(Q.de=!1),t.has("noborders")&&(Q.ce=!1),t.has("autoexport")){let m=2*this.ke,w=2*this.le,A=new q(m,w);A.Ia(),this.Pf(0,0,this.ke,this.le,0,0,m,w);let B=document.createElement("canvas");B.width=m,B.height=w;let F=B.getContext("2d"),j=new G(m,w,F);j.Ia(),A.Zc(0,0),j.draw(0,0),this.dc?.Ia(),z(B.toDataURL("image/png").replace(/^data:image\/[^;]/,"data:application/octet-stream"),"map-254-clean.png")}window.addEventListener("resize",()=>{this.resize(window.innerWidth,window.innerHeight),this.Ye=!0}),window.addEventListener("message",m=>{m.data&&"playerPos"===m.data.type&&(this.oe=(0|m.data.tileX)-this.me,this.pe=this.ne+this.le-(0|m.data.tileZ),this.re=!0,this.Ye=!0)}),window.parent.postMessage({type:"mapviewReady"},"*")}async Bc(){if(this.Ye){this.Ye=!1,this.Ze=0,d.La();let m=this.oe-(this.Cc/this.zoom|0),w=this.pe-(this.Dc/this.zoom|0),A=this.oe+(this.Cc/this.zoom|0),B=this.pe+(this.Dc/this.zoom|0);if(this.Pf(m,w,A,B,0,0,this.Cc,this.Dc),this.yf&&(this.tf?.Zc(this.wf,this.xf),d.Ma(this.wf+this.vf*m/this.ke|0,this.xf+this.uf*w/this.le|0,(A-m)*this.vf/this.ke|0,(B-w)*this.uf/this.le|0,16711680,128),d.Na(this.wf+this.vf*m/this.ke|0,this.xf+this.uf*w/this.le|0,(A-m)*this.vf/this.ke|0,(B-w)*this.uf/this.le|0,16711680),this.kf>0&&this.kf%10<5))for(let m=0;m<this.sf;m++)if(this.rf[m]==this.jf){let w=this.wf+this.vf*this.pf[m]/this.ke|0,A=this.xf+this.uf*this.qf[m]/this.le|0;d.Ta(w,A,2,16776960,256)}if(this.ef){this.Qf(this.af,this.bf,this.cf,18,10066329,7829367,5592405,"Prev page"),this.Qf(this.af,this.bf+18,this.cf,this.df-36,10066329,7829367,5592405,""),this.Qf(this.af,this.bf+this.df-18,this.cf,18,10066329,7829367,5592405,"Next page");let m=(this.df-20)/18,w=this.bf+18+3;for(let A=0;A<m;A++){if(A+this.gf<this.Le.length&&A+this.gf<this.Ff.length){if("???"===this.Ff[A+this.gf])continue;this.Le[A+this.gf].fb(this.af+3,w),this.Oe?.zd(this.Ff[A+this.gf],this.af+21,w+14,0);let m=16777215;this.hf==A+this.gf&&(m=12298922),this.kf>0&&this.kf%10<5&&this.jf==A+this.gf&&(m=16776960),this.Oe?.zd(this.Ff[A+this.gf],this.af+20,w+13,m)}w+=17}}this.Qf(this.wf,this.xf+this.uf,this.vf,18,this.zf,this.Af,this.Bf,"Overview"),this.Qf(this.af,this.bf+this.df,this.cf,18,this.zf,this.Af,this.Bf,"Key");let F=this.Dc-this.bf-20+1;3==this.Ef?this.Qf(170,F,50,30,this.Cf,this.ACTIVE,this.Df,"37%"):this.Qf(170,F,50,30,this.zf,this.Af,this.Bf,"37%"),4==this.Ef?this.Qf(230,F,50,30,this.Cf,this.ACTIVE,this.Df,"50%"):this.Qf(230,F,50,30,this.zf,this.Af,this.Bf,"50%"),6==this.Ef?this.Qf(290,F,50,30,this.Cf,this.ACTIVE,this.Df,"75%"):this.Qf(290,F,50,30,this.zf,this.Af,this.Bf,"75%"),8==this.Ef?this.Qf(350,F,50,30,this.Cf,this.ACTIVE,this.Df,"100%"):this.Qf(350,F,50,30,this.zf,this.Af,this.Bf,"100%")}if(this.Ze--,this.Ze<=0&&(this.dc?.draw(0,0),this.Ze=50,this.re)){let m=M.getContext("2d"),w=this.Cc/2|0,A=this.Dc/2|0;m.beginPath(),m.arc(w,A,8,0,2*Math.PI),m.fillStyle="#0055ff",m.fill(),m.lineWidth=2,m.strokeStyle="#ffffff",m.stroke()}}refresh(){this.Ze=0}async Ac(){1==this.tc[1]&&(this.oe=this.oe-16/this.zoom|0,this.Ye=!0),1==this.tc[2]&&(this.oe=this.oe+16/this.zoom|0,this.Ye=!0),1==this.tc[3]&&(this.pe=this.pe-16/this.zoom|0,this.Ye=!0),1==this.tc[4]&&(this.pe=this.pe+16/this.zoom|0,this.Ye=!0);let m=1;do{if(m=this.Vc(),-1===m)break;if(49==m)this.Ef=3,this.Ye=!0;else if(50==m)this.Ef=4,this.Ye=!0;else if(51==m)this.Ef=6,this.Ye=!0;else if(52==m)this.Ef=8,this.Ye=!0;else if(107==m||75==m)this.ef=!this.ef,this.Ye=!0;else if(111==m||79==m)this.yf=!this.yf,this.Ye=!0;else if(101==m||69==m){let m=2*this.ke,w=2*this.le,A=new q(m,w);A.Ia(),this.Pf(0,0,this.ke,this.le,0,0,m,w);let B=document.createElement("canvas");B.width=m,B.height=w;let F=B.getContext("2d"),j=new G(m,w,F);j.Ia(),A.Zc(0,0),j.draw(0,0),this.dc?.Ia(),z(B.toDataURL("image/png").replace(/^data:image\/[^;]/,"data:application/octet-stream"),"worldmap.png")}else 110==m||78==m?(Q.ee=!Q.ee,this.Ye=!0):105==m||73==m?(Q.fe=!Q.fe,this.Ye=!0):108==m||76==m?(Q.de=!Q.de,this.Ye=!0):98==m||66==m?(Q.ce=!Q.ce,this.Ye=!0):109==m||77==m?(Q.ge=!Q.ge,this.Ye=!0):102==m||70==m?(Q.he=!Q.he,this.Ye=!0):91===m?await this.Rf():93===m?await this.Sf():92===m&&await this.Tf()}while(m>0);if(1==this.nc){this.lc=this.oc,this.mc=this.qc,this.$e=this.oe,this._e=this.pe;let m=this.Dc-this.bf-20+1;this.oc>170&&this.oc<220&&this.qc>m?(this.Ef=3,this.lc=-1):this.oc>230&&this.oc<280&&this.qc>m?(this.Ef=4,this.lc=-1):this.oc>290&&this.oc<340&&this.qc>m?(this.Ef=6,this.lc=-1):this.oc>350&&this.oc<400&&this.qc>m?(this.Ef=8,this.lc=-1):this.oc>this.af&&this.qc>this.bf+this.df&&this.oc<this.af+this.cf?(this.ef=!this.ef,this.lc=-1):this.oc>this.wf&&this.qc>this.xf+this.uf&&this.oc<this.wf+this.vf&&(this.yf=!this.yf,this.lc=-1),this.ef&&(this.oc>this.af&&this.qc>this.bf&&this.oc<this.af+this.cf&&this.qc<this.bf+this.df&&(this.lc=-1),this.oc>this.af&&this.qc>this.bf&&this.oc<this.af+this.cf&&this.qc<this.bf+18?this.ff=0:this.oc>this.af&&this.qc>this.bf+this.df-18&&this.oc<this.af+this.cf&&this.qc<this.bf+this.df&&(this.ff=25)),this.Ye=!0}if(this.ef){if(this.hf=-1,this.hc>this.af&&this.hc<this.af+this.cf){let m=(this.df-20)/18,w=this.bf+21+5;for(let A=0;A<m;A++)A+this.gf<this.Ff.length&&"???"!==this.Ff[A+this.gf]&&(this.jc>=w&&this.jc<w+17&&(this.hf=A+this.gf,1==this.nc&&(this.jf=A+this.gf,this.kf=50)),w+=17)}this.hf!=this.if&&(this.if=this.hf,this.Ye=!0)}if((1==this.gc||1==this.nc)&&this.yf){let m=this.oc,w=this.qc;1==this.gc&&(m=this.hc,w=this.jc),m>this.wf&&w>this.xf&&m<this.wf+this.vf&&w<this.xf+this.uf&&(this.oe=(m-this.wf)*this.ke/this.vf|0,this.pe=(w-this.xf)*this.le/this.uf|0,this.lc=-1,this.Ye=!0)}1==this.gc&&-1!=this.lc&&(this.oe=this.$e+(2*(this.lc-this.hc)/this.Ef|0),this.pe=this._e+(2*(this.mc-this.jc)/this.Ef|0),this.Ye=!0),this.zoom<this.Ef&&(this.Ye=!0,this.zoom+=this.zoom/30,this.zoom>this.Ef&&(this.zoom=this.Ef)),this.zoom>this.Ef&&(this.Ye=!0,this.zoom-=this.zoom/30,this.zoom<this.Ef&&(this.zoom=this.Ef)),this.gf<this.ff&&(this.Ye=!0,this.gf++),this.gf>this.ff&&(this.Ye=!0,this.gf--),this.kf>0&&(this.Ye=!0,this.kf--);let w=this.oe-(this.Cc/this.zoom|0),A=this.pe-(this.Dc/this.zoom|0),B=this.oe+(this.Cc/this.zoom|0),F=this.pe+(this.Dc/this.zoom|0);w<48&&(this.oe=48+(this.Cc/this.zoom|0)),A<48&&(this.pe=48+(this.Dc/this.zoom|0)),B>this.ke-48&&(this.oe=this.ke-48-(this.Cc/this.zoom|0)),F>this.le-48&&(this.pe=this.le-48-(this.Dc/this.zoom|0))}Uf=null;async Gf(){if(this.Uf)return this.Uf;let m,w=5;for(;!m;){await this.Ic("Requesting map",0);try{m=await F("/worldmap.jag")}catch(A){m=void 0;for(let m=w;m>0;m--)await this.Ic(`Error loading - Will retry in ${m} secs.`,0),await B(1e3);w*=2,w>60&&(w=60)}}return this.Uf=new O(m),this.Uf}Qf(m,w,A,B,F,j,L,p){m=Math.trunc(m),w=Math.trunc(w),A=Math.trunc(A),B=Math.trunc(B),d.Na(m,w,A,B,0);let t=m+1,M=w+1,h=A-2,z=B-2;d.fillRect(t,M,h,z,j),d.Oa(t,M,h,F),d.Pa(t,M,z,F),d.Oa(t,M+z-1,h,L),d.Pa(t+h-1,M,z,L),this.Oe?.yd(p,t+(h/2|0)+1,M+(z/2|0)+1+4,0),this.Oe?.yd(p,t+(h/2|0),M+(z/2|0)+4,16777215)}Of(){let m=this.ke,w=this.le,A=new c(w,0);for(let B=5;B<m-5;B++){let F=this.Ae[B+5],j=this.Ae[B-5];for(let m=0;m<w;m++)A[m]+=this.ye[F[m]]-this.ye[j[m]];if(B>10&&B<m-10){let m=0,F=0,j=0;for(let L=5;L<w-5;L++){let w=A[L+5],p=A[L-5];m+=(w>>20)-(p>>20),F+=(w>>10&1023)-(p>>10&1023),j+=(1023&w)-(1023&p),j>0&&(this.Xe[B][L]=this.Vf(m/8533,F/8533,j/8533))}}}}Hf(m){for(;m.available>0;){let w=64*m.M()-this.me,A=64*m.M()-this.ne;if(w>0&&A>0&&w+64<this.ke&&A+64<this.le)for(let B=0;B<64;B++){let F=this.le-A-1;for(let A=-64;A<0;A++)this.Ae[w+B][F--]=m.M()}else m.J+=4096}}If(m){for(;m.available>0;){let w=64*m.M()-this.me,A=64*m.M()-this.ne;if(w>0&&A>0&&w+64<this.ke&&A+64<this.le)for(let B=0;B<64;B++){let F=this.le-A-1;for(let A=-64;A<0;A++){let A=m.M();0===A?this.Be[B+w][F--]=0:(this.Ce[B+w][F]=m.M(),this.Be[B+w][F--]=this.ze[A])}}else for(let w=-4096;w<0;w++)0!=m.M()&&m.M()}}Jf(m){for(;m.available>0;){let w=64*m.M()-this.me,A=64*m.M()-this.ne;if(w>0&&A>0&&w+64<this.ke&&A+64<this.le)for(let B=0;B<64;B++){let F=this.le-A-1;for(let A=-64;A<0;A++)for(;;){let A=m.M();if(0===A){F--;break}A<29?this.De[B+w][F]=A:A<160?this.Ee[B+w][F]=A-28:(this.Fe[B+w][F]=A-159,this.rf[this.sf]=A-160,this.pf[this.sf]=B+w,this.qf[this.sf]=F,this.sf++)}}else for(let w=0;w<64;w++){let w=0;for(let A=-64;A<0;A++)do{w=m.M()}while(0!=w)}}}Kf(m){for(;m.available>0;){let w=64*m.M()-this.me,A=64*m.M()-this.ne;if(w>0&&A>0&&w+64<this.ke&&A+64<this.le)for(let B=0;B<64;B++){let F=this.le-A-1;for(let A=-64;A<0;A++)this.Ge[B+w][F--]=1==m.M()}else m.J+=4096}}Lf(m){for(;m.available>0;){let w=64*m.M()-this.me,A=64*m.M()-this.ne;if(w>0&&A>0&&w+64<this.ke&&A+64<this.le)for(let B=0;B<64;B++){let F=this.le-A-1;for(let A=-64;A<0;A++)this.He[B+w][F--]=1==m.M()}else m.J+=4096}}Mf(m){for(;m.available>0;){let w=64*m.M()-this.me,A=64*m.M()-this.ne;if(w>0&&A>0&&w+64<this.ke&&A+64<this.le)for(let B=0;B<64;B++){let F=this.le-A-1;for(let A=-64;A<0;A++)this.Ie[B+w][F--]=1==m.M()}else m.J+=4096}}Nf(m){for(;m.available>0;){let w=64*m.M()-this.me,A=64*m.M()-this.ne;if(w>0&&A>0&&w+64<this.ke&&A+64<this.le)for(let B=0;B<64;B++){let F=this.le-A-1;for(let A=-64;A<0;A++)this.Je[B+w][F--]=1==m.M()}else m.J+=4096}}Vf(m,w,A){let B=A,F=A,j=A;if(0!==w){let L;L=A<.5?A*(w+1):A+w-A*w;let p=2*A-L,t=m+.3333333333333333;t>1&&t--;let M=m-.3333333333333333;M<0&&M++,B=6*t<1?p+6*(L-p)*t:2*t<1?L:3*t<2?p+(L-p)*(.6666666666666666-t)*6:p,F=6*m<1?p+6*(L-p)*m:2*m<1?L:3*m<2?p+(L-p)*(.6666666666666666-m)*6:p,j=6*M<1?p+6*(L-p)*M:2*M<1?L:3*M<2?p+(L-p)*(.6666666666666666-M)*6:p}return((256*B|0)<<16)+((256*F|0)<<8)+(256*j|0)}Pf(m,w,A,B,F,j,L,p){let t=A-m,M=B-w,h=(L-F<<16)/t|0,z=(p-j<<16)/M|0;for(let A=0;A<t;A++){let B=h*A>>16,L=h*(A+1)>>16,p=L-B;if(p<=0)continue;B+=F,L+=F;let t=this.Xe[A+m],l=this.Be[A+m],c=this.Ce[A+m];for(let m=0;m<M;m++){let A=z*m>>16,F=z*(m+1)>>16,M=F-A;if(M<=0)continue;A+=j,F+=j;let h=l[m+w];if(0===h)d.fillRect(B,A,L-B,F-A,t[m+w]);else{let F=c[m+w],j=252&F;0==j||p<=1||M<=1?d.fillRect(B,A,p,M,h):this.Wf(d.Ba,A*d.width+B,t[m+w],h,p,M,j>>2,3&F)}}}if(A-m>L-F)return;let l=0;for(let A=0;A<t;A++){let B=h*A>>16,F=h*(A+1)>>16,j=F-B;if(j<=0)continue;let L=this.De[A+m],p=this.Ee[A+m],t=this.Fe[A+m];for(let m=0;m<M;m++){let A=z*m>>16,M=z*(m+1)>>16,h=M-A;if(h<=0)continue;let c=255&L[m+w];if(0!=c){let m,w;m=1==j?B:F-1,w=1==h?A:M-1;let L=13421772;if((c>=5&&c<=8||c>=13&&c<=16||c>=21&&c<=24)&&(L=13369344,c-=4),27!=c&&28!=c||(L=13369344,c-=2),1==c)d.Pa(B,A,h,L);else if(2==c)d.Oa(B,A,j,L);else if(3==c)d.Pa(m,A,h,L);else if(4==c)d.Oa(B,w,j,L);else if(9==c)d.Pa(B,A,h,16777215),d.Oa(B,A,j,L);else if(10==c)d.Pa(m,A,h,16777215),d.Oa(B,A,j,L);else if(11==c)d.Pa(m,A,h,16777215),d.Oa(B,w,j,L);else if(12==c)d.Pa(B,A,h,16777215),d.Oa(B,w,j,L);else if(17==c)d.Oa(B,A,1,L);else if(18==c)d.Oa(m,A,1,L);else if(19==c)d.Oa(m,w,1,L);else if(20==c)d.Oa(B,w,1,L);else if(25==c)for(let m=0;m<h;m++)d.Oa(B+m,w-m,1,L);else if(26==c)for(let m=0;m<h;m++)d.Oa(B+m,A+m,1,L)}let f=p[m+w];0!=f&&this.Ke[f-1].hb(B-(j/2|0),A-(h/2|0),2*j,2*h);let x=t[m+w];0!=x&&(this.nf[l]=x-1,this.lf[l]=B+(j/2|0),this.mf[l]=A+(h/2|0),l++)}}for(let m=0;m<l;m++)this.Le[this.nf[m]].fb(this.lf[m]-7,this.mf[m]-7);if(Q.he)for(let A=0;A<t;A++){let B=h*A>>16,L=h*(A+1)>>16,p=L-B;if(p<=0)continue;B+=F,L+=F;let t=this.Je[A+m];for(let m=0;m<M;m++){let A=z*m>>16,F=z*(m+1)>>16,L=F-A;L<=0||(A+=j,F+=j,t[m+w]&&d.Ma(B,A,p,L,65280,96))}}if(Q.ge)for(let A=0;A<t;A++){let B=h*A>>16,L=h*(A+1)>>16,p=L-B;if(p<=0)continue;B+=F,L+=F;let t=this.Ie[A+m];for(let m=0;m<M;m++){let A=z*m>>16,F=z*(m+1)>>16,L=F-A;L<=0||(A+=j,F+=j,t[m+w]&&d.Ma(B,A,p,L,16711680,96))}}if(Q.fe)for(let A=0;A<t;A++){let B=h*A>>16,L=h*(A+1)>>16;if(!(L-B<=0)){B+=F,L+=F;for(let F=0;F<M;F++){let L=z*F>>16,p=z*(F+1)>>16;p-L<=0||(L+=j,p+=j,this.Ge[A+m][F+w]&&this.Me?.fb(B,L))}}}if(Q.ee)for(let A=0;A<t;A++){let B=h*A>>16,L=h*(A+1)>>16;if(!(L-B<=0)){B+=F,L+=F;for(let F=0;F<M;F++){let L=z*F>>16,p=z*(F+1)>>16;p-L<=0||(L+=j,p+=j,this.He[A+m][F+w]&&this.Ne?.fb(B,L))}}}if(this.kf>0)for(let m=0;m<l;m++)this.nf[m]==this.jf&&(this.Le[this.nf[m]].fb(this.lf[m]-7,this.mf[m]-7),this.kf%10<5&&(d.Ta(this.lf[m],this.mf[m],15,16776960,128),d.Ta(this.lf[m],this.mf[m],7,16777215,256)));if(this.zoom==this.Ef&&Q.de)for(let t=0;t<this.te;t++){let M=this.ve[t],h=this.we[t];M-=this.me,h=this.ne+this.le-h;let z=F+(L-F)*(M-m)/(A-m)|0,d=j+(p-j)*(h-w)/(B-w)|0,l=this.xe[t],c=16777215,f=null;if(0==l?3==this.zoom?f=this.Pe:4==this.zoom?f=this.Qe:6==this.zoom?f=this.Re:8==this.zoom&&(f=this.Se):1==l?3==this.zoom?f=this.Re:4==this.zoom?f=this.Se:6==this.zoom?f=this.Te:8==this.zoom&&(f=this.Ue):2==l&&(c=16755200,3==this.zoom?f=this.Te:4==this.zoom?f=this.Ue:6==this.zoom?f=this.Ve:8==this.zoom&&(f=this.We)),null!==f){let m=this.ue[t],w=1;for(let A=0;A<m.length;A++)"/"===m[A]&&w++;for(d-=f.ae()*(w-1)/2|0,d+=f.be()/2|0;;){let w=m.indexOf("/");if(-1===w){f.yd(m,z,d,c,!0);break}let A=m.substring(0,w);f.yd(A,z,d,c,!0),d+=f.ae(),m=m.substring(w+1)}}}if(Q.ce)for(let t=this.me/64;t<(this.me+this.ke)/64;t++)for(let M=this.ne/64;M<(this.ne+this.le)/64;M++){let h=64*t,z=64*M;h-=this.me,z=this.ne+this.le-z;let l=F+(L-F)*(h-m)/(A-m)|0,c=j+(p-j)*(z-64-w)/(B-w)|0,f=F+(L-F)*(h+64-m)/(A-m)|0,x=j+(p-j)*(z-w)/(B-w)|0;l>=L||c>=p||f<=0||x<=0||(d.Na(l,c,f-l,x-c,16777215),this.Oe?.Id(t+"_"+M,f-5,x-5,16777215,!1),33==t&&M>=71&&M<=73?this.Oe?.yd("u_pass",(f+l)/2|0,(x+c)/2|0,16711680):t>=32&&t<=34&&M>=70&&M<=74&&this.Oe?.yd("u_pass",(f+l)/2|0,(x+c)/2|0,16776960))}}Wf(m,w,A,B,F,j,L,p){let t=d.width-F;if(9==L?(L=1,p=p+1&3):10==L?(L=1,p=p+3&3):11==L&&(L=8,p=p+3&3),1==L){if(0==p)for(let L=0;L<j;L++){for(let j=0;j<F;j++)m[w++]=j<=L?B:A;w+=t}else if(1==p)for(let L=j-1;L>=0;L--){for(let j=0;j<F;j++)m[w++]=j<=L?B:A;w+=t}else if(2==p)for(let L=0;L<j;L++){for(let j=0;j<F;j++)m[w++]=j>=L?B:A;w+=t}else if(3==p)for(let L=j-1;L>=0;L--){for(let j=0;j<F;j++)m[w++]=j>=L?B:A;w+=t}}else if(2==L){if(0==p)for(let L=j-1;L>=0;L--){for(let j=0;j<F;j++)m[w++]=j<=L>>1?B:A;w+=t}else if(1==p)for(let L=0;L<j;L++){for(let j=0;j<F;j++)m[w++]=j>=L<<1?B:A;w+=t}else if(2==p)for(let L=0;L<j;L++){for(let j=F-1;j>=0;j--)m[w++]=j<=L>>1?B:A;w+=t}else if(3==p)for(let L=j-1;L>=0;L--){for(let j=F-1;j>=0;j--)m[w++]=j>=L<<1?B:A;w+=t}}else if(3==L){if(0==p)for(let L=j-1;L>=0;L--){for(let j=F-1;j>=0;j--)m[w++]=j<=L>>1?B:A;w+=t}else if(1==p)for(let L=j-1;L>=0;L--){for(let j=0;j<F;j++)m[w++]=j>=L<<1?B:A;w+=t}else if(2==p)for(let L=0;L<j;L++){for(let j=0;j<F;j++)m[w++]=j<=L>>1?B:A;w+=t}else if(3==p)for(let L=0;L<j;L++){for(let j=F-1;j>=0;j--)m[w++]=j>=L<<1?B:A;w+=t}}else if(4==L){if(0==p)for(let L=j-1;L>=0;L--){for(let j=0;j<F;j++)m[w++]=j>=L>>1?B:A;w+=t}else if(1==p)for(let L=0;L<j;L++){for(let j=0;j<F;j++)m[w++]=j<=L<<1?B:A;w+=t}else if(2==p)for(let L=0;L<j;L++){for(let j=F-1;j>=0;j--)m[w++]=j>=L>>1?B:A;w+=t}else if(3==p)for(let L=j-1;L>=0;L--){for(let j=F-1;j>=0;j--)m[w++]=j<=L<<1?B:A;w+=t}}else if(5==L){if(0==p)for(let L=j-1;L>=0;L--){for(let j=F-1;j>=0;j--)m[w++]=j>=L>>1?B:A;w+=t}else if(1==p)for(let L=j-1;L>=0;L--){for(let j=0;j<F;j++)m[w++]=j<=L<<1?B:A;w+=t}else if(2==p)for(let L=0;L<j;L++){for(let j=0;j<F;j++)m[w++]=j>=L>>1?B:A;w+=t}else if(3==p)for(let L=0;L<j;L++){for(let j=F-1;j>=0;j--)m[w++]=j<=L<<1?B:A;w+=t}}else if(6==L){if(0==p)for(let L=0;L<j;L++){for(let j=0;j<F;j++)m[w++]=j<=(F/2|0)?B:A;w+=t}else if(1==p)for(let L=0;L<j;L++){for(let p=0;p<F;p++)m[w++]=L<=(j/2|0)?B:A;w+=t}else if(2==p)for(let L=0;L<j;L++){for(let j=0;j<F;j++)m[w++]=j>=(F/2|0)?B:A;w+=t}else if(3==p)for(let L=0;L<j;L++){for(let p=0;p<F;p++)m[w++]=L>=(j/2|0)?B:A;w+=t}}else if(7==L){if(0==p)for(let L=0;L<j;L++){for(let p=0;p<F;p++)m[w++]=p<=L-(j/2|0)?B:A;w+=t}else if(1==p)for(let L=j-1;L>=0;L--){for(let p=0;p<F;p++)m[w++]=p<=L-(j/2|0)?B:A;w+=t}else if(2==p)for(let L=j-1;L>=0;L--){for(let p=F-1;p>=0;p--)m[w++]=p<=L-(j/2|0)?B:A;w+=t}else if(3==p)for(let L=0;L<j;L++){for(let p=F-1;p>=0;p--)m[w++]=p<=L-(j/2|0)?B:A;w+=t}}else if(8==L)if(0==p)for(let L=0;L<j;L++){for(let p=0;p<F;p++)m[w++]=p>=L-(j/2|0)?B:A;w+=t}else if(1==p)for(let L=j-1;L>=0;L--){for(let p=0;p<F;p++)m[w++]=p>=L-(j/2|0)?B:A;w+=t}else if(2==p)for(let L=j-1;L>=0;L--){for(let p=F-1;p>=0;p--)m[w++]=p>=L-(j/2|0)?B:A;w+=t}else if(3==p)for(let L=0;L<j;L++){for(let p=F-1;p>=0;p--)m[w++]=p>=L-(j/2|0)?B:A;w+=t}}async Rf(){0!==this.qe&&(this.ie=3200,this.je=3200,this.ke=1280,this.le=1216,this.me=2304,this.ne=2816,this.qe=0,this.oe=this.ie-this.me,this.pe=this.ne+this.le-this.je,this.$e=-1,this._e=-1,this.Ye=!0,d.La(),await this.zc())}async Sf(){1!==this.qe&&(this.ie=3200,this.je=9600,this.ke=1344,this.le=1216,this.me=2240,this.ne=9216,this.qe=1,this.oe=this.ie-this.me,this.pe=this.ne+this.le-this.je,this.$e=-1,this._e=-1,this.Ye=!0,d.La(),await this.zc())}async Tf(){2!==this.qe&&(this.ie=2496,this.je=4736,this.ke=1344,this.le=960,this.me=1792,this.ne=4160,this.qe=2,this.oe=this.ie-this.me,this.pe=this.ne+this.le-this.je,this.$e=-1,this._e=-1,this.Ye=!0,await this.zc())}Xf=!1;Yf=null;Nc(m,w,A){this.lc=m,this.mc=w,this.hc=m,this.jc=w,2===A.button?(this.kc=2,this.gc=2):(this.kc=1,this.gc=1,M.style.cursor="grabbing",this.Xf=!0)}Pc(m,w,A){this.Xf=!1,M.style.cursor="grab",this.hc=-1,this.jc=-1,this.gc=0,this.lc=-1,this.mc=-1,this.kc=0}Oc(m,w,A){this.fc=performance.now(),this.hc=m,this.jc=w,this.gc=1,this.lc=m,this.mc=w,this.kc=1}Qc(m,w,A){this.hc=-1,this.jc=-1,this.gc=0,this.lc=-1,this.mc=-1,this.kc=0}Rc(){}Sc(){}Tc(m,w,A){this.Xf||(this.hc=m,this.jc=w)}Ec(m){this.Xf=!1,M.style.cursor="grab",this.hc=-1,this.jc=-1,this.gc=0,this.lc=-1,this.mc=-1,this.kc=0}Fc(m){if(this.Xf){let w=M.getBoundingClientRect(),A=m.clientX-w.left|0,B=m.clientY-w.top|0;this.hc=A,this.jc=B}}}setTimeout(()=>{try{new Q}catch(m){}},100);export{Q as MapView};
+// src/datastruct/Linkable.ts
+class Linkable {
+  key = 0n;
+  next = null;
+  prev = null;
+  unlink() {
+    if (this.prev != null) {
+      this.prev.next = this.next;
+      if (this.next) {
+        this.next.prev = this.prev;
+      }
+      this.next = null;
+      this.prev = null;
+    }
+  }
+}
+
+// src/datastruct/Linkable2.ts
+class Linkable2 extends Linkable {
+  next2 = null;
+  prev2 = null;
+  unlink2() {
+    if (this.prev2 !== null) {
+      this.prev2.next2 = this.next2;
+      if (this.next2) {
+        this.next2.prev2 = this.prev2;
+      }
+      this.next2 = null;
+      this.prev2 = null;
+    }
+  }
+}
+
+// src/datastruct/LinkList.ts
+class LinkList {
+  sentinel = new Linkable;
+  cursor = null;
+  constructor() {
+    this.sentinel.next = this.sentinel;
+    this.sentinel.prev = this.sentinel;
+  }
+  clear() {
+    while (true) {
+      const node = this.sentinel.next;
+      if (node === this.sentinel) {
+        return;
+      }
+      node?.unlink();
+    }
+  }
+  push(node) {
+    if (node.prev) {
+      node.unlink();
+    }
+    node.prev = this.sentinel.prev;
+    node.next = this.sentinel;
+    if (node.prev) {
+      node.prev.next = node;
+    }
+    node.next.prev = node;
+  }
+  pushFront(node) {
+    if (node.prev) {
+      node.unlink();
+    }
+    node.prev = this.sentinel;
+    node.next = this.sentinel.next;
+    node.prev.next = node;
+    if (node.next) {
+      node.next.prev = node;
+    }
+  }
+  popFront() {
+    const node = this.sentinel.next;
+    if (node === this.sentinel) {
+      return null;
+    }
+    node?.unlink();
+    return node;
+  }
+  head() {
+    const node = this.sentinel.next;
+    if (node === this.sentinel) {
+      this.cursor = null;
+      return null;
+    }
+    this.cursor = node?.next ?? null;
+    return node;
+  }
+  tail() {
+    const node = this.sentinel.prev;
+    if (node === this.sentinel) {
+      this.cursor = null;
+      return null;
+    }
+    this.cursor = node?.prev ?? null;
+    return node;
+  }
+  next() {
+    const node = this.cursor;
+    if (node === this.sentinel) {
+      this.cursor = null;
+      return null;
+    }
+    this.cursor = node?.next ?? null;
+    return node;
+  }
+  prev() {
+    const node = this.cursor;
+    if (node === this.sentinel) {
+      this.cursor = null;
+      return null;
+    }
+    this.cursor = node?.prev ?? null;
+    return node;
+  }
+}
+
+// src/util/JsUtil.ts
+var sleep = async (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+var downloadUrl = async (url) => new Uint8Array(await (await fetch(url)).arrayBuffer());
+function bytesToBigInt(bytes) {
+  let result = 0n;
+  for (let index = 0;index < bytes.length; index++) {
+    result = result << 8n | BigInt(bytes[index]);
+  }
+  return result;
+}
+function bigIntToBytes(bigInt) {
+  const bytes = [];
+  while (bigInt > 0n) {
+    bytes.unshift(Number(bigInt & 0xffn));
+    bigInt >>= 8n;
+  }
+  if (bytes[0] & 128) {
+    bytes.unshift(0);
+  }
+  return new Uint8Array(bytes);
+}
+function bigIntModPow(base, exponent, modulus) {
+  let result = 1n;
+  while (exponent > 0n) {
+    if (exponent % 2n === 1n) {
+      result = result * base % modulus;
+    }
+    base = base * base % modulus;
+    exponent >>= 1n;
+  }
+  return result;
+}
+
+// src/io/Packet.ts
+class Packet extends Linkable2 {
+  static CRC32_POLYNOMIAL = 3988292384;
+  static crctable = new Int32Array(256);
+  static bitmask = new Uint32Array(33);
+  static cacheMin = new LinkList;
+  static cacheMid = new LinkList;
+  static cacheMax = new LinkList;
+  static cacheMinCount = 0;
+  static cacheMidCount = 0;
+  static cacheMaxCount = 0;
+  static {
+    for (let i = 0;i < 32; i++) {
+      Packet.bitmask[i] = (1 << i) - 1;
+    }
+    Packet.bitmask[32] = 4294967295;
+    for (let i = 0;i < 256; i++) {
+      let remainder = i;
+      for (let bit = 0;bit < 8; bit++) {
+        if ((remainder & 1) === 1) {
+          remainder = remainder >>> 1 ^ Packet.CRC32_POLYNOMIAL;
+        } else {
+          remainder >>>= 1;
+        }
+      }
+      Packet.crctable[i] = remainder;
+    }
+  }
+  static getcrc(src, offset, length) {
+    let crc = 4294967295;
+    for (let i = offset;i < length; i++) {
+      crc = crc >>> 8 ^ this.crctable[(crc ^ src[i]) & 255];
+    }
+    return ~crc;
+  }
+  static checkcrc(src, offset, length, expected = 0) {
+    return Packet.getcrc(src, offset, length) == expected;
+  }
+  view;
+  data;
+  pos = 0;
+  bitPos = 0;
+  random = null;
+  constructor(src) {
+    if (!src) {
+      throw new Error;
+    }
+    super();
+    if (src instanceof Int8Array) {
+      this.data = new Uint8Array(src.buffer, src.byteOffset, src.byteLength);
+    } else {
+      this.data = src;
+    }
+    this.view = new DataView(this.data.buffer, this.data.byteOffset, this.data.byteLength);
+  }
+  get length() {
+    return this.view.byteLength;
+  }
+  get available() {
+    return this.view.byteLength - this.pos;
+  }
+  static alloc(type) {
+    let cached = null;
+    if (type === 0 && Packet.cacheMinCount > 0) {
+      Packet.cacheMinCount--;
+      cached = Packet.cacheMin.popFront();
+    } else if (type === 1 && Packet.cacheMidCount > 0) {
+      Packet.cacheMidCount--;
+      cached = Packet.cacheMid.popFront();
+    } else if (type === 2 && Packet.cacheMaxCount > 0) {
+      Packet.cacheMaxCount--;
+      cached = Packet.cacheMax.popFront();
+    }
+    if (cached) {
+      cached.pos = 0;
+      return cached;
+    }
+    if (type === 0) {
+      return new Packet(new Uint8Array(100));
+    } else if (type === 1) {
+      return new Packet(new Uint8Array(5000));
+    } else {
+      return new Packet(new Uint8Array(30000));
+    }
+  }
+  release() {
+    this.pos = 0;
+    if (this.length === 100 && Packet.cacheMinCount < 1000) {
+      Packet.cacheMin.push(this);
+      Packet.cacheMinCount++;
+    } else if (this.length === 5000 && Packet.cacheMidCount < 250) {
+      Packet.cacheMid.push(this);
+      Packet.cacheMidCount++;
+    } else if (this.length === 30000 && Packet.cacheMaxCount < 50) {
+      Packet.cacheMax.push(this);
+      Packet.cacheMaxCount++;
+    }
+  }
+  g1() {
+    return this.view.getUint8(this.pos++);
+  }
+  g1b() {
+    return this.view.getInt8(this.pos++);
+  }
+  g2() {
+    const result = this.view.getUint16(this.pos);
+    this.pos += 2;
+    return result;
+  }
+  g2b() {
+    const result = this.view.getInt16(this.pos);
+    this.pos += 2;
+    return result;
+  }
+  g3() {
+    const result = this.view.getUint8(this.pos++) << 16 | this.view.getUint16(this.pos);
+    this.pos += 2;
+    return result;
+  }
+  g4() {
+    const result = this.view.getInt32(this.pos);
+    this.pos += 4;
+    return result;
+  }
+  g8() {
+    const result = this.view.getBigInt64(this.pos);
+    this.pos += 8;
+    return result;
+  }
+  gsmart() {
+    return this.view.getUint8(this.pos) < 128 ? this.g1() - 64 : this.g2() - 49152;
+  }
+  gsmarts() {
+    return this.view.getUint8(this.pos) < 128 ? this.g1() : this.g2() - 32768;
+  }
+  gjstr() {
+    const view = this.view;
+    const length = view.byteLength;
+    let str = "";
+    let b;
+    while ((b = view.getUint8(this.pos++)) !== 10 && this.pos < length) {
+      str += String.fromCharCode(b);
+    }
+    return str;
+  }
+  gdata(length, offset, dest) {
+    dest.set(this.data.subarray(this.pos, this.pos + length), offset);
+    this.pos += length;
+  }
+  pIsaac(opcode) {
+    this.view.setUint8(this.pos++, opcode + (this.random?.nextInt ?? 0) & 255);
+  }
+  p1(value) {
+    this.view.setUint8(this.pos++, value);
+  }
+  p2(value) {
+    this.view.setUint16(this.pos, value);
+    this.pos += 2;
+  }
+  ip2(value) {
+    this.view.setUint16(this.pos, value, true);
+    this.pos += 2;
+  }
+  p3(value) {
+    this.view.setUint8(this.pos++, value >> 16);
+    this.view.setUint16(this.pos, value);
+    this.pos += 2;
+  }
+  p4(value) {
+    this.view.setInt32(this.pos, value);
+    this.pos += 4;
+  }
+  ip4(value) {
+    this.view.setInt32(this.pos, value, true);
+    this.pos += 4;
+  }
+  p8(value) {
+    this.view.setBigInt64(this.pos, value);
+    this.pos += 8;
+  }
+  pjstr(str) {
+    const view = this.view;
+    const length = str.length;
+    for (let i = 0;i < length; i++) {
+      view.setUint8(this.pos++, str.charCodeAt(i));
+    }
+    view.setUint8(this.pos++, 10);
+  }
+  pdata(src, length, offset) {
+    this.data.set(src.subarray(offset, offset + length), this.pos);
+    this.pos += length - offset;
+  }
+  psize1(size) {
+    this.view.setUint8(this.pos - size - 1, size);
+  }
+  bits() {
+    this.bitPos = this.pos << 3;
+  }
+  bytes() {
+    this.pos = this.bitPos + 7 >>> 3;
+  }
+  gBit(n) {
+    let bytePos = this.bitPos >>> 3;
+    let remaining = 8 - (this.bitPos & 7);
+    let value = 0;
+    this.bitPos += n;
+    for (;n > remaining; remaining = 8) {
+      value += (this.view.getUint8(bytePos++) & Packet.bitmask[remaining]) << n - remaining;
+      n -= remaining;
+    }
+    if (n === remaining) {
+      value += this.view.getUint8(bytePos) & Packet.bitmask[remaining];
+    } else {
+      value += this.view.getUint8(bytePos) >>> remaining - n & Packet.bitmask[n];
+    }
+    return value;
+  }
+  rsaenc(mod, exp) {
+    const length = this.pos;
+    this.pos = 0;
+    const temp = new Uint8Array(length);
+    this.gdata(length, 0, temp);
+    const bigRaw = bytesToBigInt(temp);
+    const bigEnc = bigIntModPow(bigRaw, exp, mod);
+    const rawEnc = bigIntToBytes(bigEnc);
+    this.pos = 0;
+    this.p1(rawEnc.length);
+    this.pdata(rawEnc, rawEnc.length, 0);
+  }
+}
+
+// src/client/InputTracking.ts
+class InputTracking {
+  static active = false;
+  static old = null;
+  static out = null;
+  static lastTime = 0;
+  static trackedCount = 0;
+  static lastMoveTime = 0;
+  static lastX = 0;
+  static lastY = 0;
+  static activate() {
+    this.old = Packet.alloc(1);
+    this.out = null;
+    this.lastTime = performance.now();
+    this.active = true;
+  }
+  static deactivate() {
+    this.active = false;
+    this.old = null;
+    this.out = null;
+  }
+  static flush() {
+    let buffer = null;
+    if (this.out && this.active) {
+      buffer = this.out;
+    }
+    this.out = null;
+    return buffer;
+  }
+  static stop() {
+    let buffer = null;
+    if (this.old && this.old.pos > 0 && this.active) {
+      buffer = this.old;
+    }
+    this.deactivate();
+    return buffer;
+  }
+  static ensureCapacity(n) {
+    if (!this.old) {
+      return;
+    }
+    if (this.old.pos + n >= 500) {
+      const buffer = this.old;
+      this.old = Packet.alloc(1);
+      this.out = buffer;
+    }
+  }
+  static mousePressed(x, y, button, _pointerType) {
+    if (!this.old) {
+      return;
+    }
+    if (!this.active && (x >= 0 && x < 789 && y >= 0 && y < 532)) {
+      return;
+    }
+    this.trackedCount++;
+    const now = performance.now();
+    let delta = (now - this.lastTime) / 10 | 0;
+    if (delta > 250) {
+      delta = 250;
+    }
+    this.lastTime = now;
+    this.ensureCapacity(5);
+    if (button === 2) {
+      this.old.p1(1);
+    } else {
+      this.old.p1(2);
+    }
+    this.old.p1(delta);
+    this.old.p3(x + (y << 10));
+  }
+  static mouseReleased(button, _pointerType) {
+    if (!this.old) {
+      return;
+    }
+    if (!this.active) {
+      return;
+    }
+    this.trackedCount++;
+    const now = performance.now();
+    let delta = (now - this.lastTime) / 10 | 0;
+    if (delta > 250) {
+      delta = 250;
+    }
+    this.lastTime = now;
+    this.ensureCapacity(2);
+    if (button === 2) {
+      this.old.p1(3);
+    } else {
+      this.old.p1(4);
+    }
+    this.old.p1(delta);
+  }
+  static mouseMoved(x, y, _pointerType) {
+    if (!this.old) {
+      return;
+    }
+    if (!this.active && (x >= 0 && x < 789 && y >= 0 && y < 532)) {
+      return;
+    }
+    const now = performance.now();
+    if (now - this.lastMoveTime < 50) {
+      return;
+    }
+    this.lastMoveTime = now;
+    this.trackedCount++;
+    let delta = (now - this.lastTime) / 10 | 0;
+    if (delta > 250) {
+      delta = 250;
+    }
+    this.lastTime = now;
+    if (x - this.lastX < 8 && x - this.lastX >= -8 && y - this.lastY < 8 && y - this.lastY >= -8) {
+      this.ensureCapacity(3);
+      this.old.p1(5);
+      this.old.p1(delta);
+      this.old.p1(x + (y - this.lastY + 8 << 4) + 8 - this.lastX);
+    } else if (x - this.lastX < 128 && x - this.lastX >= -128 && y - this.lastY < 128 && y - this.lastY >= -128) {
+      this.ensureCapacity(4);
+      this.old.p1(6);
+      this.old.p1(delta);
+      this.old.p1(x + 128 - this.lastX);
+      this.old.p1(y + 128 - this.lastY);
+    } else {
+      this.ensureCapacity(5);
+      this.old.p1(7);
+      this.old.p1(delta);
+      this.old.p3(x + (y << 10));
+    }
+    this.lastX = x;
+    this.lastY = y;
+  }
+  static keyPressed(key) {
+    if (!this.old) {
+      return;
+    }
+    if (!this.active) {
+      return;
+    }
+    this.trackedCount++;
+    const now = performance.now();
+    let delta = (now - this.lastTime) / 10 | 0;
+    if (delta > 250) {
+      delta = 250;
+    }
+    this.lastTime = now;
+    if (key === 1000) {
+      key = 11;
+    } else if (key === 1001) {
+      key = 12;
+    } else if (key === 1002) {
+      key = 14;
+    } else if (key === 1003) {
+      key = 15;
+    } else if (key >= 1008) {
+      key -= 992;
+    }
+    this.ensureCapacity(3);
+    this.old.p1(8);
+    this.old.p1(delta);
+    this.old.p1(key);
+  }
+  static keyReleased(key) {
+    if (!this.old) {
+      return;
+    }
+    if (!this.active) {
+      return;
+    }
+    this.trackedCount++;
+    const now = performance.now();
+    let delta = (now - this.lastTime) / 10 | 0;
+    if (delta > 250) {
+      delta = 250;
+    }
+    this.lastTime = now;
+    if (key === 1000) {
+      key = 11;
+    } else if (key === 1001) {
+      key = 12;
+    } else if (key === 1002) {
+      key = 14;
+    } else if (key === 1003) {
+      key = 15;
+    } else if (key >= 1008) {
+      key -= 992;
+    }
+    this.ensureCapacity(3);
+    this.old.p1(9);
+    this.old.p1(delta);
+    this.old.p1(key);
+  }
+  static focusGained() {
+    if (!this.old) {
+      return;
+    }
+    if (!this.active) {
+      return;
+    }
+    this.trackedCount++;
+    const now = performance.now();
+    let delta = (now - this.lastTime) / 10 | 0;
+    if (delta > 250) {
+      delta = 250;
+    }
+    this.lastTime = now;
+    this.ensureCapacity(2);
+    this.old.p1(10);
+    this.old.p1(delta);
+  }
+  static focusLost() {
+    if (!this.old) {
+      return;
+    }
+    if (!this.active) {
+      return;
+    }
+    this.trackedCount++;
+    const now = performance.now();
+    let delta = (now - this.lastTime) / 10 | 0;
+    if (delta > 250) {
+      delta = 250;
+    }
+    this.lastTime = now;
+    this.ensureCapacity(2);
+    this.old.p1(11);
+    this.old.p1(delta);
+  }
+  static mouseEntered() {
+    if (!this.old) {
+      return;
+    }
+    if (!this.active) {
+      return;
+    }
+    this.trackedCount++;
+    const now = performance.now();
+    let delta = (now - this.lastTime) / 10 | 0;
+    if (delta > 250) {
+      delta = 250;
+    }
+    this.lastTime = now;
+    this.ensureCapacity(2);
+    this.old.p1(12);
+    this.old.p1(delta);
+  }
+  static mouseExited() {
+    if (!this.old) {
+      return;
+    }
+    if (!this.active) {
+      return;
+    }
+    this.trackedCount++;
+    const now = performance.now();
+    let delta = (now - this.lastTime) / 10 | 0;
+    if (delta > 250) {
+      delta = 250;
+    }
+    this.lastTime = now;
+    this.ensureCapacity(2);
+    this.old.p1(13);
+    this.old.p1(delta);
+  }
+}
+
+// src/client/KeyCodes.ts
+var CanvasEnabledKeys = ["F11", "F12"];
+var KeyCodes = new Map;
+KeyCodes.set("ArrowLeft", { code: 37, ch: 1 });
+KeyCodes.set("ArrowRight", { code: 39, ch: 2 });
+KeyCodes.set("ArrowUp", { code: 38, ch: 3 });
+KeyCodes.set("ArrowDown", { code: 40, ch: 4 });
+KeyCodes.set("Control", { code: 17, ch: 5 });
+KeyCodes.set("Shift", { code: 16, ch: 6 });
+KeyCodes.set("Alt", { code: 18, ch: 7 });
+KeyCodes.set("Backspace", { code: 8, ch: 8 });
+KeyCodes.set("Tab", { code: 9, ch: 9 });
+KeyCodes.set("Enter", { code: 10, ch: 10 });
+KeyCodes.set("Escape", { code: 27, ch: 27 });
+KeyCodes.set(" ", { code: 32, ch: 32 });
+KeyCodes.set("Delete", { code: 127, ch: 127 });
+KeyCodes.set("Home", { code: 36, ch: 1000 });
+KeyCodes.set("End", { code: 35, ch: 1001 });
+KeyCodes.set("PageUp", { code: 33, ch: 1002 });
+KeyCodes.set("PageDown", { code: 34, ch: 1003 });
+KeyCodes.set("F1", { code: 112, ch: 1008 });
+KeyCodes.set("F2", { code: 113, ch: 1009 });
+KeyCodes.set("F3", { code: 114, ch: 1010 });
+KeyCodes.set("F4", { code: 115, ch: 1011 });
+KeyCodes.set("F5", { code: 116, ch: 1012 });
+KeyCodes.set("F6", { code: 117, ch: 1013 });
+KeyCodes.set("F7", { code: 118, ch: 1014 });
+KeyCodes.set("F8", { code: 119, ch: 1015 });
+KeyCodes.set("F9", { code: 120, ch: 1016 });
+KeyCodes.set("F10", { code: 121, ch: 1017 });
+KeyCodes.set("F11", { code: 122, ch: 1018 });
+KeyCodes.set("F12", { code: 123, ch: 1019 });
+KeyCodes.set("CapsLock", { code: 20, ch: 65535 });
+KeyCodes.set("Meta", { code: 524, ch: 65535 });
+KeyCodes.set("Insert", { code: 155, ch: 65535 });
+KeyCodes.set("`", { code: 192, ch: 96 });
+KeyCodes.set("~", { code: 192, ch: 126 });
+KeyCodes.set("!", { code: 49, ch: 33 });
+KeyCodes.set("@", { code: 50, ch: 64 });
+KeyCodes.set("#", { code: 51, ch: 35 });
+KeyCodes.set("£", { code: 51, ch: 163 });
+KeyCodes.set("$", { code: 52, ch: 36 });
+KeyCodes.set("%", { code: 53, ch: 37 });
+KeyCodes.set("^", { code: 54, ch: 94 });
+KeyCodes.set("&", { code: 55, ch: 38 });
+KeyCodes.set("*", { code: 56, ch: 42 });
+KeyCodes.set("(", { code: 57, ch: 40 });
+KeyCodes.set(")", { code: 48, ch: 41 });
+KeyCodes.set("-", { code: 45, ch: 45 });
+KeyCodes.set("_", { code: 45, ch: 95 });
+KeyCodes.set("=", { code: 61, ch: 61 });
+KeyCodes.set("+", { code: 61, ch: 43 });
+KeyCodes.set("[", { code: 91, ch: 91 });
+KeyCodes.set("{", { code: 91, ch: 123 });
+KeyCodes.set("]", { code: 93, ch: 93 });
+KeyCodes.set("}", { code: 93, ch: 125 });
+KeyCodes.set("\\", { code: 92, ch: 92 });
+KeyCodes.set("|", { code: 92, ch: 124 });
+KeyCodes.set(";", { code: 59, ch: 59 });
+KeyCodes.set(":", { code: 59, ch: 58 });
+KeyCodes.set("'", { code: 222, ch: 39 });
+KeyCodes.set('"', { code: 222, ch: 34 });
+KeyCodes.set(",", { code: 44, ch: 44 });
+KeyCodes.set("<", { code: 44, ch: 60 });
+KeyCodes.set(".", { code: 46, ch: 46 });
+KeyCodes.set(">", { code: 46, ch: 62 });
+KeyCodes.set("/", { code: 47, ch: 47 });
+KeyCodes.set("?", { code: 47, ch: 63 });
+KeyCodes.set("0", { code: 48, ch: 48 });
+KeyCodes.set("1", { code: 49, ch: 49 });
+KeyCodes.set("2", { code: 50, ch: 50 });
+KeyCodes.set("3", { code: 51, ch: 51 });
+KeyCodes.set("4", { code: 52, ch: 52 });
+KeyCodes.set("5", { code: 53, ch: 53 });
+KeyCodes.set("6", { code: 54, ch: 54 });
+KeyCodes.set("7", { code: 55, ch: 55 });
+KeyCodes.set("8", { code: 56, ch: 56 });
+KeyCodes.set("9", { code: 57, ch: 57 });
+KeyCodes.set("a", { code: 65, ch: 97 });
+KeyCodes.set("b", { code: 66, ch: 98 });
+KeyCodes.set("c", { code: 67, ch: 99 });
+KeyCodes.set("d", { code: 68, ch: 100 });
+KeyCodes.set("e", { code: 69, ch: 101 });
+KeyCodes.set("f", { code: 70, ch: 102 });
+KeyCodes.set("g", { code: 71, ch: 103 });
+KeyCodes.set("h", { code: 72, ch: 104 });
+KeyCodes.set("i", { code: 73, ch: 105 });
+KeyCodes.set("j", { code: 74, ch: 106 });
+KeyCodes.set("k", { code: 75, ch: 107 });
+KeyCodes.set("l", { code: 76, ch: 108 });
+KeyCodes.set("m", { code: 77, ch: 109 });
+KeyCodes.set("n", { code: 78, ch: 110 });
+KeyCodes.set("o", { code: 79, ch: 111 });
+KeyCodes.set("p", { code: 80, ch: 112 });
+KeyCodes.set("q", { code: 81, ch: 113 });
+KeyCodes.set("r", { code: 82, ch: 114 });
+KeyCodes.set("s", { code: 83, ch: 115 });
+KeyCodes.set("t", { code: 84, ch: 116 });
+KeyCodes.set("u", { code: 85, ch: 117 });
+KeyCodes.set("v", { code: 86, ch: 118 });
+KeyCodes.set("w", { code: 87, ch: 119 });
+KeyCodes.set("x", { code: 88, ch: 120 });
+KeyCodes.set("y", { code: 89, ch: 121 });
+KeyCodes.set("z", { code: 90, ch: 122 });
+KeyCodes.set("A", { code: 65, ch: 65 });
+KeyCodes.set("B", { code: 66, ch: 66 });
+KeyCodes.set("C", { code: 67, ch: 67 });
+KeyCodes.set("D", { code: 68, ch: 68 });
+KeyCodes.set("E", { code: 69, ch: 69 });
+KeyCodes.set("F", { code: 70, ch: 70 });
+KeyCodes.set("G", { code: 71, ch: 71 });
+KeyCodes.set("H", { code: 72, ch: 72 });
+KeyCodes.set("I", { code: 73, ch: 73 });
+KeyCodes.set("J", { code: 74, ch: 74 });
+KeyCodes.set("K", { code: 75, ch: 75 });
+KeyCodes.set("L", { code: 76, ch: 76 });
+KeyCodes.set("M", { code: 77, ch: 77 });
+KeyCodes.set("N", { code: 78, ch: 78 });
+KeyCodes.set("O", { code: 79, ch: 79 });
+KeyCodes.set("P", { code: 80, ch: 80 });
+KeyCodes.set("Q", { code: 81, ch: 81 });
+KeyCodes.set("R", { code: 82, ch: 82 });
+KeyCodes.set("S", { code: 83, ch: 83 });
+KeyCodes.set("T", { code: 84, ch: 84 });
+KeyCodes.set("U", { code: 85, ch: 85 });
+KeyCodes.set("V", { code: 86, ch: 86 });
+KeyCodes.set("W", { code: 87, ch: 87 });
+KeyCodes.set("X", { code: 88, ch: 88 });
+KeyCodes.set("Y", { code: 89, ch: 89 });
+KeyCodes.set("Z", { code: 90, ch: 90 });
+
+// src/dash3d/graphics/Canvas.ts
+var canvas = document.getElementById("canvas");
+var canvas2d = canvas?.getContext("2d", {
+  desynchronized: false,
+  alpha: false
+});
+function saveDataURL(dataURL, filename) {
+  const link = document.createElement("a");
+  link.href = dataURL;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// src/dash3d/graphics/Pix2D.ts
+class Pix2D extends Linkable2 {
+  static pixels = new Int32Array;
+  static width = 0;
+  static height = 0;
+  static clipMinX = 0;
+  static clipMaxX = 0;
+  static clipMinY = 0;
+  static clipMaxY = 0;
+  static sizeX = 0;
+  static maxX = 0;
+  static maxY = 0;
+  static setPixels(pixels, width, height) {
+    this.pixels = pixels;
+    this.width = width;
+    this.height = height;
+    this.setClipping(0, 0, width, height);
+  }
+  static resetClipping() {
+    this.clipMinX = 0;
+    this.clipMinY = 0;
+    this.clipMaxX = this.width;
+    this.clipMaxY = this.height;
+    this.sizeX = this.clipMaxX - 1;
+    this.maxX = this.clipMaxX / 2 | 0;
+  }
+  static setClipping(x1, y1, x2, y2) {
+    if (x1 < 0) {
+      x1 = 0;
+    }
+    if (y1 < 0) {
+      y1 = 0;
+    }
+    if (x2 > this.width) {
+      x2 = this.width;
+    }
+    if (y2 > this.height) {
+      y2 = this.height;
+    }
+    this.clipMinY = y1;
+    this.clipMaxY = y2;
+    this.clipMinX = x1;
+    this.clipMaxX = x2;
+    this.sizeX = this.clipMaxX - 1;
+    this.maxX = this.clipMaxX / 2 | 0;
+    this.maxY = this.clipMaxY / 2 | 0;
+  }
+  static cls() {
+    const len = this.width * this.height;
+    for (let i = 0;i < len; i++) {
+      this.pixels[i] = 0;
+    }
+  }
+  static fillRectTrans(x, y, width, height, rgb, alpha) {
+    if (x < this.clipMinX) {
+      width -= this.clipMinX - x;
+      x = this.clipMinX;
+    }
+    if (y < this.clipMinY) {
+      height -= this.clipMinY - y;
+      y = this.clipMinY;
+    }
+    if (x + width > this.clipMaxX) {
+      width = this.clipMaxX - x;
+    }
+    if (y + height > this.clipMaxY) {
+      height = this.clipMaxY - y;
+    }
+    const invAlpha = 256 - alpha;
+    const r0 = (rgb >> 16 & 255) * alpha;
+    const g0 = (rgb >> 8 & 255) * alpha;
+    const b0 = (rgb & 255) * alpha;
+    const step = this.width - width;
+    let offset = x + y * this.width;
+    for (let i = 0;i < height; i++) {
+      for (let j = -width;j < 0; j++) {
+        const r1 = (this.pixels[offset] >> 16 & 255) * invAlpha;
+        const g1 = (this.pixels[offset] >> 8 & 255) * invAlpha;
+        const b1 = (this.pixels[offset] & 255) * invAlpha;
+        const mixed = (r0 + r1 >> 8 << 16) + (g0 + g1 >> 8 << 8) + (b0 + b1 >> 8);
+        this.pixels[offset++] = mixed;
+      }
+      offset += step;
+    }
+  }
+  static fillRect(x, y, width, height, rgb) {
+    if (x < this.clipMinX) {
+      width -= this.clipMinX - x;
+      x = this.clipMinX;
+    }
+    if (y < this.clipMinY) {
+      height -= this.clipMinY - y;
+      y = this.clipMinY;
+    }
+    if (x + width > this.clipMaxX) {
+      width = this.clipMaxX - x;
+    }
+    if (y + height > this.clipMaxY) {
+      height = this.clipMaxY - y;
+    }
+    const step = this.width - width;
+    let offset = x + y * this.width;
+    for (let i = -height;i < 0; i++) {
+      for (let j = -width;j < 0; j++) {
+        this.pixels[offset++] = rgb;
+      }
+      offset += step;
+    }
+  }
+  static drawRect(x, y, w, h, rgb) {
+    this.hline(x, y, w, rgb);
+    this.hline(x, y + h - 1, w, rgb);
+    this.vline(x, y, h, rgb);
+    this.vline(x + w - 1, y, h, rgb);
+  }
+  static drawRectTrans(x, y, w, h, rgb, alpha) {
+    this.hlineTrans(x, y, w, rgb, alpha);
+    this.hlineTrans(x, y + h - 1, w, rgb, alpha);
+    if (h >= 3) {
+      this.vlineTrans(x, y, h, rgb, alpha);
+      this.vlineTrans(x + w - 1, y, h, rgb, alpha);
+    }
+  }
+  static hline(x, y, width, rgb) {
+    if (y < this.clipMinY || y >= this.clipMaxY) {
+      return;
+    }
+    if (x < this.clipMinX) {
+      width -= this.clipMinX - x;
+      x = this.clipMinX;
+    }
+    if (x + width > this.clipMaxX) {
+      width = this.clipMaxX - x;
+    }
+    const off = x + y * this.width;
+    for (let i = 0;i < width; i++) {
+      this.pixels[off + i] = rgb;
+    }
+  }
+  static hlineTrans(x, y, width, rgb, alpha) {
+    if (y < this.clipMinY || y >= this.clipMaxY) {
+      return;
+    }
+    if (x < this.clipMinX) {
+      width -= this.clipMinX - x;
+      x = this.clipMinX;
+    }
+    if (x + width > this.clipMaxX) {
+      width = this.clipMaxX - x;
+    }
+    const invAlpha = 256 - alpha;
+    const r0 = (rgb >> 16 & 255) * alpha;
+    const g0 = (rgb >> 8 & 255) * alpha;
+    const b0 = (rgb & 255) * alpha;
+    const _step = this.width - width;
+    let offset = x + y * this.width;
+    for (let i = 0;i < width; i++) {
+      const r1 = (this.pixels[offset] >> 16 & 255) * invAlpha;
+      const g1 = (this.pixels[offset] >> 8 & 255) * invAlpha;
+      const b1 = (this.pixels[offset] & 255) * invAlpha;
+      const mixed = (r0 + r1 >> 8 << 16) + (g0 + g1 >> 8 << 8) + (b0 + b1 >> 8);
+      this.pixels[offset++] = mixed;
+    }
+  }
+  static vline(x, y, height, rgb) {
+    if (x < this.clipMinX || x >= this.clipMaxX) {
+      return;
+    }
+    if (y < this.clipMinY) {
+      height -= this.clipMinY - y;
+      y = this.clipMinY;
+    }
+    if (y + height > this.clipMaxY) {
+      height = this.clipMaxY - y;
+    }
+    const off = x + y * this.width;
+    for (let i = 0;i < height; i++) {
+      this.pixels[off + i * this.width] = rgb;
+    }
+  }
+  static vlineTrans(x, y, height, rgb, alpha) {
+    if (x < this.clipMinX || x >= this.clipMaxX) {
+      return;
+    }
+    if (y < this.clipMinY) {
+      height -= this.clipMinY - y;
+      y = this.clipMinY;
+    }
+    if (y + height > this.clipMaxY) {
+      height = this.clipMaxY - y;
+    }
+    const invAlpha = 256 - alpha;
+    const r0 = (rgb >> 16 & 255) * alpha;
+    const g0 = (rgb >> 8 & 255) * alpha;
+    const b0 = (rgb & 255) * alpha;
+    let offset = x + y * this.width;
+    for (let i = 0;i < height; i++) {
+      const r1 = (this.pixels[offset] >> 16 & 255) * invAlpha;
+      const g1 = (this.pixels[offset] >> 8 & 255) * invAlpha;
+      const b1 = (this.pixels[offset] & 255) * invAlpha;
+      const mixed = (r0 + r1 >> 8 << 16) + (g0 + g1 >> 8 << 8) + (b0 + b1 >> 8);
+      this.pixels[offset] = mixed;
+      offset += this.width;
+    }
+  }
+  static fillCircle(xCenter, yCenter, yRadius, rgb, alpha) {
+    const invAlpha = 256 - alpha;
+    const r0 = (rgb >> 16 & 255) * alpha;
+    const g0 = (rgb >> 8 & 255) * alpha;
+    const b0 = (rgb & 255) * alpha;
+    let yStart = yCenter - yRadius;
+    if (yStart < 0) {
+      yStart = 0;
+    }
+    let yEnd = yCenter + yRadius;
+    if (yEnd >= this.height) {
+      yEnd = this.height - 1;
+    }
+    for (let y = yStart;y <= yEnd; y++) {
+      const midpoint = y - yCenter;
+      const xRadius = Math.sqrt(yRadius * yRadius - midpoint * midpoint) | 0;
+      let xStart = xCenter - xRadius;
+      if (xStart < 0) {
+        xStart = 0;
+      }
+      let xEnd = xCenter + xRadius;
+      if (xEnd >= this.width) {
+        xEnd = this.width - 1;
+      }
+      let offset = xStart + y * this.width;
+      for (let x = xStart;x <= xEnd; x++) {
+        const r1 = (this.pixels[offset] >> 16 & 255) * invAlpha;
+        const g1 = (this.pixels[offset] >> 8 & 255) * invAlpha;
+        const b1 = (this.pixels[offset] & 255) * invAlpha;
+        const mixed = (r0 + r1 >> 8 << 16) + (g0 + g1 >> 8 << 8) + (b0 + b1 >> 8);
+        this.pixels[offset++] = mixed;
+      }
+    }
+  }
+}
+
+// src/dash3d/graphics/Pix8.ts
+class Pix8 extends Pix2D {
+  data;
+  bpal;
+  wi;
+  hi;
+  xof;
+  yof;
+  owi;
+  ohi;
+  constructor(width, height, palette) {
+    super();
+    this.data = new Int8Array(width * height);
+    this.wi = this.owi = width;
+    this.hi = this.ohi = height;
+    this.xof = this.yof = 0;
+    this.bpal = palette;
+  }
+  static depack(jag, name, sprite = 0) {
+    const dat = new Packet(jag.read(name + ".dat"));
+    const index = new Packet(jag.read("index.dat"));
+    index.pos = dat.g2();
+    const owi = index.g2();
+    const ohi = index.g2();
+    const bpalCount = index.g1();
+    const bpal = new Int32Array(bpalCount);
+    for (let i = 0;i < bpalCount - 1; i++) {
+      bpal[i + 1] = index.g3();
+    }
+    for (let i = 0;i < sprite; i++) {
+      index.pos += 2;
+      dat.pos += index.g2() * index.g2();
+      index.pos += 1;
+    }
+    if (dat.pos > dat.length || index.pos > index.length) {
+      throw new Error;
+    }
+    const xof = index.g1();
+    const yof = index.g1();
+    const wi = index.g2();
+    const hi = index.g2();
+    const image = new Pix8(wi, hi, bpal);
+    image.xof = xof;
+    image.yof = yof;
+    image.owi = owi;
+    image.ohi = ohi;
+    const encoding = index.g1();
+    if (encoding === 0) {
+      for (let i = 0;i < image.wi * image.hi; i++) {
+        image.data[i] = dat.g1b();
+      }
+    } else if (encoding === 1) {
+      for (let x = 0;x < image.wi; x++) {
+        for (let y = 0;y < image.hi; y++) {
+          image.data[x + y * image.wi] = dat.g1b();
+        }
+      }
+    }
+    return image;
+  }
+  halveSize() {
+    this.owi |= 0;
+    this.ohi |= 0;
+    this.owi /= 2;
+    this.ohi /= 2;
+    this.owi |= 0;
+    this.ohi |= 0;
+    const pixels = new Int8Array(this.owi * this.ohi);
+    let off = 0;
+    for (let y = 0;y < this.hi; y++) {
+      for (let x = 0;x < this.wi; x++) {
+        pixels[(x + this.xof >> 1) + (y + this.yof >> 1) * this.owi] = this.data[off++];
+      }
+    }
+    this.data = pixels;
+    this.wi = this.owi;
+    this.hi = this.ohi;
+    this.xof = 0;
+    this.yof = 0;
+  }
+  trim() {
+    if (this.wi === this.owi && this.hi === this.ohi) {
+      return;
+    }
+    const pixels = new Int8Array(this.owi * this.ohi);
+    let off = 0;
+    for (let y = 0;y < this.hi; y++) {
+      for (let x = 0;x < this.wi; x++) {
+        pixels[x + this.xof + (y + this.yof) * this.owi] = this.data[off++];
+      }
+    }
+    this.data = pixels;
+    this.wi = this.owi;
+    this.hi = this.ohi;
+    this.xof = 0;
+    this.yof = 0;
+  }
+  rgbAdjust(r, g, b) {
+    for (let i = 0;i < this.bpal.length; i++) {
+      let red = this.bpal[i] >> 16 & 255;
+      red += r;
+      if (red < 0) {
+        red = 0;
+      } else if (red > 255) {
+        red = 255;
+      }
+      let green = this.bpal[i] >> 8 & 255;
+      green += g;
+      if (green < 0) {
+        green = 0;
+      } else if (green > 255) {
+        green = 255;
+      }
+      let blue = this.bpal[i] & 255;
+      blue += b;
+      if (blue < 0) {
+        blue = 0;
+      } else if (blue > 255) {
+        blue = 255;
+      }
+      this.bpal[i] = (red << 16) + (green << 8) + blue;
+    }
+  }
+  hflip() {
+    const pixels = this.data;
+    const width = this.wi;
+    const height = this.hi;
+    for (let y = 0;y < height; y++) {
+      const div = width / 2 | 0;
+      for (let x = 0;x < div; x++) {
+        const off1 = x + y * width;
+        const off2 = width - x - 1 + y * width;
+        const tmp = pixels[off1];
+        pixels[off1] = pixels[off2];
+        pixels[off2] = tmp;
+      }
+    }
+  }
+  vflip() {
+    const pixels = this.data;
+    const width = this.wi;
+    const height = this.hi;
+    for (let y = 0;y < (height / 2 | 0); y++) {
+      for (let x = 0;x < width; x++) {
+        const off1 = x + y * width;
+        const off2 = x + (height - y - 1) * width;
+        const tmp = pixels[off1];
+        pixels[off1] = pixels[off2];
+        pixels[off2] = tmp;
+      }
+    }
+  }
+  plotSprite(x, y) {
+    x |= 0;
+    y |= 0;
+    x += this.xof;
+    y += this.yof;
+    let dstOff = x + y * Pix2D.width;
+    let srcOff = 0;
+    let h = this.hi;
+    let w = this.wi;
+    let dstStep = Pix2D.width - w;
+    let srcStep = 0;
+    if (y < Pix2D.clipMinY) {
+      const cutoff = Pix2D.clipMinY - y;
+      h -= cutoff;
+      y = Pix2D.clipMinY;
+      srcOff += cutoff * w;
+      dstOff += cutoff * Pix2D.width;
+    }
+    if (y + h > Pix2D.clipMaxY) {
+      h -= y + h - Pix2D.clipMaxY;
+    }
+    if (x < Pix2D.clipMinX) {
+      const cutoff = Pix2D.clipMinX - x;
+      w -= cutoff;
+      x = Pix2D.clipMinX;
+      srcOff += cutoff;
+      dstOff += cutoff;
+      srcStep += cutoff;
+      dstStep += cutoff;
+    }
+    if (x + w > Pix2D.clipMaxX) {
+      const cutoff = x + w - Pix2D.clipMaxX;
+      w -= cutoff;
+      srcStep += cutoff;
+      dstStep += cutoff;
+    }
+    if (w > 0 && h > 0) {
+      this.plot(w, h, this.data, srcOff, srcStep, Pix2D.pixels, dstOff, dstStep);
+    }
+  }
+  plot(w, h, src, srcOff, srcStep, dst, dstOff, dstStep) {
+    const qw = -(w >> 2);
+    w = -(w & 3);
+    for (let y = -h;y < 0; y++) {
+      for (let x = qw;x < 0; x++) {
+        let palIndex = src[srcOff++];
+        if (palIndex === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = this.bpal[palIndex & 255];
+        }
+        palIndex = src[srcOff++];
+        if (palIndex === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = this.bpal[palIndex & 255];
+        }
+        palIndex = src[srcOff++];
+        if (palIndex === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = this.bpal[palIndex & 255];
+        }
+        palIndex = src[srcOff++];
+        if (palIndex === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = this.bpal[palIndex & 255];
+        }
+      }
+      for (let x = w;x < 0; x++) {
+        const palIndex = src[srcOff++];
+        if (palIndex === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = this.bpal[palIndex & 255];
+        }
+      }
+      dstOff += dstStep;
+      srcOff += srcStep;
+    }
+  }
+  scalePlotSprite(arg0, arg1, arg2, arg3) {
+    try {
+      const local2 = this.wi;
+      const local5 = this.hi;
+      let local7 = 0;
+      let local9 = 0;
+      const _local15 = (local2 << 16) / arg2 | 0;
+      const _local21 = (local5 << 16) / arg3 | 0;
+      const local24 = this.owi;
+      const local27 = this.ohi;
+      const local33 = (local24 << 16) / arg2 | 0;
+      const local39 = (local27 << 16) / arg3 | 0;
+      arg0 = arg0 + (this.xof * arg2 + local24 - 1) / local24 | 0;
+      arg1 = arg1 + (this.yof * arg3 + local27 - 1) / local27 | 0;
+      if (this.xof * arg2 % local24 != 0) {
+        local7 = (local24 - this.xof * arg2 % local24 << 16) / arg2 | 0;
+      }
+      if (this.yof * arg3 % local27 != 0) {
+        local9 = (local27 - this.yof * arg3 % local27 << 16) / arg3 | 0;
+      }
+      arg2 = arg2 * (this.wi - (local7 >> 16)) / local24 | 0;
+      arg3 = arg3 * (this.hi - (local9 >> 16)) / local27 | 0;
+      let local133 = arg0 + arg1 * Pix2D.width;
+      let local137 = Pix2D.width - arg2;
+      let local144;
+      if (arg1 < Pix2D.clipMinY) {
+        local144 = Pix2D.clipMinY - arg1;
+        arg3 -= local144;
+        arg1 = 0;
+        local133 += local144 * Pix2D.width;
+        local9 += local39 * local144;
+      }
+      if (arg1 + arg3 > Pix2D.clipMaxY) {
+        arg3 -= arg1 + arg3 - Pix2D.clipMaxY;
+      }
+      if (arg0 < Pix2D.clipMinX) {
+        local144 = Pix2D.clipMinX - arg0;
+        arg2 -= local144;
+        arg0 = 0;
+        local133 += local144;
+        local7 += local33 * local144;
+        local137 += local144;
+      }
+      if (arg0 + arg2 > Pix2D.clipMaxX) {
+        local144 = arg0 + arg2 - Pix2D.clipMaxX;
+        arg2 -= local144;
+        local137 += local144;
+      }
+      this.plotScale(Pix2D.pixels, this.data, this.bpal, local7, local9, local133, local137, arg2, arg3, local33, local39, local2);
+    } catch (_e) {
+      console.log("error in sprite clipping routine");
+    }
+  }
+  plotScale(dst, src, bpal, offW, offH, dstOff, dstStep, w, h, scaleCropWidth, scaleCropHeight, arg11) {
+    try {
+      const lastOffW = offW;
+      for (let y = -h;y < 0; y++) {
+        const offY = (offH >> 16) * arg11;
+        for (let x = -w;x < 0; x++) {
+          const rgb = src[(offW >> 16) + offY];
+          if (rgb == 0) {
+            dstOff++;
+          } else {
+            dst[dstOff++] = bpal[rgb & 255];
+          }
+          offW += scaleCropWidth;
+        }
+        offH += scaleCropHeight;
+        offW = lastOffW;
+        dstOff += dstStep;
+      }
+    } catch (_e) {
+      console.log("error in plot_scale");
+    }
+  }
+}
+
+// src/util/Arrays.ts
+class TypedArray1d extends Array {
+  constructor(length, defaultValue) {
+    super(length);
+    for (let l = 0;l < length; l++) {
+      this[l] = defaultValue;
+    }
+  }
+}
+
+class TypedArray2d extends Array {
+  constructor(length, width, defaultValue) {
+    super(length);
+    for (let l = 0;l < length; l++) {
+      this[l] = new Array(width);
+      for (let w = 0;w < width; w++) {
+        this[l][w] = defaultValue;
+      }
+    }
+  }
+}
+class Int32Array2d extends Array {
+  constructor(length, width) {
+    super(length);
+    for (let l = 0;l < length; l++) {
+      this[l] = new Int32Array(width);
+    }
+  }
+}
+
+// src/dash3d/Pix3D.ts
+class Pix3D extends Pix2D {
+  static lowMem = false;
+  static lowDetail = true;
+  static highDetail = false;
+  static divTable = new Int32Array(512);
+  static divTable2 = new Int32Array(2048);
+  static sinTable = new Int32Array(2048);
+  static cosTable = new Int32Array(2048);
+  static colourTable = new Int32Array(65536);
+  static textures = new TypedArray1d(50, null);
+  static textureTranslucent = new TypedArray1d(50, false);
+  static averageTextureRgb = new Int32Array(50);
+  static activeTexels = new TypedArray1d(50, null);
+  static textureCycle = new Int32Array(50);
+  static texPal = new TypedArray1d(50, null);
+  static textureCount = 0;
+  static originX = 0;
+  static originY = 0;
+  static texelPool = null;
+  static poolSize = 0;
+  static opaque = false;
+  static cycle = 0;
+  static scanline = new Int32Array;
+  static hclip = false;
+  static trans = 0;
+  static {
+    for (let i = 1;i < 512; i++) {
+      this.divTable[i] = 32768 / i | 0;
+    }
+    for (let i = 1;i < 2048; i++) {
+      this.divTable2[i] = 65536 / i | 0;
+    }
+    for (let i = 0;i < 2048; i++) {
+      this.sinTable[i] = Math.sin(i * 0.0030679615757712823) * 65536 | 0;
+      this.cosTable[i] = Math.cos(i * 0.0030679615757712823) * 65536 | 0;
+    }
+  }
+  static setRenderClipping() {
+    this.scanline = new Int32Array(Pix2D.height);
+    for (let y = 0;y < Pix2D.height; y++) {
+      this.scanline[y] = Pix2D.width * y;
+    }
+    this.originX = Pix2D.width / 2 | 0;
+    this.originY = Pix2D.height / 2 | 0;
+  }
+  static setClipping(width, height) {
+    this.scanline = new Int32Array(height);
+    for (let y = 0;y < height; y++) {
+      this.scanline[y] = width * y;
+    }
+    this.originX = width / 2 | 0;
+    this.originY = height / 2 | 0;
+  }
+  static clearTexels() {
+    this.texelPool = null;
+    this.activeTexels.fill(null);
+  }
+  static initPool(size) {
+    if (this.texelPool) {
+      return;
+    }
+    this.poolSize = size;
+    if (this.lowMem) {
+      this.texelPool = new Int32Array2d(size, 16384);
+    } else {
+      this.texelPool = new Int32Array2d(size, 65536);
+    }
+    this.activeTexels.fill(null);
+  }
+  static unpackTextures(textures) {
+    this.textureCount = 0;
+    for (let i = 0;i < 50; i++) {
+      try {
+        this.textures[i] = Pix8.depack(textures, i.toString());
+        if (this.lowMem && this.textures[i]?.owi === 128) {
+          this.textures[i]?.halveSize();
+        } else {
+          this.textures[i]?.trim();
+        }
+        this.textureCount++;
+      } catch (_e) {}
+    }
+  }
+  static getAverageTextureRgb(id) {
+    if (this.averageTextureRgb[id] !== 0) {
+      return this.averageTextureRgb[id];
+    }
+    const palette = this.texPal[id];
+    if (!palette) {
+      return 0;
+    }
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    const length = palette.length;
+    for (let i = 0;i < length; i++) {
+      r += palette[i] >> 16 & 255;
+      g += palette[i] >> 8 & 255;
+      b += palette[i] & 255;
+    }
+    let rgb = ((r / length | 0) << 16) + ((g / length | 0) << 8) + (b / length | 0);
+    rgb = this.gammaCorrect(rgb, 1.4);
+    if (rgb === 0) {
+      rgb = 1;
+    }
+    this.averageTextureRgb[id] = rgb;
+    return rgb;
+  }
+  static pushTexture(id) {
+    if (this.activeTexels[id] && this.texelPool) {
+      this.texelPool[this.poolSize++] = this.activeTexels[id];
+      this.activeTexels[id] = null;
+    }
+  }
+  static getTexels(id) {
+    this.textureCycle[id] = this.cycle++;
+    if (this.activeTexels[id]) {
+      return this.activeTexels[id];
+    }
+    let texels;
+    if (this.poolSize > 0 && this.texelPool) {
+      texels = this.texelPool[--this.poolSize];
+      this.texelPool[this.poolSize] = null;
+    } else {
+      let cycle = 0;
+      let selected = -1;
+      for (let t = 0;t < this.textureCount; t++) {
+        if (this.activeTexels[t] && (this.textureCycle[t] < cycle || selected === -1)) {
+          cycle = this.textureCycle[t];
+          selected = t;
+        }
+      }
+      texels = this.activeTexels[selected];
+      this.activeTexels[selected] = null;
+    }
+    this.activeTexels[id] = texels;
+    const texture = this.textures[id];
+    const palette = this.texPal[id];
+    if (!texels || !texture || !palette) {
+      return null;
+    }
+    if (this.lowMem) {
+      this.textureTranslucent[id] = false;
+      for (let i = 0;i < 4096; i++) {
+        const rgb = texels[i] = palette[texture.data[i]] & 16316671;
+        if (rgb === 0) {
+          this.textureTranslucent[id] = true;
+        }
+        texels[i + 4096] = rgb - (rgb >>> 3) & 16316671;
+        texels[i + 8192] = rgb - (rgb >>> 2) & 16316671;
+        texels[i + 12288] = rgb - (rgb >>> 2) - (rgb >>> 3) & 16316671;
+      }
+    } else {
+      if (texture.wi === 64) {
+        for (let y = 0;y < 128; y++) {
+          for (let x = 0;x < 128; x++) {
+            texels[x + (y << 7 | 0)] = palette[texture.data[(x >> 1) + (y >> 1 << 6 | 0)]];
+          }
+        }
+      } else {
+        for (let i = 0;i < 16384; i++) {
+          texels[i] = palette[texture.data[i]];
+        }
+      }
+      this.textureTranslucent[id] = false;
+      for (let i = 0;i < 16384; i++) {
+        texels[i] &= 16316671;
+        const rgb = texels[i];
+        if (rgb === 0) {
+          this.textureTranslucent[id] = true;
+        }
+        texels[i + 16384] = rgb - (rgb >>> 3) & 16316671;
+        texels[i + 32768] = rgb - (rgb >>> 2) & 16316671;
+        texels[i + 49152] = rgb - (rgb >>> 2) - (rgb >>> 3) & 16316671;
+      }
+    }
+    return texels;
+  }
+  static initColourTable(brightness) {
+    const randomBrightness = brightness + Math.random() * 0.03 - 0.015;
+    let offset = 0;
+    for (let y = 0;y < 512; y++) {
+      const hue = (y / 8 | 0) / 64 + 0.0078125;
+      const saturation = (y & 7) / 8 + 0.0625;
+      for (let x = 0;x < 128; x++) {
+        const lightness = x / 128;
+        let r = lightness;
+        let g = lightness;
+        let b = lightness;
+        if (saturation !== 0) {
+          let q;
+          if (lightness < 0.5) {
+            q = lightness * (saturation + 1);
+          } else {
+            q = lightness + saturation - lightness * saturation;
+          }
+          const p = lightness * 2 - q;
+          let t = hue + 0.3333333333333333;
+          if (t > 1) {
+            t--;
+          }
+          let d11 = hue - 0.3333333333333333;
+          if (d11 < 0) {
+            d11++;
+          }
+          if (t * 6 < 1) {
+            r = p + (q - p) * 6 * t;
+          } else if (t * 2 < 1) {
+            r = q;
+          } else if (t * 3 < 2) {
+            r = p + (q - p) * (0.6666666666666666 - t) * 6;
+          } else {
+            r = p;
+          }
+          if (hue * 6 < 1) {
+            g = p + (q - p) * 6 * hue;
+          } else if (hue * 2 < 1) {
+            g = q;
+          } else if (hue * 3 < 2) {
+            g = p + (q - p) * (0.6666666666666666 - hue) * 6;
+          } else {
+            g = p;
+          }
+          if (d11 * 6 < 1) {
+            b = p + (q - p) * 6 * d11;
+          } else if (d11 * 2 < 1) {
+            b = q;
+          } else if (d11 * 3 < 2) {
+            b = p + (q - p) * (0.6666666666666666 - d11) * 6;
+          } else {
+            b = p;
+          }
+        }
+        const intR = r * 256 | 0;
+        const intG = g * 256 | 0;
+        const intB = b * 256 | 0;
+        const rgb = (intR << 16) + (intG << 8) + intB;
+        this.colourTable[offset++] = this.gammaCorrect(rgb, randomBrightness);
+      }
+    }
+    for (let id = 0;id < 50; id++) {
+      const texture = this.textures[id];
+      if (!texture) {
+        continue;
+      }
+      const palette = texture.bpal;
+      this.texPal[id] = new Int32Array(palette.length);
+      for (let i = 0;i < palette.length; i++) {
+        const texturePalette = this.texPal[id];
+        if (!texturePalette) {
+          continue;
+        }
+        texturePalette[i] = this.gammaCorrect(palette[i], randomBrightness);
+      }
+    }
+    for (let id = 0;id < 50; id++) {
+      this.pushTexture(id);
+    }
+  }
+  static gammaCorrect(rgb, gamma) {
+    const r = (rgb >> 16) / 256;
+    const g = (rgb >> 8 & 255) / 256;
+    const b = (rgb & 255) / 256;
+    const powR = Math.pow(r, gamma);
+    const powG = Math.pow(g, gamma);
+    const powB = Math.pow(b, gamma);
+    const intR = powR * 256 | 0;
+    const intG = powG * 256 | 0;
+    const intB = powB * 256 | 0;
+    return (intR << 16) + (intG << 8) + intB;
+  }
+  static gouraudTriangle(xA, xB, xC, yA, yB, yC, colourA, colourB, colourC) {
+    let xStepAB = 0;
+    let colourStepAB = 0;
+    if (yB !== yA) {
+      xStepAB = (xB - xA << 16) / (yB - yA) | 0;
+      colourStepAB = (colourB - colourA << 15) / (yB - yA) | 0;
+    }
+    let xStepBC = 0;
+    let colourStepBC = 0;
+    if (yC !== yB) {
+      xStepBC = (xC - xB << 16) / (yC - yB) | 0;
+      colourStepBC = (colourC - colourB << 15) / (yC - yB) | 0;
+    }
+    let xStepAC = 0;
+    let colourStepAC = 0;
+    if (yC !== yA) {
+      xStepAC = (xA - xC << 16) / (yA - yC) | 0;
+      colourStepAC = (colourA - colourC << 15) / (yA - yC) | 0;
+    }
+    if (yA <= yB && yA <= yC) {
+      if (yA >= Pix2D.clipMaxY) {
+        return;
+      }
+      if (yB > Pix2D.clipMaxY) {
+        yB = Pix2D.clipMaxY;
+      }
+      if (yC > Pix2D.clipMaxY) {
+        yC = Pix2D.clipMaxY;
+      }
+      if (yB < yC) {
+        xC = xA <<= 16;
+        colourC = colourA <<= 15;
+        if (yA < 0) {
+          xC -= xStepAC * yA;
+          xA -= xStepAB * yA;
+          colourC -= colourStepAC * yA;
+          colourA -= colourStepAB * yA;
+          yA = 0;
+        }
+        xB <<= 16;
+        colourB <<= 15;
+        if (yB < 0) {
+          xB -= xStepBC * yB;
+          colourB -= colourStepBC * yB;
+          yB = 0;
+        }
+        if (yA !== yB && xStepAC < xStepAB || yA === yB && xStepAC > xStepBC) {
+          yC -= yB;
+          yB -= yA;
+          yA = this.scanline[yA];
+          while (true) {
+            yB--;
+            if (yB < 0) {
+              while (true) {
+                yC--;
+                if (yC < 0) {
+                  return;
+                }
+                this.gouraudRaster(xC >> 16, xB >> 16, colourC >> 7, colourB >> 7, Pix2D.pixels, yA, 0);
+                xC += xStepAC;
+                xB += xStepBC;
+                colourC += colourStepAC;
+                colourB += colourStepBC;
+                yA += Pix2D.width;
+              }
+            }
+            this.gouraudRaster(xC >> 16, xA >> 16, colourC >> 7, colourA >> 7, Pix2D.pixels, yA, 0);
+            xC += xStepAC;
+            xA += xStepAB;
+            colourC += colourStepAC;
+            colourA += colourStepAB;
+            yA += Pix2D.width;
+          }
+        } else {
+          yC -= yB;
+          yB -= yA;
+          yA = this.scanline[yA];
+          while (true) {
+            yB--;
+            if (yB < 0) {
+              while (true) {
+                yC--;
+                if (yC < 0) {
+                  return;
+                }
+                this.gouraudRaster(xB >> 16, xC >> 16, colourB >> 7, colourC >> 7, Pix2D.pixels, yA, 0);
+                xC += xStepAC;
+                xB += xStepBC;
+                colourC += colourStepAC;
+                colourB += colourStepBC;
+                yA += Pix2D.width;
+              }
+            }
+            this.gouraudRaster(xA >> 16, xC >> 16, colourA >> 7, colourC >> 7, Pix2D.pixels, yA, 0);
+            xC += xStepAC;
+            xA += xStepAB;
+            colourC += colourStepAC;
+            colourA += colourStepAB;
+            yA += Pix2D.width;
+          }
+        }
+      } else {
+        xB = xA <<= 16;
+        colourB = colourA <<= 15;
+        if (yA < 0) {
+          xB -= xStepAC * yA;
+          xA -= xStepAB * yA;
+          colourB -= colourStepAC * yA;
+          colourA -= colourStepAB * yA;
+          yA = 0;
+        }
+        xC <<= 16;
+        colourC <<= 15;
+        if (yC < 0) {
+          xC -= xStepBC * yC;
+          colourC -= colourStepBC * yC;
+          yC = 0;
+        }
+        if (yA !== yC && xStepAC < xStepAB || yA === yC && xStepBC > xStepAB) {
+          yB -= yC;
+          yC -= yA;
+          yA = this.scanline[yA];
+          while (true) {
+            yC--;
+            if (yC < 0) {
+              while (true) {
+                yB--;
+                if (yB < 0) {
+                  return;
+                }
+                this.gouraudRaster(xC >> 16, xA >> 16, colourC >> 7, colourA >> 7, Pix2D.pixels, yA, 0);
+                xC += xStepBC;
+                xA += xStepAB;
+                colourC += colourStepBC;
+                colourA += colourStepAB;
+                yA += Pix2D.width;
+              }
+            }
+            this.gouraudRaster(xB >> 16, xA >> 16, colourB >> 7, colourA >> 7, Pix2D.pixels, yA, 0);
+            xB += xStepAC;
+            xA += xStepAB;
+            colourB += colourStepAC;
+            colourA += colourStepAB;
+            yA += Pix2D.width;
+          }
+        } else {
+          yB -= yC;
+          yC -= yA;
+          yA = this.scanline[yA];
+          while (true) {
+            yC--;
+            if (yC < 0) {
+              while (true) {
+                yB--;
+                if (yB < 0) {
+                  return;
+                }
+                this.gouraudRaster(xA >> 16, xC >> 16, colourA >> 7, colourC >> 7, Pix2D.pixels, yA, 0);
+                xC += xStepBC;
+                xA += xStepAB;
+                colourC += colourStepBC;
+                colourA += colourStepAB;
+                yA += Pix2D.width;
+              }
+            }
+            this.gouraudRaster(xA >> 16, xB >> 16, colourA >> 7, colourB >> 7, Pix2D.pixels, yA, 0);
+            xB += xStepAC;
+            xA += xStepAB;
+            colourB += colourStepAC;
+            colourA += colourStepAB;
+            yA += Pix2D.width;
+          }
+        }
+      }
+    } else if (yB <= yC) {
+      if (yB >= Pix2D.clipMaxY) {
+        return;
+      }
+      if (yC > Pix2D.clipMaxY) {
+        yC = Pix2D.clipMaxY;
+      }
+      if (yA > Pix2D.clipMaxY) {
+        yA = Pix2D.clipMaxY;
+      }
+      if (yC < yA) {
+        xA = xB <<= 16;
+        colourA = colourB <<= 15;
+        if (yB < 0) {
+          xA -= xStepAB * yB;
+          xB -= xStepBC * yB;
+          colourA -= colourStepAB * yB;
+          colourB -= colourStepBC * yB;
+          yB = 0;
+        }
+        xC <<= 16;
+        colourC <<= 15;
+        if (yC < 0) {
+          xC -= xStepAC * yC;
+          colourC -= colourStepAC * yC;
+          yC = 0;
+        }
+        if (yB !== yC && xStepAB < xStepBC || yB === yC && xStepAB > xStepAC) {
+          yA -= yC;
+          yC -= yB;
+          yB = this.scanline[yB];
+          while (true) {
+            yC--;
+            if (yC < 0) {
+              while (true) {
+                yA--;
+                if (yA < 0) {
+                  return;
+                }
+                this.gouraudRaster(xA >> 16, xC >> 16, colourA >> 7, colourC >> 7, Pix2D.pixels, yB, 0);
+                xA += xStepAB;
+                xC += xStepAC;
+                colourA += colourStepAB;
+                colourC += colourStepAC;
+                yB += Pix2D.width;
+              }
+            }
+            this.gouraudRaster(xA >> 16, xB >> 16, colourA >> 7, colourB >> 7, Pix2D.pixels, yB, 0);
+            xA += xStepAB;
+            xB += xStepBC;
+            colourA += colourStepAB;
+            colourB += colourStepBC;
+            yB += Pix2D.width;
+          }
+        } else {
+          yA -= yC;
+          yC -= yB;
+          yB = this.scanline[yB];
+          while (true) {
+            yC--;
+            if (yC < 0) {
+              while (true) {
+                yA--;
+                if (yA < 0) {
+                  return;
+                }
+                this.gouraudRaster(xC >> 16, xA >> 16, colourC >> 7, colourA >> 7, Pix2D.pixels, yB, 0);
+                xA += xStepAB;
+                xC += xStepAC;
+                colourA += colourStepAB;
+                colourC += colourStepAC;
+                yB += Pix2D.width;
+              }
+            }
+            this.gouraudRaster(xB >> 16, xA >> 16, colourB >> 7, colourA >> 7, Pix2D.pixels, yB, 0);
+            xA += xStepAB;
+            xB += xStepBC;
+            colourA += colourStepAB;
+            colourB += colourStepBC;
+            yB += Pix2D.width;
+          }
+        }
+      } else {
+        xC = xB <<= 16;
+        colourC = colourB <<= 15;
+        if (yB < 0) {
+          xC -= xStepAB * yB;
+          xB -= xStepBC * yB;
+          colourC -= colourStepAB * yB;
+          colourB -= colourStepBC * yB;
+          yB = 0;
+        }
+        xA <<= 16;
+        colourA <<= 15;
+        if (yA < 0) {
+          xA -= xStepAC * yA;
+          colourA -= colourStepAC * yA;
+          yA = 0;
+        }
+        yC -= yA;
+        yA -= yB;
+        yB = this.scanline[yB];
+        if (xStepAB < xStepBC) {
+          while (true) {
+            yA--;
+            if (yA < 0) {
+              while (true) {
+                yC--;
+                if (yC < 0) {
+                  return;
+                }
+                this.gouraudRaster(xA >> 16, xB >> 16, colourA >> 7, colourB >> 7, Pix2D.pixels, yB, 0);
+                xA += xStepAC;
+                xB += xStepBC;
+                colourA += colourStepAC;
+                colourB += colourStepBC;
+                yB += Pix2D.width;
+              }
+            }
+            this.gouraudRaster(xC >> 16, xB >> 16, colourC >> 7, colourB >> 7, Pix2D.pixels, yB, 0);
+            xC += xStepAB;
+            xB += xStepBC;
+            colourC += colourStepAB;
+            colourB += colourStepBC;
+            yB += Pix2D.width;
+          }
+        } else {
+          while (true) {
+            yA--;
+            if (yA < 0) {
+              while (true) {
+                yC--;
+                if (yC < 0) {
+                  return;
+                }
+                this.gouraudRaster(xB >> 16, xA >> 16, colourB >> 7, colourA >> 7, Pix2D.pixels, yB, 0);
+                xA += xStepAC;
+                xB += xStepBC;
+                colourA += colourStepAC;
+                colourB += colourStepBC;
+                yB += Pix2D.width;
+              }
+            }
+            this.gouraudRaster(xB >> 16, xC >> 16, colourB >> 7, colourC >> 7, Pix2D.pixels, yB, 0);
+            xC += xStepAB;
+            xB += xStepBC;
+            colourC += colourStepAB;
+            colourB += colourStepBC;
+            yB += Pix2D.width;
+          }
+        }
+      }
+    } else {
+      if (yC >= Pix2D.clipMaxY) {
+        return;
+      }
+      if (yA > Pix2D.clipMaxY) {
+        yA = Pix2D.clipMaxY;
+      }
+      if (yB > Pix2D.clipMaxY) {
+        yB = Pix2D.clipMaxY;
+      }
+      if (yA < yB) {
+        xB = xC <<= 16;
+        colourB = colourC <<= 15;
+        if (yC < 0) {
+          xB -= xStepBC * yC;
+          xC -= xStepAC * yC;
+          colourB -= colourStepBC * yC;
+          colourC -= colourStepAC * yC;
+          yC = 0;
+        }
+        xA <<= 16;
+        colourA <<= 15;
+        if (yA < 0) {
+          xA -= xStepAB * yA;
+          colourA -= colourStepAB * yA;
+          yA = 0;
+        }
+        yB -= yA;
+        yA -= yC;
+        yC = this.scanline[yC];
+        if (xStepBC < xStepAC) {
+          while (true) {
+            yA--;
+            if (yA < 0) {
+              while (true) {
+                yB--;
+                if (yB < 0) {
+                  return;
+                }
+                this.gouraudRaster(xB >> 16, xA >> 16, colourB >> 7, colourA >> 7, Pix2D.pixels, yC, 0);
+                xB += xStepBC;
+                xA += xStepAB;
+                colourB += colourStepBC;
+                colourA += colourStepAB;
+                yC += Pix2D.width;
+              }
+            }
+            this.gouraudRaster(xB >> 16, xC >> 16, colourB >> 7, colourC >> 7, Pix2D.pixels, yC, 0);
+            xB += xStepBC;
+            xC += xStepAC;
+            colourB += colourStepBC;
+            colourC += colourStepAC;
+            yC += Pix2D.width;
+          }
+        } else {
+          while (true) {
+            yA--;
+            if (yA < 0) {
+              while (true) {
+                yB--;
+                if (yB < 0) {
+                  return;
+                }
+                this.gouraudRaster(xA >> 16, xB >> 16, colourA >> 7, colourB >> 7, Pix2D.pixels, yC, 0);
+                xB += xStepBC;
+                xA += xStepAB;
+                colourB += colourStepBC;
+                colourA += colourStepAB;
+                yC += Pix2D.width;
+              }
+            }
+            this.gouraudRaster(xC >> 16, xB >> 16, colourC >> 7, colourB >> 7, Pix2D.pixels, yC, 0);
+            xB += xStepBC;
+            xC += xStepAC;
+            colourB += colourStepBC;
+            colourC += colourStepAC;
+            yC += Pix2D.width;
+          }
+        }
+      } else {
+        xA = xC <<= 16;
+        colourA = colourC <<= 15;
+        if (yC < 0) {
+          xA -= xStepBC * yC;
+          xC -= xStepAC * yC;
+          colourA -= colourStepBC * yC;
+          colourC -= colourStepAC * yC;
+          yC = 0;
+        }
+        xB <<= 16;
+        colourB <<= 15;
+        if (yB < 0) {
+          xB -= xStepAB * yB;
+          colourB -= colourStepAB * yB;
+          yB = 0;
+        }
+        yA -= yB;
+        yB -= yC;
+        yC = this.scanline[yC];
+        if (xStepBC < xStepAC) {
+          while (true) {
+            yB--;
+            if (yB < 0) {
+              while (true) {
+                yA--;
+                if (yA < 0) {
+                  return;
+                }
+                this.gouraudRaster(xB >> 16, xC >> 16, colourB >> 7, colourC >> 7, Pix2D.pixels, yC, 0);
+                xB += xStepAB;
+                xC += xStepAC;
+                colourB += colourStepAB;
+                colourC += colourStepAC;
+                yC += Pix2D.width;
+              }
+            }
+            this.gouraudRaster(xA >> 16, xC >> 16, colourA >> 7, colourC >> 7, Pix2D.pixels, yC, 0);
+            xA += xStepBC;
+            xC += xStepAC;
+            colourA += colourStepBC;
+            colourC += colourStepAC;
+            yC += Pix2D.width;
+          }
+        } else {
+          while (true) {
+            yB--;
+            if (yB < 0) {
+              while (true) {
+                yA--;
+                if (yA < 0) {
+                  return;
+                }
+                this.gouraudRaster(xC >> 16, xB >> 16, colourC >> 7, colourB >> 7, Pix2D.pixels, yC, 0);
+                xB += xStepAB;
+                xC += xStepAC;
+                colourB += colourStepAB;
+                colourC += colourStepAC;
+                yC += Pix2D.width;
+              }
+            }
+            this.gouraudRaster(xC >> 16, xA >> 16, colourC >> 7, colourA >> 7, Pix2D.pixels, yC, 0);
+            xA += xStepBC;
+            xC += xStepAC;
+            colourA += colourStepBC;
+            colourC += colourStepAC;
+            yC += Pix2D.width;
+          }
+        }
+      }
+    }
+  }
+  static gouraudRaster(xA, xB, colourA, colourB, dst, off, len) {
+    let rgb;
+    if (this.lowDetail) {
+      let colourStep;
+      if (this.hclip) {
+        if (xB - xA > 3) {
+          colourStep = (colourB - colourA) / (xB - xA) | 0;
+        } else {
+          colourStep = 0;
+        }
+        if (xB > Pix2D.sizeX) {
+          xB = Pix2D.sizeX;
+        }
+        if (xA < 0) {
+          colourA -= xA * colourStep;
+          xA = 0;
+        }
+        if (xA >= xB) {
+          return;
+        }
+        off += xA;
+        len = xB - xA >> 2;
+        colourStep <<= 2;
+      } else if (xA < xB) {
+        off += xA;
+        len = xB - xA >> 2;
+        if (len > 0) {
+          colourStep = (colourB - colourA) * this.divTable[len] >> 15;
+        } else {
+          colourStep = 0;
+        }
+      } else {
+        return;
+      }
+      if (this.trans === 0) {
+        while (true) {
+          len--;
+          if (len < 0) {
+            len = xB - xA & 3;
+            if (len > 0) {
+              rgb = this.colourTable[colourA >> 8];
+              do {
+                dst[off++] = rgb;
+                len--;
+              } while (len > 0);
+              return;
+            }
+            break;
+          }
+          rgb = this.colourTable[colourA >> 8];
+          colourA += colourStep;
+          dst[off++] = rgb;
+          dst[off++] = rgb;
+          dst[off++] = rgb;
+          dst[off++] = rgb;
+        }
+      } else {
+        const alpha = this.trans;
+        const invAlpha = 256 - this.trans;
+        while (true) {
+          len--;
+          if (len < 0) {
+            len = xB - xA & 3;
+            if (len > 0) {
+              rgb = this.colourTable[colourA >> 8];
+              rgb = ((rgb & 16711935) * invAlpha >> 8 & 16711935) + ((rgb & 65280) * invAlpha >> 8 & 65280);
+              do {
+                dst[off++] = rgb + ((dst[off] & 16711935) * alpha >> 8 & 16711935) + ((dst[off] & 65280) * alpha >> 8 & 65280);
+                len--;
+              } while (len > 0);
+            }
+            break;
+          }
+          rgb = this.colourTable[colourA >> 8];
+          colourA += colourStep;
+          rgb = ((rgb & 16711935) * invAlpha >> 8 & 16711935) + ((rgb & 65280) * invAlpha >> 8 & 65280);
+          dst[off++] = rgb + ((dst[off] & 16711935) * alpha >> 8 & 16711935) + ((dst[off] & 65280) * alpha >> 8 & 65280);
+          dst[off++] = rgb + ((dst[off] & 16711935) * alpha >> 8 & 16711935) + ((dst[off] & 65280) * alpha >> 8 & 65280);
+          dst[off++] = rgb + ((dst[off] & 16711935) * alpha >> 8 & 16711935) + ((dst[off] & 65280) * alpha >> 8 & 65280);
+          dst[off++] = rgb + ((dst[off] & 16711935) * alpha >> 8 & 16711935) + ((dst[off] & 65280) * alpha >> 8 & 65280);
+        }
+      }
+    } else if (xA < xB) {
+      const colourStep = (colourB - colourA) / (xB - xA) | 0;
+      if (this.hclip) {
+        if (xB > Pix2D.sizeX) {
+          xB = Pix2D.sizeX;
+        }
+        if (xA < 0) {
+          colourA -= xA * colourStep;
+          xA = 0;
+        }
+        if (xA >= xB) {
+          return;
+        }
+      }
+      off += xA;
+      len = xB - xA;
+      if (this.trans === 0) {
+        do {
+          dst[off++] = this.colourTable[colourA >> 8];
+          colourA += colourStep;
+          len--;
+        } while (len > 0);
+      } else {
+        const alpha = this.trans;
+        const invAlpha = 256 - this.trans;
+        do {
+          rgb = this.colourTable[colourA >> 8];
+          colourA += colourStep;
+          rgb = ((rgb & 16711935) * invAlpha >> 8 & 16711935) + ((rgb & 65280) * invAlpha >> 8 & 65280);
+          dst[off++] = rgb + ((dst[off] & 16711935) * alpha >> 8 & 16711935) + ((dst[off] & 65280) * alpha >> 8 & 65280);
+          len--;
+        } while (len > 0);
+      }
+    }
+  }
+  static flatTriangle(xA, xB, xC, yA, yB, yC, colour) {
+    let xStepAB = 0;
+    if (yB !== yA) {
+      xStepAB = (xB - xA << 16) / (yB - yA) | 0;
+    }
+    let xStepBC = 0;
+    if (yC !== yB) {
+      xStepBC = (xC - xB << 16) / (yC - yB) | 0;
+    }
+    let xStepAC = 0;
+    if (yC !== yA) {
+      xStepAC = (xA - xC << 16) / (yA - yC) | 0;
+    }
+    if (yA <= yB && yA <= yC) {
+      if (yA >= Pix2D.clipMaxY) {
+        return;
+      }
+      if (yB > Pix2D.clipMaxY) {
+        yB = Pix2D.clipMaxY;
+      }
+      if (yC > Pix2D.clipMaxY) {
+        yC = Pix2D.clipMaxY;
+      }
+      if (yB < yC) {
+        xC = xA <<= 16;
+        if (yA < 0) {
+          xC -= xStepAC * yA;
+          xA -= xStepAB * yA;
+          yA = 0;
+        }
+        xB <<= 16;
+        if (yB < 0) {
+          xB -= xStepBC * yB;
+          yB = 0;
+        }
+        if (yA !== yB && xStepAC < xStepAB || yA === yB && xStepAC > xStepBC) {
+          yC -= yB;
+          yB -= yA;
+          yA = this.scanline[yA];
+          while (true) {
+            yB--;
+            if (yB < 0) {
+              while (true) {
+                yC--;
+                if (yC < 0) {
+                  return;
+                }
+                this.flatRaster(xC >> 16, xB >> 16, Pix2D.pixels, yA, colour);
+                xC += xStepAC;
+                xB += xStepBC;
+                yA += Pix2D.width;
+              }
+            }
+            this.flatRaster(xC >> 16, xA >> 16, Pix2D.pixels, yA, colour);
+            xC += xStepAC;
+            xA += xStepAB;
+            yA += Pix2D.width;
+          }
+        } else {
+          yC -= yB;
+          yB -= yA;
+          yA = this.scanline[yA];
+          while (true) {
+            yB--;
+            if (yB < 0) {
+              while (true) {
+                yC--;
+                if (yC < 0) {
+                  return;
+                }
+                this.flatRaster(xB >> 16, xC >> 16, Pix2D.pixels, yA, colour);
+                xC += xStepAC;
+                xB += xStepBC;
+                yA += Pix2D.width;
+              }
+            }
+            this.flatRaster(xA >> 16, xC >> 16, Pix2D.pixels, yA, colour);
+            xC += xStepAC;
+            xA += xStepAB;
+            yA += Pix2D.width;
+          }
+        }
+      } else {
+        xB = xA <<= 16;
+        if (yA < 0) {
+          xB -= xStepAC * yA;
+          xA -= xStepAB * yA;
+          yA = 0;
+        }
+        xC <<= 16;
+        if (yC < 0) {
+          xC -= xStepBC * yC;
+          yC = 0;
+        }
+        if (yA !== yC && xStepAC < xStepAB || yA === yC && xStepBC > xStepAB) {
+          yB -= yC;
+          yC -= yA;
+          yA = this.scanline[yA];
+          while (true) {
+            yC--;
+            if (yC < 0) {
+              while (true) {
+                yB--;
+                if (yB < 0) {
+                  return;
+                }
+                this.flatRaster(xC >> 16, xA >> 16, Pix2D.pixels, yA, colour);
+                xC += xStepBC;
+                xA += xStepAB;
+                yA += Pix2D.width;
+              }
+            }
+            this.flatRaster(xB >> 16, xA >> 16, Pix2D.pixels, yA, colour);
+            xB += xStepAC;
+            xA += xStepAB;
+            yA += Pix2D.width;
+          }
+        } else {
+          yB -= yC;
+          yC -= yA;
+          yA = this.scanline[yA];
+          while (true) {
+            yC--;
+            if (yC < 0) {
+              while (true) {
+                yB--;
+                if (yB < 0) {
+                  return;
+                }
+                this.flatRaster(xA >> 16, xC >> 16, Pix2D.pixels, yA, colour);
+                xC += xStepBC;
+                xA += xStepAB;
+                yA += Pix2D.width;
+              }
+            }
+            this.flatRaster(xA >> 16, xB >> 16, Pix2D.pixels, yA, colour);
+            xB += xStepAC;
+            xA += xStepAB;
+            yA += Pix2D.width;
+          }
+        }
+      }
+    } else if (yB <= yC) {
+      if (yB >= Pix2D.clipMaxY) {
+        return;
+      }
+      if (yC > Pix2D.clipMaxY) {
+        yC = Pix2D.clipMaxY;
+      }
+      if (yA > Pix2D.clipMaxY) {
+        yA = Pix2D.clipMaxY;
+      }
+      if (yC < yA) {
+        xA = xB <<= 16;
+        if (yB < 0) {
+          xA -= xStepAB * yB;
+          xB -= xStepBC * yB;
+          yB = 0;
+        }
+        xC <<= 16;
+        if (yC < 0) {
+          xC -= xStepAC * yC;
+          yC = 0;
+        }
+        if (yB !== yC && xStepAB < xStepBC || yB === yC && xStepAB > xStepAC) {
+          yA -= yC;
+          yC -= yB;
+          yB = this.scanline[yB];
+          while (true) {
+            yC--;
+            if (yC < 0) {
+              while (true) {
+                yA--;
+                if (yA < 0) {
+                  return;
+                }
+                this.flatRaster(xA >> 16, xC >> 16, Pix2D.pixels, yB, colour);
+                xA += xStepAB;
+                xC += xStepAC;
+                yB += Pix2D.width;
+              }
+            }
+            this.flatRaster(xA >> 16, xB >> 16, Pix2D.pixels, yB, colour);
+            xA += xStepAB;
+            xB += xStepBC;
+            yB += Pix2D.width;
+          }
+        } else {
+          yA -= yC;
+          yC -= yB;
+          yB = this.scanline[yB];
+          while (true) {
+            yC--;
+            if (yC < 0) {
+              while (true) {
+                yA--;
+                if (yA < 0) {
+                  return;
+                }
+                this.flatRaster(xC >> 16, xA >> 16, Pix2D.pixels, yB, colour);
+                xA += xStepAB;
+                xC += xStepAC;
+                yB += Pix2D.width;
+              }
+            }
+            this.flatRaster(xB >> 16, xA >> 16, Pix2D.pixels, yB, colour);
+            xA += xStepAB;
+            xB += xStepBC;
+            yB += Pix2D.width;
+          }
+        }
+      } else {
+        xC = xB <<= 16;
+        if (yB < 0) {
+          xC -= xStepAB * yB;
+          xB -= xStepBC * yB;
+          yB = 0;
+        }
+        xA <<= 16;
+        if (yA < 0) {
+          xA -= xStepAC * yA;
+          yA = 0;
+        }
+        yC -= yA;
+        yA -= yB;
+        yB = this.scanline[yB];
+        if (xStepAB < xStepBC) {
+          while (true) {
+            yA--;
+            if (yA < 0) {
+              while (true) {
+                yC--;
+                if (yC < 0) {
+                  return;
+                }
+                this.flatRaster(xA >> 16, xB >> 16, Pix2D.pixels, yB, colour);
+                xA += xStepAC;
+                xB += xStepBC;
+                yB += Pix2D.width;
+              }
+            }
+            this.flatRaster(xC >> 16, xB >> 16, Pix2D.pixels, yB, colour);
+            xC += xStepAB;
+            xB += xStepBC;
+            yB += Pix2D.width;
+          }
+        } else {
+          while (true) {
+            yA--;
+            if (yA < 0) {
+              while (true) {
+                yC--;
+                if (yC < 0) {
+                  return;
+                }
+                this.flatRaster(xB >> 16, xA >> 16, Pix2D.pixels, yB, colour);
+                xA += xStepAC;
+                xB += xStepBC;
+                yB += Pix2D.width;
+              }
+            }
+            this.flatRaster(xB >> 16, xC >> 16, Pix2D.pixels, yB, colour);
+            xC += xStepAB;
+            xB += xStepBC;
+            yB += Pix2D.width;
+          }
+        }
+      }
+    } else {
+      if (yC >= Pix2D.clipMaxY) {
+        return;
+      }
+      if (yA > Pix2D.clipMaxY) {
+        yA = Pix2D.clipMaxY;
+      }
+      if (yB > Pix2D.clipMaxY) {
+        yB = Pix2D.clipMaxY;
+      }
+      if (yA < yB) {
+        xB = xC <<= 16;
+        if (yC < 0) {
+          xB -= xStepBC * yC;
+          xC -= xStepAC * yC;
+          yC = 0;
+        }
+        xA <<= 16;
+        if (yA < 0) {
+          xA -= xStepAB * yA;
+          yA = 0;
+        }
+        yB -= yA;
+        yA -= yC;
+        yC = this.scanline[yC];
+        if (xStepBC < xStepAC) {
+          while (true) {
+            yA--;
+            if (yA < 0) {
+              while (true) {
+                yB--;
+                if (yB < 0) {
+                  return;
+                }
+                this.flatRaster(xB >> 16, xA >> 16, Pix2D.pixels, yC, colour);
+                xB += xStepBC;
+                xA += xStepAB;
+                yC += Pix2D.width;
+              }
+            }
+            this.flatRaster(xB >> 16, xC >> 16, Pix2D.pixels, yC, colour);
+            xB += xStepBC;
+            xC += xStepAC;
+            yC += Pix2D.width;
+          }
+        } else {
+          while (true) {
+            yA--;
+            if (yA < 0) {
+              while (true) {
+                yB--;
+                if (yB < 0) {
+                  return;
+                }
+                this.flatRaster(xA >> 16, xB >> 16, Pix2D.pixels, yC, colour);
+                xB += xStepBC;
+                xA += xStepAB;
+                yC += Pix2D.width;
+              }
+            }
+            this.flatRaster(xC >> 16, xB >> 16, Pix2D.pixels, yC, colour);
+            xB += xStepBC;
+            xC += xStepAC;
+            yC += Pix2D.width;
+          }
+        }
+      } else {
+        xA = xC <<= 16;
+        if (yC < 0) {
+          xA -= xStepBC * yC;
+          xC -= xStepAC * yC;
+          yC = 0;
+        }
+        xB <<= 16;
+        if (yB < 0) {
+          xB -= xStepAB * yB;
+          yB = 0;
+        }
+        yA -= yB;
+        yB -= yC;
+        yC = this.scanline[yC];
+        if (xStepBC < xStepAC) {
+          while (true) {
+            yB--;
+            if (yB < 0) {
+              while (true) {
+                yA--;
+                if (yA < 0) {
+                  return;
+                }
+                this.flatRaster(xB >> 16, xC >> 16, Pix2D.pixels, yC, colour);
+                xB += xStepAB;
+                xC += xStepAC;
+                yC += Pix2D.width;
+              }
+            }
+            this.flatRaster(xA >> 16, xC >> 16, Pix2D.pixels, yC, colour);
+            xA += xStepBC;
+            xC += xStepAC;
+            yC += Pix2D.width;
+          }
+        } else {
+          while (true) {
+            yB--;
+            if (yB < 0) {
+              while (true) {
+                yA--;
+                if (yA < 0) {
+                  return;
+                }
+                this.flatRaster(xC >> 16, xB >> 16, Pix2D.pixels, yC, colour);
+                xB += xStepAB;
+                xC += xStepAC;
+                yC += Pix2D.width;
+              }
+            }
+            this.flatRaster(xC >> 16, xA >> 16, Pix2D.pixels, yC, colour);
+            xA += xStepBC;
+            xC += xStepAC;
+            yC += Pix2D.width;
+          }
+        }
+      }
+    }
+  }
+  static flatRaster(xA, xB, dst, off, colour) {
+    if (this.hclip) {
+      if (xB > Pix2D.sizeX) {
+        xB = Pix2D.sizeX;
+      }
+      if (xA < 0) {
+        xA = 0;
+      }
+    }
+    if (xA >= xB) {
+      return;
+    }
+    off += xA;
+    let len = xB - xA >> 2;
+    if (this.trans === 0) {
+      while (true) {
+        len--;
+        if (len < 0) {
+          len = xB - xA & 3;
+          while (true) {
+            len--;
+            if (len < 0) {
+              return;
+            }
+            dst[off++] = colour;
+          }
+        }
+        dst[off++] = colour;
+        dst[off++] = colour;
+        dst[off++] = colour;
+        dst[off++] = colour;
+      }
+    } else {
+      const alpha = this.trans;
+      const invAlpha = 256 - this.trans;
+      colour = ((colour & 16711935) * invAlpha >> 8 & 16711935) + ((colour & 65280) * invAlpha >> 8 & 65280);
+      while (true) {
+        len--;
+        if (len < 0) {
+          len = xB - xA & 3;
+          while (true) {
+            len--;
+            if (len < 0) {
+              return;
+            }
+            dst[off++] = colour + ((dst[off] & 16711935) * alpha >> 8 & 16711935) + ((dst[off] & 65280) * alpha >> 8 & 65280);
+          }
+        }
+        dst[off++] = colour + ((dst[off] & 16711935) * alpha >> 8 & 16711935) + ((dst[off] & 65280) * alpha >> 8 & 65280);
+        dst[off++] = colour + ((dst[off] & 16711935) * alpha >> 8 & 16711935) + ((dst[off] & 65280) * alpha >> 8 & 65280);
+        dst[off++] = colour + ((dst[off] & 16711935) * alpha >> 8 & 16711935) + ((dst[off] & 65280) * alpha >> 8 & 65280);
+        dst[off++] = colour + ((dst[off] & 16711935) * alpha >> 8 & 16711935) + ((dst[off] & 65280) * alpha >> 8 & 65280);
+      }
+    }
+  }
+  static textureTriangle(xA, xB, xC, yA, yB, yC, shadeA, shadeB, shadeC, originX, originY, originZ, txB, txC, tyB, tyC, tzB, tzC, texture) {
+    const texels = this.getTexels(texture);
+    this.opaque = !this.textureTranslucent[texture];
+    const verticalX = originX - txB;
+    const verticalY = originY - tyB;
+    const verticalZ = originZ - tzB;
+    const horizontalX = txC - originX;
+    const horizontalY = tyC - originY;
+    const horizontalZ = tzC - originZ;
+    let u = horizontalX * originY - horizontalY * originX << 14;
+    const uStride = horizontalY * originZ - horizontalZ * originY << 8;
+    const uStepVertical = horizontalZ * originX - horizontalX * originZ << 5;
+    let v = verticalX * originY - verticalY * originX << 14;
+    const vStride = verticalY * originZ - verticalZ * originY << 8;
+    const vStepVertical = verticalZ * originX - verticalX * originZ << 5;
+    let w = verticalY * horizontalX - verticalX * horizontalY << 14;
+    const wStride = verticalZ * horizontalY - verticalY * horizontalZ << 8;
+    const wStepVertical = verticalX * horizontalZ - verticalZ * horizontalX << 5;
+    let xStepAB = 0;
+    let shadeStepAB = 0;
+    if (yB !== yA) {
+      xStepAB = (xB - xA << 16) / (yB - yA) | 0;
+      shadeStepAB = (shadeB - shadeA << 16) / (yB - yA) | 0;
+    }
+    let xStepBC = 0;
+    let shadeStepBC = 0;
+    if (yC !== yB) {
+      xStepBC = (xC - xB << 16) / (yC - yB) | 0;
+      shadeStepBC = (shadeC - shadeB << 16) / (yC - yB) | 0;
+    }
+    let xStepAC = 0;
+    let shadeStepAC = 0;
+    if (yC !== yA) {
+      xStepAC = (xA - xC << 16) / (yA - yC) | 0;
+      shadeStepAC = (shadeA - shadeC << 16) / (yA - yC) | 0;
+    }
+    if (yA <= yB && yA <= yC) {
+      if (yA >= Pix2D.clipMaxY) {
+        return;
+      }
+      if (yB > Pix2D.clipMaxY) {
+        yB = Pix2D.clipMaxY;
+      }
+      if (yC > Pix2D.clipMaxY) {
+        yC = Pix2D.clipMaxY;
+      }
+      if (yB < yC) {
+        xC = xA <<= 16;
+        shadeC = shadeA <<= 16;
+        if (yA < 0) {
+          xC -= xStepAC * yA;
+          xA -= xStepAB * yA;
+          shadeC -= shadeStepAC * yA;
+          shadeA -= shadeStepAB * yA;
+          yA = 0;
+        }
+        xB <<= 16;
+        shadeB <<= 16;
+        if (yB < 0) {
+          xB -= xStepBC * yB;
+          shadeB -= shadeStepBC * yB;
+          yB = 0;
+        }
+        const dy = yA - this.originY;
+        u += uStepVertical * dy;
+        v += vStepVertical * dy;
+        w += wStepVertical * dy;
+        u |= 0;
+        v |= 0;
+        w |= 0;
+        if (yA !== yB && xStepAC < xStepAB || yA === yB && xStepAC > xStepBC) {
+          yC -= yB;
+          yB -= yA;
+          yA = this.scanline[yA];
+          while (true) {
+            yB--;
+            if (yB < 0) {
+              while (true) {
+                yC--;
+                if (yC < 0) {
+                  return;
+                }
+                this.textureRaster(xC >> 16, xB >> 16, Pix2D.pixels, yA, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeC >> 8, shadeB >> 8);
+                xC += xStepAC;
+                xB += xStepBC;
+                shadeC += shadeStepAC;
+                shadeB += shadeStepBC;
+                yA += Pix2D.width;
+                u += uStepVertical;
+                v += vStepVertical;
+                w += wStepVertical;
+                u |= 0;
+                v |= 0;
+                w |= 0;
+              }
+            }
+            this.textureRaster(xC >> 16, xA >> 16, Pix2D.pixels, yA, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeC >> 8, shadeA >> 8);
+            xC += xStepAC;
+            xA += xStepAB;
+            shadeC += shadeStepAC;
+            shadeA += shadeStepAB;
+            yA += Pix2D.width;
+            u += uStepVertical;
+            v += vStepVertical;
+            w += wStepVertical;
+            u |= 0;
+            v |= 0;
+            w |= 0;
+          }
+        } else {
+          yC -= yB;
+          yB -= yA;
+          yA = this.scanline[yA];
+          while (true) {
+            yB--;
+            if (yB < 0) {
+              while (true) {
+                yC--;
+                if (yC < 0) {
+                  return;
+                }
+                this.textureRaster(xB >> 16, xC >> 16, Pix2D.pixels, yA, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeB >> 8, shadeC >> 8);
+                xC += xStepAC;
+                xB += xStepBC;
+                shadeC += shadeStepAC;
+                shadeB += shadeStepBC;
+                yA += Pix2D.width;
+                u += uStepVertical;
+                v += vStepVertical;
+                w += wStepVertical;
+                u |= 0;
+                v |= 0;
+                w |= 0;
+              }
+            }
+            this.textureRaster(xA >> 16, xC >> 16, Pix2D.pixels, yA, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeA >> 8, shadeC >> 8);
+            xC += xStepAC;
+            xA += xStepAB;
+            shadeC += shadeStepAC;
+            shadeA += shadeStepAB;
+            yA += Pix2D.width;
+            u += uStepVertical;
+            v += vStepVertical;
+            w += wStepVertical;
+            u |= 0;
+            v |= 0;
+            w |= 0;
+          }
+        }
+      } else {
+        xB = xA <<= 16;
+        shadeB = shadeA <<= 16;
+        if (yA < 0) {
+          xB -= xStepAC * yA;
+          xA -= xStepAB * yA;
+          shadeB -= shadeStepAC * yA;
+          shadeA -= shadeStepAB * yA;
+          yA = 0;
+        }
+        xC <<= 16;
+        shadeC <<= 16;
+        if (yC < 0) {
+          xC -= xStepBC * yC;
+          shadeC -= shadeStepBC * yC;
+          yC = 0;
+        }
+        const dy = yA - this.originY;
+        u += uStepVertical * dy;
+        v += vStepVertical * dy;
+        w += wStepVertical * dy;
+        u |= 0;
+        v |= 0;
+        w |= 0;
+        if ((yA === yC || xStepAC >= xStepAB) && (yA !== yC || xStepBC <= xStepAB)) {
+          yB -= yC;
+          yC -= yA;
+          yA = this.scanline[yA];
+          while (true) {
+            yC--;
+            if (yC < 0) {
+              while (true) {
+                yB--;
+                if (yB < 0) {
+                  return;
+                }
+                this.textureRaster(xA >> 16, xC >> 16, Pix2D.pixels, yA, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeA >> 8, shadeC >> 8);
+                xC += xStepBC;
+                xA += xStepAB;
+                shadeC += shadeStepBC;
+                shadeA += shadeStepAB;
+                yA += Pix2D.width;
+                u += uStepVertical;
+                v += vStepVertical;
+                w += wStepVertical;
+                u |= 0;
+                v |= 0;
+                w |= 0;
+              }
+            }
+            this.textureRaster(xA >> 16, xB >> 16, Pix2D.pixels, yA, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeA >> 8, shadeB >> 8);
+            xB += xStepAC;
+            xA += xStepAB;
+            shadeB += shadeStepAC;
+            shadeA += shadeStepAB;
+            yA += Pix2D.width;
+            u += uStepVertical;
+            v += vStepVertical;
+            w += wStepVertical;
+            u |= 0;
+            v |= 0;
+            w |= 0;
+          }
+        } else {
+          yB -= yC;
+          yC -= yA;
+          yA = this.scanline[yA];
+          while (true) {
+            yC--;
+            if (yC < 0) {
+              while (true) {
+                yB--;
+                if (yB < 0) {
+                  return;
+                }
+                this.textureRaster(xC >> 16, xA >> 16, Pix2D.pixels, yA, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeC >> 8, shadeA >> 8);
+                xC += xStepBC;
+                xA += xStepAB;
+                shadeC += shadeStepBC;
+                shadeA += shadeStepAB;
+                yA += Pix2D.width;
+                u += uStepVertical;
+                v += vStepVertical;
+                w += wStepVertical;
+                u |= 0;
+                v |= 0;
+                w |= 0;
+              }
+            }
+            this.textureRaster(xB >> 16, xA >> 16, Pix2D.pixels, yA, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeB >> 8, shadeA >> 8);
+            xB += xStepAC;
+            xA += xStepAB;
+            shadeB += shadeStepAC;
+            shadeA += shadeStepAB;
+            yA += Pix2D.width;
+            u += uStepVertical;
+            v += vStepVertical;
+            w += wStepVertical;
+            u |= 0;
+            v |= 0;
+            w |= 0;
+          }
+        }
+      }
+    } else if (yB <= yC) {
+      if (yB >= Pix2D.clipMaxY) {
+        return;
+      }
+      if (yC > Pix2D.clipMaxY) {
+        yC = Pix2D.clipMaxY;
+      }
+      if (yA > Pix2D.clipMaxY) {
+        yA = Pix2D.clipMaxY;
+      }
+      if (yC < yA) {
+        xA = xB <<= 16;
+        shadeA = shadeB <<= 16;
+        if (yB < 0) {
+          xA -= xStepAB * yB;
+          xB -= xStepBC * yB;
+          shadeA -= shadeStepAB * yB;
+          shadeB -= shadeStepBC * yB;
+          yB = 0;
+        }
+        xC <<= 16;
+        shadeC <<= 16;
+        if (yC < 0) {
+          xC -= xStepAC * yC;
+          shadeC -= shadeStepAC * yC;
+          yC = 0;
+        }
+        const dy = yB - this.originY;
+        u += uStepVertical * dy;
+        v += vStepVertical * dy;
+        w += wStepVertical * dy;
+        u |= 0;
+        v |= 0;
+        w |= 0;
+        if (yB !== yC && xStepAB < xStepBC || yB === yC && xStepAB > xStepAC) {
+          yA -= yC;
+          yC -= yB;
+          yB = this.scanline[yB];
+          while (true) {
+            yC--;
+            if (yC < 0) {
+              while (true) {
+                yA--;
+                if (yA < 0) {
+                  return;
+                }
+                this.textureRaster(xA >> 16, xC >> 16, Pix2D.pixels, yB, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeA >> 8, shadeC >> 8);
+                xA += xStepAB;
+                xC += xStepAC;
+                shadeA += shadeStepAB;
+                shadeC += shadeStepAC;
+                yB += Pix2D.width;
+                u += uStepVertical;
+                v += vStepVertical;
+                w += wStepVertical;
+                u |= 0;
+                v |= 0;
+                w |= 0;
+              }
+            }
+            this.textureRaster(xA >> 16, xB >> 16, Pix2D.pixels, yB, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeA >> 8, shadeB >> 8);
+            xA += xStepAB;
+            xB += xStepBC;
+            shadeA += shadeStepAB;
+            shadeB += shadeStepBC;
+            yB += Pix2D.width;
+            u += uStepVertical;
+            v += vStepVertical;
+            w += wStepVertical;
+            u |= 0;
+            v |= 0;
+            w |= 0;
+          }
+        } else {
+          yA -= yC;
+          yC -= yB;
+          yB = this.scanline[yB];
+          while (true) {
+            yC--;
+            if (yC < 0) {
+              while (true) {
+                yA--;
+                if (yA < 0) {
+                  return;
+                }
+                this.textureRaster(xC >> 16, xA >> 16, Pix2D.pixels, yB, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeC >> 8, shadeA >> 8);
+                xA += xStepAB;
+                xC += xStepAC;
+                shadeA += shadeStepAB;
+                shadeC += shadeStepAC;
+                yB += Pix2D.width;
+                u += uStepVertical;
+                v += vStepVertical;
+                w += wStepVertical;
+                u |= 0;
+                v |= 0;
+                w |= 0;
+              }
+            }
+            this.textureRaster(xB >> 16, xA >> 16, Pix2D.pixels, yB, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeB >> 8, shadeA >> 8);
+            xA += xStepAB;
+            xB += xStepBC;
+            shadeA += shadeStepAB;
+            shadeB += shadeStepBC;
+            yB += Pix2D.width;
+            u += uStepVertical;
+            v += vStepVertical;
+            w += wStepVertical;
+            u |= 0;
+            v |= 0;
+            w |= 0;
+          }
+        }
+      } else {
+        xC = xB <<= 16;
+        shadeC = shadeB <<= 16;
+        if (yB < 0) {
+          xC -= xStepAB * yB;
+          xB -= xStepBC * yB;
+          shadeC -= shadeStepAB * yB;
+          shadeB -= shadeStepBC * yB;
+          yB = 0;
+        }
+        xA <<= 16;
+        shadeA <<= 16;
+        if (yA < 0) {
+          xA -= xStepAC * yA;
+          shadeA -= shadeStepAC * yA;
+          yA = 0;
+        }
+        const dy = yB - this.originY;
+        u += uStepVertical * dy;
+        v += vStepVertical * dy;
+        w += wStepVertical * dy;
+        u |= 0;
+        v |= 0;
+        w |= 0;
+        yC -= yA;
+        yA -= yB;
+        yB = this.scanline[yB];
+        if (xStepAB < xStepBC) {
+          while (true) {
+            yA--;
+            if (yA < 0) {
+              while (true) {
+                yC--;
+                if (yC < 0) {
+                  return;
+                }
+                this.textureRaster(xA >> 16, xB >> 16, Pix2D.pixels, yB, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeA >> 8, shadeB >> 8);
+                xA += xStepAC;
+                xB += xStepBC;
+                shadeA += shadeStepAC;
+                shadeB += shadeStepBC;
+                yB += Pix2D.width;
+                u += uStepVertical;
+                v += vStepVertical;
+                w += wStepVertical;
+                u |= 0;
+                v |= 0;
+                w |= 0;
+              }
+            }
+            this.textureRaster(xC >> 16, xB >> 16, Pix2D.pixels, yB, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeC >> 8, shadeB >> 8);
+            xC += xStepAB;
+            xB += xStepBC;
+            shadeC += shadeStepAB;
+            shadeB += shadeStepBC;
+            yB += Pix2D.width;
+            u += uStepVertical;
+            v += vStepVertical;
+            w += wStepVertical;
+            u |= 0;
+            v |= 0;
+            w |= 0;
+          }
+        } else {
+          while (true) {
+            yA--;
+            if (yA < 0) {
+              while (true) {
+                yC--;
+                if (yC < 0) {
+                  return;
+                }
+                this.textureRaster(xB >> 16, xA >> 16, Pix2D.pixels, yB, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeB >> 8, shadeA >> 8);
+                xA += xStepAC;
+                xB += xStepBC;
+                shadeA += shadeStepAC;
+                shadeB += shadeStepBC;
+                yB += Pix2D.width;
+                u += uStepVertical;
+                v += vStepVertical;
+                w += wStepVertical;
+                u |= 0;
+                v |= 0;
+                w |= 0;
+              }
+            }
+            this.textureRaster(xB >> 16, xC >> 16, Pix2D.pixels, yB, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeB >> 8, shadeC >> 8);
+            xC += xStepAB;
+            xB += xStepBC;
+            shadeC += shadeStepAB;
+            shadeB += shadeStepBC;
+            yB += Pix2D.width;
+            u += uStepVertical;
+            v += vStepVertical;
+            w += wStepVertical;
+            u |= 0;
+            v |= 0;
+            w |= 0;
+          }
+        }
+      }
+    } else {
+      if (yC >= Pix2D.clipMaxY) {
+        return;
+      }
+      if (yA > Pix2D.clipMaxY) {
+        yA = Pix2D.clipMaxY;
+      }
+      if (yB > Pix2D.clipMaxY) {
+        yB = Pix2D.clipMaxY;
+      }
+      if (yA < yB) {
+        xB = xC <<= 16;
+        shadeB = shadeC <<= 16;
+        if (yC < 0) {
+          xB -= xStepBC * yC;
+          xC -= xStepAC * yC;
+          shadeB -= shadeStepBC * yC;
+          shadeC -= shadeStepAC * yC;
+          yC = 0;
+        }
+        xA <<= 16;
+        shadeA <<= 16;
+        if (yA < 0) {
+          xA -= xStepAB * yA;
+          shadeA -= shadeStepAB * yA;
+          yA = 0;
+        }
+        const dy = yC - this.originY;
+        u += uStepVertical * dy;
+        v += vStepVertical * dy;
+        w += wStepVertical * dy;
+        u |= 0;
+        v |= 0;
+        w |= 0;
+        yB -= yA;
+        yA -= yC;
+        yC = this.scanline[yC];
+        if (xStepBC < xStepAC) {
+          while (true) {
+            yA--;
+            if (yA < 0) {
+              while (true) {
+                yB--;
+                if (yB < 0) {
+                  return;
+                }
+                this.textureRaster(xB >> 16, xA >> 16, Pix2D.pixels, yC, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeB >> 8, shadeA >> 8);
+                xB += xStepBC;
+                xA += xStepAB;
+                shadeB += shadeStepBC;
+                shadeA += shadeStepAB;
+                yC += Pix2D.width;
+                u += uStepVertical;
+                v += vStepVertical;
+                w += wStepVertical;
+                u |= 0;
+                v |= 0;
+                w |= 0;
+              }
+            }
+            this.textureRaster(xB >> 16, xC >> 16, Pix2D.pixels, yC, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeB >> 8, shadeC >> 8);
+            xB += xStepBC;
+            xC += xStepAC;
+            shadeB += shadeStepBC;
+            shadeC += shadeStepAC;
+            yC += Pix2D.width;
+            u += uStepVertical;
+            v += vStepVertical;
+            w += wStepVertical;
+            u |= 0;
+            v |= 0;
+            w |= 0;
+          }
+        } else {
+          while (true) {
+            yA--;
+            if (yA < 0) {
+              while (true) {
+                yB--;
+                if (yB < 0) {
+                  return;
+                }
+                this.textureRaster(xA >> 16, xB >> 16, Pix2D.pixels, yC, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeA >> 8, shadeB >> 8);
+                xB += xStepBC;
+                xA += xStepAB;
+                shadeB += shadeStepBC;
+                shadeA += shadeStepAB;
+                yC += Pix2D.width;
+                u += uStepVertical;
+                v += vStepVertical;
+                w += wStepVertical;
+                u |= 0;
+                v |= 0;
+                w |= 0;
+              }
+            }
+            this.textureRaster(xC >> 16, xB >> 16, Pix2D.pixels, yC, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeC >> 8, shadeB >> 8);
+            xB += xStepBC;
+            xC += xStepAC;
+            shadeB += shadeStepBC;
+            shadeC += shadeStepAC;
+            yC += Pix2D.width;
+            u += uStepVertical;
+            v += vStepVertical;
+            w += wStepVertical;
+            u |= 0;
+            v |= 0;
+            w |= 0;
+          }
+        }
+      } else {
+        xA = xC <<= 16;
+        shadeA = shadeC <<= 16;
+        if (yC < 0) {
+          xA -= xStepBC * yC;
+          xC -= xStepAC * yC;
+          shadeA -= shadeStepBC * yC;
+          shadeC -= shadeStepAC * yC;
+          yC = 0;
+        }
+        xB <<= 16;
+        shadeB <<= 16;
+        if (yB < 0) {
+          xB -= xStepAB * yB;
+          shadeB -= shadeStepAB * yB;
+          yB = 0;
+        }
+        const dy = yC - this.originY;
+        u += uStepVertical * dy;
+        v += vStepVertical * dy;
+        w += wStepVertical * dy;
+        u |= 0;
+        v |= 0;
+        w |= 0;
+        yA -= yB;
+        yB -= yC;
+        yC = this.scanline[yC];
+        if (xStepBC < xStepAC) {
+          while (true) {
+            yB--;
+            if (yB < 0) {
+              while (true) {
+                yA--;
+                if (yA < 0) {
+                  return;
+                }
+                this.textureRaster(xB >> 16, xC >> 16, Pix2D.pixels, yC, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeB >> 8, shadeC >> 8);
+                xB += xStepAB;
+                xC += xStepAC;
+                shadeB += shadeStepAB;
+                shadeC += shadeStepAC;
+                yC += Pix2D.width;
+                u += uStepVertical;
+                v += vStepVertical;
+                w += wStepVertical;
+                u |= 0;
+                v |= 0;
+                w |= 0;
+              }
+            }
+            this.textureRaster(xA >> 16, xC >> 16, Pix2D.pixels, yC, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeA >> 8, shadeC >> 8);
+            xA += xStepBC;
+            xC += xStepAC;
+            shadeA += shadeStepBC;
+            shadeC += shadeStepAC;
+            yC += Pix2D.width;
+            u += uStepVertical;
+            v += vStepVertical;
+            w += wStepVertical;
+            u |= 0;
+            v |= 0;
+            w |= 0;
+          }
+        } else {
+          while (true) {
+            yB--;
+            if (yB < 0) {
+              while (true) {
+                yA--;
+                if (yA < 0) {
+                  return;
+                }
+                this.textureRaster(xC >> 16, xB >> 16, Pix2D.pixels, yC, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeC >> 8, shadeB >> 8);
+                xB += xStepAB;
+                xC += xStepAC;
+                shadeB += shadeStepAB;
+                shadeC += shadeStepAC;
+                yC += Pix2D.width;
+                u += uStepVertical;
+                v += vStepVertical;
+                w += wStepVertical;
+                u |= 0;
+                v |= 0;
+                w |= 0;
+              }
+            }
+            this.textureRaster(xC >> 16, xA >> 16, Pix2D.pixels, yC, texels, 0, 0, u, v, w, uStride, vStride, wStride, shadeC >> 8, shadeA >> 8);
+            xA += xStepBC;
+            xC += xStepAC;
+            shadeA += shadeStepBC;
+            shadeC += shadeStepAC;
+            yC += Pix2D.width;
+            u += uStepVertical;
+            v += vStepVertical;
+            w += wStepVertical;
+            u |= 0;
+            v |= 0;
+            w |= 0;
+          }
+        }
+      }
+    }
+  }
+  static textureRaster(xA, xB, dst, off, texels, curU, curV, u, v, w, uStride, vStride, wStride, shadeA, shadeB) {
+    if (!texels) {
+      return;
+    }
+    if (xA >= xB) {
+      return;
+    }
+    let shadeStrides;
+    let strides;
+    if (this.hclip) {
+      shadeStrides = (shadeB - shadeA) / (xB - xA) | 0;
+      if (xB > Pix2D.sizeX) {
+        xB = Pix2D.sizeX;
+      }
+      if (xA < 0) {
+        shadeA -= xA * shadeStrides;
+        xA = 0;
+      }
+      if (xA >= xB) {
+        return;
+      }
+      strides = xB - xA >> 3;
+      shadeStrides <<= 12;
+    } else {
+      if (xB - xA > 7) {
+        strides = xB - xA >> 3;
+        shadeStrides = (shadeB - shadeA) * this.divTable[strides] >> 6;
+      } else {
+        strides = 0;
+        shadeStrides = 0;
+      }
+    }
+    shadeA <<= 9;
+    off += xA;
+    let nextU;
+    let nextV;
+    let curW;
+    let dx;
+    let stepU;
+    let stepV;
+    let shadeShift;
+    if (this.lowMem) {
+      nextU = 0;
+      nextV = 0;
+      dx = xA - this.originX;
+      u = u + (uStride >> 3) * dx;
+      v = v + (vStride >> 3) * dx;
+      w = w + (wStride >> 3) * dx;
+      u |= 0;
+      v |= 0;
+      w |= 0;
+      curW = w >> 12;
+      if (curW !== 0) {
+        curU = u / curW | 0;
+        curV = v / curW | 0;
+        if (curU < 0) {
+          curU = 0;
+        } else if (curU > 4032) {
+          curU = 4032;
+        }
+      }
+      u = u + uStride;
+      v = v + vStride;
+      w = w + wStride;
+      u |= 0;
+      v |= 0;
+      w |= 0;
+      curW = w >> 12;
+      if (curW !== 0) {
+        nextU = u / curW | 0;
+        nextV = v / curW | 0;
+        if (nextU < 7) {
+          nextU = 7;
+        } else if (nextU > 4032) {
+          nextU = 4032;
+        }
+      }
+      stepU = nextU - curU >> 3;
+      stepV = nextV - curV >> 3;
+      curU += shadeA >> 3 & 786432;
+      shadeShift = shadeA >> 23;
+      if (this.opaque) {
+        while (strides-- > 0) {
+          dst[off++] = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+          dst[off++] = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+          dst[off++] = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+          dst[off++] = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+          dst[off++] = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+          dst[off++] = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+          dst[off++] = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+          dst[off++] = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift;
+          curU = nextU;
+          curV = nextV;
+          u += uStride;
+          v += vStride;
+          w += wStride;
+          u |= 0;
+          v |= 0;
+          w |= 0;
+          curW = w >> 12;
+          if (curW !== 0) {
+            nextU = u / curW | 0;
+            nextV = v / curW | 0;
+            if (nextU < 7) {
+              nextU = 7;
+            } else if (nextU > 4032) {
+              nextU = 4032;
+            }
+          }
+          stepU = nextU - curU >> 3;
+          stepV = nextV - curV >> 3;
+          shadeA += shadeStrides;
+          curU += shadeA >> 3 & 786432;
+          shadeShift = shadeA >> 23;
+        }
+        strides = xB - xA & 7;
+        while (strides-- > 0) {
+          dst[off++] = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+        }
+      } else {
+        while (strides-- > 0) {
+          let rgb;
+          if ((rgb = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+          if ((rgb = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+          if ((rgb = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+          if ((rgb = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+          if ((rgb = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+          if ((rgb = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+          if ((rgb = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+          if ((rgb = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU = nextU;
+          curV = nextV;
+          u += uStride;
+          v += vStride;
+          w += wStride;
+          u |= 0;
+          v |= 0;
+          w |= 0;
+          curW = w >> 12;
+          if (curW !== 0) {
+            nextU = u / curW | 0;
+            nextV = v / curW | 0;
+            if (nextU < 7) {
+              nextU = 7;
+            } else if (nextU > 4032) {
+              nextU = 4032;
+            }
+          }
+          stepU = nextU - curU >> 3;
+          stepV = nextV - curV >> 3;
+          shadeA += shadeStrides;
+          curU += shadeA >> 3 & 786432;
+          shadeShift = shadeA >> 23;
+        }
+        strides = xB - xA & 7;
+        while (strides-- > 0) {
+          let rgb;
+          if ((rgb = texels[(curV & 4032) + (curU >> 6)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+        }
+      }
+    } else {
+      nextU = 0;
+      nextV = 0;
+      dx = xA - this.originX;
+      u = u + (uStride >> 3) * dx;
+      v = v + (vStride >> 3) * dx;
+      w = w + (wStride >> 3) * dx;
+      u |= 0;
+      v |= 0;
+      w |= 0;
+      curW = w >> 14;
+      if (curW !== 0) {
+        curU = u / curW | 0;
+        curV = v / curW | 0;
+        if (curU < 0) {
+          curU = 0;
+        } else if (curU > 16256) {
+          curU = 16256;
+        }
+      }
+      u = u + uStride;
+      v = v + vStride;
+      w = w + wStride;
+      u |= 0;
+      v |= 0;
+      w |= 0;
+      curW = w >> 14;
+      if (curW !== 0) {
+        nextU = u / curW | 0;
+        nextV = v / curW | 0;
+        if (nextU < 7) {
+          nextU = 7;
+        } else if (nextU > 16256) {
+          nextU = 16256;
+        }
+      }
+      stepU = nextU - curU >> 3;
+      stepV = nextV - curV >> 3;
+      curU += shadeA & 6291456;
+      shadeShift = shadeA >> 23;
+      if (this.opaque) {
+        while (strides-- > 0) {
+          dst[off++] = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+          dst[off++] = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+          dst[off++] = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+          dst[off++] = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+          dst[off++] = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+          dst[off++] = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+          dst[off++] = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+          dst[off++] = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift;
+          curU = nextU;
+          curV = nextV;
+          u += uStride;
+          v += vStride;
+          w += wStride;
+          u |= 0;
+          v |= 0;
+          w |= 0;
+          curW = w >> 14;
+          if (curW !== 0) {
+            nextU = u / curW | 0;
+            nextV = v / curW | 0;
+            if (nextU < 7) {
+              nextU = 7;
+            } else if (nextU > 16256) {
+              nextU = 16256;
+            }
+          }
+          stepU = nextU - curU >> 3;
+          stepV = nextV - curV >> 3;
+          shadeA += shadeStrides;
+          curU += shadeA & 6291456;
+          shadeShift = shadeA >> 23;
+        }
+        strides = xB - xA & 7;
+        while (strides-- > 0) {
+          dst[off++] = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift;
+          curU += stepU;
+          curV += stepV;
+        }
+      } else {
+        while (strides-- > 0 && texels) {
+          let rgb;
+          if ((rgb = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+          if ((rgb = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+          if ((rgb = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+          if ((rgb = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+          if ((rgb = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+          if ((rgb = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+          if ((rgb = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+          if ((rgb = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU = nextU;
+          curV = nextV;
+          u += uStride;
+          v += vStride;
+          w += wStride;
+          u |= 0;
+          v |= 0;
+          w |= 0;
+          curW = w >> 14;
+          if (curW !== 0) {
+            nextU = u / curW | 0;
+            nextV = v / curW | 0;
+            if (nextU < 7) {
+              nextU = 7;
+            } else if (nextU > 16256) {
+              nextU = 16256;
+            }
+          }
+          stepU = nextU - curU >> 3;
+          stepV = nextV - curV >> 3;
+          shadeA += shadeStrides;
+          curU += shadeA & 6291456;
+          shadeShift = shadeA >> 23;
+        }
+        strides = xB - xA & 7;
+        while (strides-- > 0 && texels) {
+          let rgb;
+          if ((rgb = texels[(curV & 16256) + (curU >> 7)] >>> shadeShift) !== 0) {
+            dst[off] = rgb;
+          }
+          off++;
+          curU += stepU;
+          curV += stepV;
+        }
+      }
+    }
+  }
+}
+
+// src/dash3d/graphics/PixMap.ts
+class PixMap {
+  data;
+  static keyedCanvas = null;
+  static keyedCtx = null;
+  width;
+  height;
+  img;
+  ctx;
+  paint;
+  constructor(width, height, ctx = canvas2d) {
+    this.width = width;
+    this.height = height;
+    this.data = new Int32Array(width * height);
+    this.ctx = ctx;
+    this.img = this.ctx.createImageData(width, height);
+    this.paint = new Uint32Array(this.img.data.buffer);
+    this.setPixels();
+  }
+  setPixels() {
+    Pix2D.setPixels(this.data, this.width, this.height);
+  }
+  draw(x, y) {
+    this.prepareCanvas();
+    this.ctx.putImageData(this.img, x, y);
+  }
+  drawKeyed(x, y, transparentRgb) {
+    this.prepareCanvas(transparentRgb & 16777215);
+    const scratch = this.keyedCanvas();
+    if (!scratch) {
+      this.ctx.putImageData(this.img, x, y);
+      return;
+    }
+    scratch.ctx.putImageData(this.img, 0, 0);
+    this.ctx.drawImage(scratch.canvas, x, y);
+  }
+  keyedCanvas() {
+    if (!PixMap.keyedCanvas) {
+      PixMap.keyedCanvas = document.createElement("canvas");
+      PixMap.keyedCtx = PixMap.keyedCanvas.getContext("2d");
+    }
+    const canvas2 = PixMap.keyedCanvas;
+    const ctx = PixMap.keyedCtx;
+    if (!canvas2 || !ctx) {
+      return null;
+    }
+    if (canvas2.width !== this.width) {
+      canvas2.width = this.width;
+    }
+    if (canvas2.height !== this.height) {
+      canvas2.height = this.height;
+    }
+    return { canvas: canvas2, ctx };
+  }
+  prepareCanvas(transparentRgb = -1) {
+    const data = this.data;
+    const paint = this.paint;
+    const len = data.length;
+    const keyed = transparentRgb >= 0;
+    let i = 0;
+    const unroll = len - len % 4;
+    for (;i < unroll; i += 4) {
+      const p0 = data[i];
+      const p1 = data[i + 1];
+      const p2 = data[i + 2];
+      const p3 = data[i + 3];
+      paint[i] = keyed && (p0 & 16777215) === transparentRgb ? 0 : (p0 & 16711680) >> 16 | p0 & 65280 | (p0 & 255) << 16 | 4278190080;
+      paint[i + 1] = keyed && (p1 & 16777215) === transparentRgb ? 0 : (p1 & 16711680) >> 16 | p1 & 65280 | (p1 & 255) << 16 | 4278190080;
+      paint[i + 2] = keyed && (p2 & 16777215) === transparentRgb ? 0 : (p2 & 16711680) >> 16 | p2 & 65280 | (p2 & 255) << 16 | 4278190080;
+      paint[i + 3] = keyed && (p3 & 16777215) === transparentRgb ? 0 : (p3 & 16711680) >> 16 | p3 & 65280 | (p3 & 255) << 16 | 4278190080;
+    }
+    for (;i < len; i++) {
+      const pixel = data[i];
+      paint[i] = keyed && (pixel & 16777215) === transparentRgb ? 0 : (pixel & 16711680) >> 16 | pixel & 65280 | (pixel & 255) << 16 | 4278190080;
+    }
+  }
+}
+
+// src/client/GameShell.ts
+class GameShell {
+  static cameraZoom = 1;
+  state = 0;
+  deltime = 20;
+  mindel = 1;
+  otim = new Array(10);
+  fps = 0;
+  debug = false;
+  drawArea = null;
+  redrawScreen = true;
+  focus = true;
+  idleTimer = performance.now();
+  mouseButton = 0;
+  mouseX = -1;
+  mouseY = -1;
+  nextMouseClickButton = 0;
+  nextMouseClickX = -1;
+  nextMouseClickY = -1;
+  mouseClickButton = 0;
+  mouseClickX = -1;
+  mouseClickY = -1;
+  nextMouseClickTime = 0;
+  mouseClickTime = 0;
+  keyHeld = [];
+  keyQueue = [];
+  keyQueueReadPos = 0;
+  keyQueueWritePos = 0;
+  resizeToFit = false;
+  tfps = 60;
+  tickAlpha = 0;
+  tps = 0;
+  renderFps = 0;
+  tickAccumulator = 0;
+  lastTickLoopTime = 0;
+  lastTickTime = 0;
+  tickRunning = false;
+  async maininit() {}
+  async mainloop() {}
+  async maindraw() {}
+  refresh() {}
+  constructor(resizetoFit = false) {
+    canvas.tabIndex = -1;
+    canvas2d.fillStyle = "black";
+    canvas2d.fillRect(0, 0, canvas.width, canvas.height);
+    this.resizeToFit = resizetoFit;
+    if (this.resizeToFit) {
+      this.resize(window.innerWidth, window.innerHeight);
+    } else {
+      this.resize(canvas.width, canvas.height);
+    }
+  }
+  get sWid() {
+    return canvas.width;
+  }
+  get sHei() {
+    return canvas.height;
+  }
+  resize(width, height) {
+    canvas.width = width;
+    canvas.height = height;
+    this.drawArea = new PixMap(width, height);
+    Pix3D.setRenderClipping();
+  }
+  async run() {
+    canvas.addEventListener("resize", () => {
+      if (this.resizeToFit) {
+        this.resize(window.innerWidth, window.innerHeight);
+      }
+    }, false);
+    canvas.onfocus = this.onfocus.bind(this);
+    canvas.onblur = this.onblur.bind(this);
+    canvas.onkeydown = this.onkeydown.bind(this);
+    canvas.onkeyup = this.onkeyup.bind(this);
+    canvas.onwheel = this.onwheel.bind(this);
+    canvas.onmousedown = this.onmousedown.bind(this);
+    canvas.onpointerdown = this.onpointerdown.bind(this);
+    canvas.onmouseup = this.onmouseup.bind(this);
+    canvas.onpointerup = this.onpointerup.bind(this);
+    canvas.onpointerenter = this.onpointerenter.bind(this);
+    canvas.onpointerleave = this.onpointerleave.bind(this);
+    canvas.onpointermove = this.onpointermove.bind(this);
+    window.onmouseup = this.windowMouseUp.bind(this);
+    window.onmousemove = this.windowMouseMove.bind(this);
+    if (this.isTouchDevice) {
+      if (this.hasTouchEvents) {
+        canvas.ontouchstart = this.ontouchstart.bind(this);
+      } else {
+        canvas.style.touchAction = "none";
+      }
+    }
+    canvas.oncontextmenu = (e) => {
+      e.preventDefault();
+    };
+    window.oncontextmenu = (e) => {
+      e.preventDefault();
+    };
+    await this.messageBox("Loading...", 0);
+    await this.maininit();
+    this.lastTickLoopTime = performance.now();
+    this.lastTickTime = this.lastTickLoopTime;
+    this.tickAccumulator = 0;
+    this.startTickLoop();
+    this.startRenderLoop();
+  }
+  startTickLoop() {
+    const maxCatchupTicks = 5;
+    let tickCounter = 0;
+    let lastTpsUpdate = performance.now();
+    const tickLoop = async () => {
+      try {
+        if (this.state < 0) {
+          if (this.state === -1) {
+            this.shutdown();
+          }
+          return;
+        }
+        const now = performance.now();
+        let delta = now - this.lastTickLoopTime;
+        if (delta > 250) {
+          delta = 250;
+        }
+        this.lastTickLoopTime = now;
+        this.tickAccumulator += delta;
+        let updates = 0;
+        while (this.tickAccumulator >= this.deltime && updates < maxCatchupTicks && !this.tickRunning) {
+          if (this.state > 0) {
+            this.state--;
+            if (this.state === 0) {
+              this.shutdown();
+              return;
+            }
+          }
+          this.tickRunning = true;
+          try {
+            this.mouseClickButton = this.nextMouseClickButton;
+            this.mouseClickX = this.nextMouseClickX;
+            this.mouseClickY = this.nextMouseClickY;
+            this.mouseClickTime = this.nextMouseClickTime;
+            this.nextMouseClickButton = 0;
+            this.lastTickTime = performance.now();
+            await this.mainloop();
+          } catch (e) {
+            console.error("[GameShell] mainloop failed:", e);
+            fetch("/debug-log", { method: "POST", body: "[GameShell] mainloop failed: " + String(e).substring(0, 500) }).catch(() => {});
+          } finally {
+            this.tickRunning = false;
+          }
+          this.tickAccumulator -= this.deltime;
+          updates++;
+          tickCounter++;
+        }
+        if (updates >= maxCatchupTicks && this.tickAccumulator >= this.deltime) {
+          this.tickAccumulator = 0;
+        }
+        if (now - lastTpsUpdate >= 1000) {
+          this.tps = Math.min(tickCounter, Math.round(1000 / this.deltime));
+          tickCounter = 0;
+          lastTpsUpdate = now;
+        }
+      } catch (e) {
+        console.error("[GameShell] tickLoop failed:", e);
+        fetch("/debug-log", { method: "POST", body: "[GameShell] tickLoop failed: " + String(e).substring(0, 500) }).catch(() => {});
+      } finally {
+        if (this.state >= 0) {
+          requestAnimationFrame(tickLoop);
+        }
+      }
+    };
+    requestAnimationFrame(tickLoop);
+  }
+  startRenderLoop() {
+    let lastRenderTime = performance.now();
+    let renderCounter = 0;
+    let lastRenderFpsUpdate = performance.now();
+    const renderLoop = async (timestamp) => {
+      try {
+        if (this.state < 0) {
+          return;
+        }
+        const now = performance.now();
+        const fpsLimit = window.clientInstance?.maxRenderFps ?? this.tfps;
+        const targetFrameTime = fpsLimit > 0 ? 1000 / fpsLimit : 0;
+        const delta = now - lastRenderTime;
+        if (targetFrameTime === 0 || delta >= targetFrameTime) {
+          if (targetFrameTime > 0) {
+            lastRenderTime = now - delta % targetFrameTime;
+          } else {
+            lastRenderTime = now;
+          }
+          this.tickAlpha = Math.max(0, Math.min(1, this.tickAccumulator / this.deltime));
+          try {
+            await this.maindraw();
+          } catch (e) {
+            console.error("[GameShell] maindraw failed:", e);
+            fetch("/debug-log", { method: "POST", body: "[GameShell] maindraw failed: " + String(e).substring(0, 500) }).catch(() => {});
+          }
+          renderCounter++;
+          if (now - lastRenderFpsUpdate >= 1000) {
+            this.renderFps = renderCounter;
+            this.fps = this.renderFps;
+            renderCounter = 0;
+            lastRenderFpsUpdate = now;
+          }
+          if (this.debug) {
+            console.log("tickAlpha:" + this.tickAlpha.toFixed(3) + " fps:" + this.renderFps + " tps:" + this.tps + " deltime:" + this.deltime);
+            this.debug = false;
+          }
+        }
+        if (this.tfps > 0 && this.tfps < 60) {
+          const wait = 1000 / this.tfps - (performance.now() - timestamp);
+          if (wait > 0) {
+            await sleep(wait);
+          }
+        }
+      } catch (e) {
+        console.error("[GameShell] renderLoop failed:", e);
+        fetch("/debug-log", { method: "POST", body: "[GameShell] renderLoop failed: " + String(e).substring(0, 500) }).catch(() => {});
+      } finally {
+        if (this.state >= 0) {
+          requestAnimationFrame(renderLoop);
+        }
+      }
+    };
+    requestAnimationFrame(renderLoop);
+  }
+  shutdown() {
+    this.state = -2;
+  }
+  setFramerate(rate) {
+    this.deltime = 1000 / rate | 0;
+  }
+  setTargetedFramerate(rate) {
+    this.tfps = Math.max(Math.min(60, rate | 0), 0);
+  }
+  start() {
+    if (this.state >= 0) {
+      this.state = 0;
+    }
+  }
+  stop() {
+    if (this.state >= 0) {
+      this.state = 4000 / this.deltime | 0;
+    }
+  }
+  async messageBox(message, progress) {
+    const width = this.sWid;
+    const height = this.sHei;
+    if (this.redrawScreen) {
+      canvas2d.fillStyle = "black";
+      canvas2d.fillRect(0, 0, width, height);
+      this.redrawScreen = false;
+    }
+    const y = height / 2 - 18;
+    canvas2d.strokeStyle = "rgb(140, 17, 17)";
+    canvas2d.strokeRect((width / 2 | 0) - 152, y, 304, 34);
+    canvas2d.fillStyle = "rgb(140, 17, 17)";
+    canvas2d.fillRect((width / 2 | 0) - 150, y + 2, progress * 3, 30);
+    canvas2d.fillStyle = "black";
+    canvas2d.fillRect((width / 2 | 0) - 150 + progress * 3, y + 2, 300 - progress * 3, 30);
+    canvas2d.font = "bold 13px helvetica, sans-serif";
+    canvas2d.textAlign = "center";
+    canvas2d.fillStyle = "white";
+    canvas2d.fillText(message, width / 2 | 0, y + 22);
+    await sleep(5);
+  }
+  onmousedown(e) {
+    if (e.clientX < 0 || e.clientY < 0) {
+      return;
+    }
+    const { x, y } = this.getMousePos(e);
+    this.mouseDown(x, y, e);
+  }
+  onwheel(e) {
+    const ZOOM_STEP = 0.5;
+    const MIN_ZOOM = 0;
+    const MAX_ZOOM = 3;
+    if (e.deltaY > 0) {
+      GameShell.cameraZoom = Math.min(MAX_ZOOM, GameShell.cameraZoom + ZOOM_STEP);
+    } else {
+      GameShell.cameraZoom = Math.max(MIN_ZOOM, GameShell.cameraZoom - ZOOM_STEP);
+    }
+  }
+  mouseDown(x, y, e) {
+    this.idleTimer = performance.now();
+    this.nextMouseClickX = x;
+    this.nextMouseClickY = y;
+    this.nextMouseClickTime = performance.now();
+    this.mouseX = x;
+    this.mouseY = y;
+    if (e.button === 2) {
+      this.nextMouseClickButton = 2;
+      this.mouseButton = 2;
+    } else {
+      this.nextMouseClickButton = 1;
+      this.mouseButton = 1;
+    }
+    if (InputTracking.active) {
+      InputTracking.mousePressed(x, y, e.button, "mouse");
+    }
+  }
+  onpointerdown(e) {
+    if (e.clientX < 0 || e.clientY < 0) {
+      return;
+    }
+    const { x, y } = this.getMousePos(e);
+    this.pointerDown(x, y, e);
+  }
+  pointerDown(_x, _y, _e) {}
+  onmouseup(e) {
+    const { x, y } = this.getMousePos(e);
+    this.mouseUp(x, y, e);
+  }
+  mouseUp(x, y, e) {
+    this.idleTimer = performance.now();
+    this.mouseButton = 0;
+    if (InputTracking.active) {
+      InputTracking.mouseReleased(e.button, "mouse");
+    }
+    this.mouseX = x;
+    this.mouseY = y;
+  }
+  onpointerup(e) {
+    const { x, y } = this.getMousePos(e);
+    this.pointerUp(x, y, e);
+  }
+  pointerUp(_x, _y, _e) {}
+  onpointerenter(e) {
+    if (e.clientX < 0 || e.clientY < 0) {
+      return;
+    }
+    const { x, y } = this.getMousePos(e);
+    this.pointerEnter(x, y, e);
+  }
+  pointerEnter(x, y, _e) {
+    this.mouseX = x;
+    this.mouseY = y;
+    if (InputTracking.active) {
+      InputTracking.mouseEntered();
+    }
+  }
+  onpointerleave(e) {
+    this.pointerLeave(e);
+  }
+  pointerLeave(_e) {
+    this.idleTimer = performance.now();
+    this.mouseX = -1;
+    this.mouseY = -1;
+    if (InputTracking.active) {
+      InputTracking.mouseExited();
+    }
+    this.nextMouseClickX = -1;
+    this.nextMouseClickY = -1;
+    this.nextMouseClickButton = 0;
+    this.mouseButton = 0;
+  }
+  onpointermove(e) {
+    if (e.clientX < 0 || e.clientY < 0) {
+      return;
+    }
+    const { x, y } = this.getMousePos(e);
+    this.pointerMove(x, y, e);
+  }
+  pointerMove(x, y, e) {
+    this.idleTimer = performance.now();
+    this.mouseX = x;
+    this.mouseY = y;
+    if (InputTracking.active) {
+      InputTracking.mouseMoved(x, y, e.pointerType);
+    }
+  }
+  windowMouseUp(e) {}
+  windowMouseMove(e) {}
+  ontouchstart(e) {
+    this.touchStart(e);
+  }
+  touchStart(e) {
+    if (e.touches.length < 2) {
+      e.preventDefault();
+    }
+  }
+  onkeydown(e) {
+    this.idleTimer = performance.now();
+    const keyCode = KeyCodes.get(e.key);
+    if (!keyCode || e.code.length === 0 && !e.isTrusted) {
+      return;
+    }
+    let ch = keyCode.ch;
+    if (e.ctrlKey) {
+      if (ch >= 65 && ch <= 93 || ch == 95) {
+        ch -= 65 - 1;
+      } else if (ch >= 97 && ch <= 122) {
+        ch -= 97 - 1;
+      }
+    }
+    if (ch > 0 && ch < 128) {
+      this.keyHeld[ch] = 1;
+    }
+    if (ch > 4) {
+      this.keyQueue[this.keyQueueWritePos] = ch;
+      this.keyQueueWritePos = this.keyQueueWritePos + 1 & 127;
+    }
+    if (InputTracking.active) {
+      InputTracking.keyPressed(ch);
+    }
+    if (!CanvasEnabledKeys.includes(e.key)) {
+      e.preventDefault();
+    }
+  }
+  onkeyup(e) {
+    this.idleTimer = performance.now();
+    const keyCode = KeyCodes.get(e.key);
+    if (!keyCode || e.code.length === 0 && !e.isTrusted) {
+      return;
+    }
+    let ch = keyCode.ch;
+    if (e.ctrlKey) {
+      if (ch >= 65 && ch <= 93 || ch == 95) {
+        ch -= 65 - 1;
+      } else if (ch >= 97 && ch <= 122) {
+        ch -= 97 - 1;
+      }
+    }
+    if (ch > 0 && ch < 128) {
+      this.keyHeld[ch] = 0;
+    }
+    if (InputTracking.active) {
+      InputTracking.keyReleased(ch);
+    }
+    if (!CanvasEnabledKeys.includes(e.key)) {
+      e.preventDefault();
+    }
+  }
+  pollKey() {
+    let key = -1;
+    if (this.keyQueueWritePos !== this.keyQueueReadPos) {
+      key = this.keyQueue[this.keyQueueReadPos];
+      this.keyQueueReadPos = this.keyQueueReadPos + 1 & 127;
+    }
+    return key;
+  }
+  onfocus(_e) {
+    this.focus = true;
+    this.redrawScreen = true;
+    this.refresh();
+    if (InputTracking.active) {
+      InputTracking.focusGained();
+    }
+  }
+  onblur(_e) {
+    this.focus = false;
+    for (let i = 0;i < 128; i++) {
+      this.keyHeld[i] = 0;
+    }
+    if (InputTracking.active) {
+      InputTracking.focusLost();
+    }
+  }
+  get hasTouchEvents() {
+    return "ontouchstart" in window;
+  }
+  get isTouchDevice() {
+    return this.hasTouchEvents || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+  }
+  get isMobile() {
+    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|Windows Phone|Mobile/i.test(navigator.userAgent)) {
+      return true;
+    }
+    return this.isTouchDevice;
+  }
+  isFullScreen() {
+    return document.fullscreenElement !== null;
+  }
+  getMousePos(e) {
+    const fixedWidth = this.sWid;
+    const fixedHeight = this.sHei;
+    const canvasBounds = canvas.getBoundingClientRect();
+    const clickLocWithinCanvas = {
+      x: e.clientX - canvasBounds.left,
+      y: e.clientY - canvasBounds.top
+    };
+    let x = 0;
+    let y = 0;
+    if (this.isFullScreen()) {
+      const gameAspectRatio = fixedWidth / fixedHeight;
+      const ourAspectRatio = window.innerWidth / window.innerHeight;
+      const wider = ourAspectRatio >= gameAspectRatio;
+      let trueCanvasWidth = 0;
+      let trueCanvasHeight = 0;
+      let offsetX = 0;
+      let offsetY = 0;
+      if (wider) {
+        trueCanvasWidth = window.innerHeight * gameAspectRatio;
+        trueCanvasHeight = window.innerHeight;
+        offsetX = (window.innerWidth - trueCanvasWidth) / 2;
+      } else {
+        trueCanvasWidth = window.innerWidth;
+        trueCanvasHeight = window.innerWidth / gameAspectRatio;
+        offsetY = (window.innerHeight - trueCanvasHeight) / 2;
+      }
+      const scaleX = fixedWidth / trueCanvasWidth;
+      const scaleY = fixedHeight / trueCanvasHeight;
+      x = (clickLocWithinCanvas.x - offsetX) * scaleX | 0;
+      y = (clickLocWithinCanvas.y - offsetY) * scaleY | 0;
+    } else {
+      const scaleX = canvas.width / canvasBounds.width;
+      const scaleY = canvas.height / canvasBounds.height;
+      x = clickLocWithinCanvas.x * scaleX | 0;
+      y = clickLocWithinCanvas.y * scaleY | 0;
+    }
+    if (x < 0) {
+      x = 0;
+    }
+    if (x > fixedWidth) {
+      x = fixedWidth;
+    }
+    if (y < 0) {
+      y = 0;
+    }
+    if (y > fixedHeight) {
+      y = fixedHeight;
+    }
+    return { x, y };
+  }
+}
+
+// src/dash3d/graphics/Jpeg.ts
+var jpegCanvas = document.createElement("canvas");
+var jpegImg = document.createElement("img");
+var jpeg2d = jpegCanvas.getContext("2d", {
+  willReadFrequently: true
+});
+async function decodeJpeg(data) {
+  if (data[0] !== 255) {
+    data[0] = 255;
+  }
+  URL.revokeObjectURL(jpegImg.src);
+  jpegImg.src = URL.createObjectURL(new Blob([data], { type: "image/jpeg" }));
+  await new Promise((resolve) => jpegImg.onload = () => resolve());
+  jpeg2d.clearRect(0, 0, jpegCanvas.width, jpegCanvas.height);
+  const width = jpegImg.naturalWidth;
+  const height = jpegImg.naturalHeight;
+  jpegCanvas.width = width;
+  jpegCanvas.height = height;
+  jpeg2d.drawImage(jpegImg, 0, 0);
+  return jpeg2d.getImageData(0, 0, width, height);
+}
+
+// src/dash3d/graphics/Pix32.ts
+class Pix32 extends Pix2D {
+  data;
+  wi;
+  hi;
+  xof;
+  yof;
+  owi;
+  ohi;
+  constructor(width, height) {
+    super();
+    this.data = new Int32Array(width * height);
+    this.wi = this.owi = width;
+    this.hi = this.ohi = height;
+    this.xof = this.yof = 0;
+  }
+  static async fromJpeg(archive, name) {
+    const dat = archive.read(name + ".dat");
+    if (!dat) {
+      throw new Error;
+    }
+    const jpeg = await decodeJpeg(dat);
+    const image = new Pix32(jpeg.width, jpeg.height);
+    const data = new Uint32Array(jpeg.data.buffer);
+    for (let i = 0;i < image.data.length; i++) {
+      const pixel = data[i];
+      image.data[i] = (pixel >> 24 & 255) << 24 | (pixel & 255) << 16 | (pixel >> 8 & 255) << 8 | pixel >> 16 & 255;
+    }
+    return image;
+  }
+  static depack(jag, name, sprite = 0) {
+    const dat = new Packet(jag.read(name + ".dat"));
+    const index = new Packet(jag.read("index.dat"));
+    index.pos = dat.g2();
+    const owi = index.g2();
+    const ohi = index.g2();
+    const bpalCount = index.g1();
+    const bpal = new Int32Array(bpalCount);
+    for (let i = 0;i < bpalCount - 1; i++) {
+      bpal[i + 1] = index.g3();
+      if (bpal[i + 1] === 0) {
+        bpal[i + 1] = 1;
+      }
+    }
+    for (let i = 0;i < sprite; i++) {
+      index.pos += 2;
+      dat.pos += index.g2() * index.g2();
+      index.pos += 1;
+    }
+    if (dat.pos > dat.length || index.pos > index.length) {
+      throw new Error;
+    }
+    const xof = index.g1();
+    const yof = index.g1();
+    const wi = index.g2();
+    const hi = index.g2();
+    const image = new Pix32(wi, hi);
+    image.xof = xof;
+    image.yof = yof;
+    image.owi = owi;
+    image.ohi = ohi;
+    const encoding = index.g1();
+    if (encoding === 0) {
+      for (let i = 0;i < image.wi * image.hi; i++) {
+        image.data[i] = bpal[dat.g1()];
+      }
+    } else if (encoding === 1) {
+      for (let x = 0;x < image.wi; x++) {
+        for (let y = 0;y < image.hi; y++) {
+          image.data[x + y * image.wi] = bpal[dat.g1()];
+        }
+      }
+    }
+    return image;
+  }
+  setPixels() {
+    Pix2D.setPixels(this.data, this.wi, this.hi);
+  }
+  rgbAdjust(r, g, b) {
+    for (let i = 0;i < this.data.length; i++) {
+      const rgb = this.data[i];
+      if (rgb !== 0) {
+        let red = rgb >> 16 & 255;
+        red += r;
+        if (red < 1) {
+          red = 1;
+        } else if (red > 255) {
+          red = 255;
+        }
+        let green = rgb >> 8 & 255;
+        green += g;
+        if (green < 1) {
+          green = 1;
+        } else if (green > 255) {
+          green = 255;
+        }
+        let blue = rgb & 255;
+        blue += b;
+        if (blue < 1) {
+          blue = 1;
+        } else if (blue > 255) {
+          blue = 255;
+        }
+        this.data[i] = (red << 16) + (green << 8) + blue;
+      }
+    }
+  }
+  trim() {
+    const pixels = new Int32Array(this.owi * this.ohi);
+    for (let y = 0;y < this.hi; y++) {
+      for (let x = 0;x < this.wi; x++) {
+        pixels[(this.yof + y) * this.owi + this.xof + x] = this.data[this.wi * y + x];
+      }
+    }
+    this.data = pixels;
+    this.wi = this.owi;
+    this.hi = this.ohi;
+    this.xof = 0;
+    this.yof = 0;
+  }
+  hflip() {
+    const pixels = this.data;
+    const width = this.wi;
+    const height = this.hi;
+    for (let y = 0;y < height; y++) {
+      const div = width / 2 | 0;
+      for (let x = 0;x < div; x++) {
+        const off1 = x + y * width;
+        const off2 = width - x - 1 + y * width;
+        const tmp = pixels[off1];
+        pixels[off1] = pixels[off2];
+        pixels[off2] = tmp;
+      }
+    }
+  }
+  vflip() {
+    const pixels = this.data;
+    const width = this.wi;
+    const height = this.hi;
+    for (let y = 0;y < (height / 2 | 0); y++) {
+      for (let x = 0;x < width; x++) {
+        const off1 = x + y * width;
+        const off2 = x + (height - y - 1) * width;
+        const tmp = pixels[off1];
+        pixels[off1] = pixels[off2];
+        pixels[off2] = tmp;
+      }
+    }
+  }
+  quickPlotSprite(x, y) {
+    x |= 0;
+    y |= 0;
+    x += this.xof;
+    y += this.yof;
+    let dstOff = x + y * Pix2D.width;
+    let srcOff = 0;
+    let h = this.hi;
+    let w = this.wi;
+    let dstStep = Pix2D.width - w;
+    let srcStep = 0;
+    if (y < Pix2D.clipMinY) {
+      const cutoff = Pix2D.clipMinY - y;
+      h -= cutoff;
+      y = Pix2D.clipMinY;
+      srcOff += cutoff * w;
+      dstOff += cutoff * Pix2D.width;
+    }
+    if (y + h > Pix2D.clipMaxY) {
+      h -= y + h - Pix2D.clipMaxY;
+    }
+    if (x < Pix2D.clipMinX) {
+      const cutoff = Pix2D.clipMinX - x;
+      w -= cutoff;
+      x = Pix2D.clipMinX;
+      srcOff += cutoff;
+      dstOff += cutoff;
+      srcStep += cutoff;
+      dstStep += cutoff;
+    }
+    if (x + w > Pix2D.clipMaxX) {
+      const cutoff = x + w - Pix2D.clipMaxX;
+      w -= cutoff;
+      srcStep += cutoff;
+      dstStep += cutoff;
+    }
+    if (w > 0 && h > 0) {
+      this.plotQuick(w, h, this.data, srcOff, srcStep, Pix2D.pixels, dstOff, dstStep);
+    }
+  }
+  plotQuick(w, h, src, srcOff, srcStep, dst, dstOff, dstStep) {
+    const qw = -(w >> 2);
+    w = -(w & 3);
+    for (let y = -h;y < 0; y++) {
+      for (let x = qw;x < 0; x++) {
+        dst[dstOff++] = src[srcOff++];
+        dst[dstOff++] = src[srcOff++];
+        dst[dstOff++] = src[srcOff++];
+        dst[dstOff++] = src[srcOff++];
+      }
+      for (let x = w;x < 0; x++) {
+        dst[dstOff++] = src[srcOff++];
+      }
+      dstOff += dstStep;
+      srcOff += srcStep;
+    }
+  }
+  plotSprite(x, y) {
+    x |= 0;
+    y |= 0;
+    x += this.xof;
+    y += this.yof;
+    let dstOff = x + y * Pix2D.width;
+    let srcOff = 0;
+    let h = this.hi;
+    let w = this.wi;
+    let dstStep = Pix2D.width - w;
+    let srcStep = 0;
+    if (y < Pix2D.clipMinY) {
+      const cutoff = Pix2D.clipMinY - y;
+      h -= cutoff;
+      y = Pix2D.clipMinY;
+      srcOff += cutoff * w;
+      dstOff += cutoff * Pix2D.width;
+    }
+    if (y + h > Pix2D.clipMaxY) {
+      h -= y + h - Pix2D.clipMaxY;
+    }
+    if (x < Pix2D.clipMinX) {
+      const cutoff = Pix2D.clipMinX - x;
+      w -= cutoff;
+      x = Pix2D.clipMinX;
+      srcOff += cutoff;
+      dstOff += cutoff;
+      srcStep += cutoff;
+      dstStep += cutoff;
+    }
+    if (x + w > Pix2D.clipMaxX) {
+      const cutoff = x + w - Pix2D.clipMaxX;
+      w -= cutoff;
+      srcStep += cutoff;
+      dstStep += cutoff;
+    }
+    if (w > 0 && h > 0) {
+      this.plot(w, h, this.data, srcOff, srcStep, Pix2D.pixels, dstOff, dstStep);
+    }
+  }
+  plot(w, h, src, srcOff, srcStep, dst, dstOff, dstStep) {
+    const qw = -(w >> 2);
+    w = -(w & 3);
+    for (let y = -h;y < 0; y++) {
+      for (let x = qw;x < 0; x++) {
+        let rgb = src[srcOff++];
+        if (rgb === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+        rgb = src[srcOff++];
+        if (rgb === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+        rgb = src[srcOff++];
+        if (rgb === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+        rgb = src[srcOff++];
+        if (rgb === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+      }
+      for (let x = w;x < 0; x++) {
+        const rgb = src[srcOff++];
+        if (rgb === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+      }
+      dstOff += dstStep;
+      srcOff += srcStep;
+    }
+  }
+  transPlotSprite(x, y, alpha) {
+    x |= 0;
+    y |= 0;
+    x += this.xof;
+    y += this.yof;
+    let dstStep = x + y * Pix2D.width;
+    let srcStep = 0;
+    let h = this.hi;
+    let w = this.wi;
+    let dstOff = Pix2D.width - w;
+    let srcOff = 0;
+    if (y < Pix2D.clipMinY) {
+      const cutoff = Pix2D.clipMinY - y;
+      h -= cutoff;
+      y = Pix2D.clipMinY;
+      srcStep += cutoff * w;
+      dstStep += cutoff * Pix2D.width;
+    }
+    if (y + h > Pix2D.clipMaxY) {
+      h -= y + h - Pix2D.clipMaxY;
+    }
+    if (x < Pix2D.clipMinX) {
+      const cutoff = Pix2D.clipMinX - x;
+      w -= cutoff;
+      x = Pix2D.clipMinX;
+      srcStep += cutoff;
+      dstStep += cutoff;
+      srcOff += cutoff;
+      dstOff += cutoff;
+    }
+    if (x + w > Pix2D.clipMaxX) {
+      const cutoff = x + w - Pix2D.clipMaxX;
+      w -= cutoff;
+      srcOff += cutoff;
+      dstOff += cutoff;
+    }
+    if (w > 0 && h > 0) {
+      this.tranSprite(Pix2D.pixels, this.data, srcStep, dstStep, w, h, dstOff, srcOff, alpha);
+    }
+  }
+  tranSprite(dst, src, srcOff, dstOff, w, h, dstStep, srcStep, alpha) {
+    const invAlpha = 256 - alpha;
+    for (let y = -h;y < 0; y++) {
+      for (let x = -w;x < 0; x++) {
+        const rgb = src[srcOff++];
+        if (rgb === 0) {
+          dstOff++;
+        } else {
+          const dstRgb = dst[dstOff];
+          dst[dstOff++] = ((rgb & 16711935) * alpha + (dstRgb & 16711935) * invAlpha & 4278255360) + ((rgb & 65280) * alpha + (dstRgb & 65280) * invAlpha & 16711680) >> 8;
+        }
+      }
+      dstOff += dstStep;
+      srcOff += srcStep;
+    }
+  }
+  scanlineRotatePlotSprite(x, y, w, h, anchorX, anchorY, theta, zoom, lineStart, lineWidth) {
+    x |= 0;
+    y |= 0;
+    w |= 0;
+    h |= 0;
+    try {
+      const centerX = -w / 2 | 0;
+      const centerY = -h / 2 | 0;
+      const sin = Math.sin(theta / 326.11) * 65536 | 0;
+      const cos = Math.cos(theta / 326.11) * 65536 | 0;
+      const sinZoom = sin * zoom >> 8;
+      const cosZoom = cos * zoom >> 8;
+      let leftX = (anchorX << 16) + centerY * sinZoom + centerX * cosZoom;
+      let leftY = (anchorY << 16) + (centerY * cosZoom - centerX * sinZoom);
+      let leftOff = x + y * Pix2D.width;
+      for (let i = 0;i < h; i++) {
+        const dstOff = lineStart[i];
+        let dstX = leftOff + dstOff;
+        let srcX = leftX + cosZoom * dstOff;
+        let srcY = leftY - sinZoom * dstOff;
+        for (let j = -lineWidth[i];j < 0; j++) {
+          Pix2D.pixels[dstX++] = this.data[(srcX >> 16) + (srcY >> 16) * this.wi];
+          srcX += cosZoom;
+          srcY -= sinZoom;
+        }
+        leftX += sinZoom;
+        leftY += cosZoom;
+        leftOff += Pix2D.width;
+      }
+    } catch (_e) {}
+  }
+  rotatePlotSprite(x, y, w, h, anchorX, anchorY, theta, zoom) {
+    x |= 0;
+    y |= 0;
+    w |= 0;
+    h |= 0;
+    try {
+      const centerX = -w / 2 | 0;
+      const centerY = -h / 2 | 0;
+      const sin = Math.sin(theta) * 65536 | 0;
+      const cos = Math.cos(theta) * 65536 | 0;
+      const sinZoom = sin * zoom >> 8;
+      const cosZoom = cos * zoom >> 8;
+      let leftX = (anchorX << 16) + (centerY * sinZoom + centerX * cosZoom);
+      let leftY = (anchorY << 16) + (centerY * cosZoom - centerX * sinZoom);
+      let leftOff = x + y * Pix2D.width;
+      for (let i = 0;i < h; i++) {
+        let dstX = leftOff;
+        let srcX = leftX;
+        let srcY = leftY;
+        for (let j = -w;j < 0; j++) {
+          const rgb = this.data[(srcX >> 16) + (srcY >> 16) * this.owi];
+          if (rgb == 0) {
+            dstX++;
+          } else {
+            Pix2D.pixels[dstX++] = rgb;
+          }
+          srcX += cosZoom;
+          srcY -= sinZoom;
+        }
+        leftX += sinZoom;
+        leftY += cosZoom;
+        leftOff += Pix2D.width;
+      }
+    } catch (_e) {}
+  }
+  scanlinePlotSprite(mask, x, y) {
+    x |= 0;
+    y |= 0;
+    x += this.xof;
+    y += this.yof;
+    let dstStep = x + y * Pix2D.width;
+    let srcStep = 0;
+    let h = this.hi;
+    let w = this.wi;
+    let dstOff = Pix2D.width - w;
+    let srcOff = 0;
+    if (y < Pix2D.clipMinY) {
+      const cutoff = Pix2D.clipMinY - y;
+      h -= cutoff;
+      y = Pix2D.clipMinY;
+      srcStep += cutoff * w;
+      dstStep += cutoff * Pix2D.width;
+    }
+    if (y + h > Pix2D.clipMaxY) {
+      h -= y + h - Pix2D.clipMaxY;
+    }
+    if (x < Pix2D.clipMinX) {
+      const cutoff = Pix2D.clipMinX - x;
+      w -= cutoff;
+      x = Pix2D.clipMinX;
+      srcStep += cutoff;
+      dstStep += cutoff;
+      srcOff += cutoff;
+      dstOff += cutoff;
+    }
+    if (x + w > Pix2D.clipMaxX) {
+      const cutoff = x + w - Pix2D.clipMaxX;
+      w -= cutoff;
+      srcOff += cutoff;
+      dstOff += cutoff;
+    }
+    if (w > 0 && h > 0) {
+      this.plotScanline(Pix2D.pixels, this.data, srcStep, dstStep, w, h, dstOff, srcOff, mask.data);
+    }
+  }
+  plotScanline(dst, src, srcOff, dstOff, w, h, dstStep, srcStep, mask) {
+    const qw = -(w >> 2);
+    w = -(w & 3);
+    for (let y = -h;y < 0; y++) {
+      for (let x = qw;x < 0; x++) {
+        let rgb = src[srcOff++];
+        if (rgb !== 0 && mask[dstOff] === 0) {
+          dst[dstOff++] = rgb;
+        } else {
+          dstOff++;
+        }
+        rgb = src[srcOff++];
+        if (rgb !== 0 && mask[dstOff] === 0) {
+          dst[dstOff++] = rgb;
+        } else {
+          dstOff++;
+        }
+        rgb = src[srcOff++];
+        if (rgb !== 0 && mask[dstOff] === 0) {
+          dst[dstOff++] = rgb;
+        } else {
+          dstOff++;
+        }
+        rgb = src[srcOff++];
+        if (rgb !== 0 && mask[dstOff] === 0) {
+          dst[dstOff++] = rgb;
+        } else {
+          dstOff++;
+        }
+      }
+      for (let x = w;x < 0; x++) {
+        const rgb = src[srcOff++];
+        if (rgb !== 0 && mask[dstOff] === 0) {
+          dst[dstOff++] = rgb;
+        } else {
+          dstOff++;
+        }
+      }
+      dstOff += dstStep;
+      srcOff += srcStep;
+    }
+  }
+}
+
+// src/util/JavaRandom.ts
+var p2_16 = 65536;
+var p2_24 = 16777216;
+var p2_27 = 134217728;
+var p2_31 = 2147483648;
+var p2_32 = 4294967296;
+var p2_48 = 281474976710656;
+var p2_53 = Math.pow(2, 53);
+var m2_16 = 65535;
+var [c2, c1, c0] = [5, 57068, 58989];
+var s2 = 0;
+var s1 = 0;
+var s0 = 0;
+function _next() {
+  let carry = 11;
+  let r0 = s0 * c0 + carry;
+  carry = r0 >>> 16;
+  r0 &= m2_16;
+  let r1 = s1 * c0 + s0 * c1 + carry;
+  carry = r1 >>> 16;
+  r1 &= m2_16;
+  let r2 = s2 * c0 + s1 * c1 + s0 * c2 + carry;
+  r2 &= m2_16;
+  [s2, s1, s0] = [r2, r1, r0];
+  return s2 * p2_16 + s1;
+}
+function next_signed(bits) {
+  return _next() >> 32 - bits;
+}
+function next(bits) {
+  return _next() >>> 32 - bits;
+}
+function checkIsPositiveInt(n, r = Number.MAX_SAFE_INTEGER) {
+  if (n < 0 || n > r) {
+    throw RangeError("number must be > 0");
+  }
+}
+
+class JavaRandom {
+  constructor(seedval) {
+    if (typeof seedval === "undefined") {
+      seedval = Math.floor(Math.random() * p2_48);
+    }
+    this.setSeed(seedval);
+  }
+  setSeed(n) {
+    checkIsPositiveInt(n);
+    s0 = n & m2_16 ^ c0;
+    s1 = n / p2_16 & m2_16 ^ c1;
+    s2 = n / p2_32 & m2_16 ^ c2;
+  }
+  nextInt(bound) {
+    if (bound === undefined) {
+      return next_signed(32);
+    }
+    checkIsPositiveInt(bound, 2147483647);
+    if ((bound & -bound) === bound) {
+      const r = next(31) / p2_31;
+      return ~~(bound * r);
+    }
+    let bits, val;
+    do {
+      bits = next(31);
+      val = bits % bound;
+    } while (bits - val + (bound - 1) < 0);
+    return val;
+  }
+  nextLong() {
+    const msb = BigInt(next_signed(32));
+    const lsb = BigInt(next_signed(32));
+    const p2_32n = BigInt(p2_32);
+    return msb * p2_32n + lsb;
+  }
+  nextBoolean() {
+    return next(1) != 0;
+  }
+  nextFloat() {
+    return next(24) / p2_24;
+  }
+  nextDouble() {
+    return (p2_27 * next(26) + next(27)) / p2_53;
+  }
+}
+
+// src/dash3d/graphics/PixFont.ts
+class PixFont extends Linkable2 {
+  static CHARSET = `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!"£$%^&*()-_=+[{]};:'@#~,<.>/?\\| `;
+  static CHARCODESET = [];
+  charMask = [];
+  charMaskWidth = new Int32Array(94);
+  charMaskHeight = new Int32Array(94);
+  charOffsetX = new Int32Array(94);
+  charOffsetY = new Int32Array(94);
+  charAdvance = new Int32Array(95);
+  drawWidth = new Int32Array(256);
+  rand = new JavaRandom(Date.now());
+  strikeout = false;
+  height2d = 0;
+  static {
+    const isCapacitor = navigator.userAgent.includes("Capacitor");
+    for (let i = 0;i < 256; i++) {
+      let c = PixFont.CHARSET.indexOf(String.fromCharCode(i));
+      if (isCapacitor) {
+        if (c >= 63) {
+          c--;
+        }
+      }
+      if (c === -1) {
+        c = 74;
+      }
+      PixFont.CHARCODESET[i] = c;
+    }
+  }
+  static depack(archive, name) {
+    const dat = new Packet(archive.read(name + ".dat"));
+    const idx = new Packet(archive.read("index.dat"));
+    idx.pos = dat.g2() + 4;
+    const off = idx.g1();
+    if (off > 0) {
+      idx.pos += (off - 1) * 3;
+    }
+    const font = new PixFont;
+    for (let i = 0;i < 94; i++) {
+      font.charOffsetX[i] = idx.g1();
+      font.charOffsetY[i] = idx.g1();
+      const w = font.charMaskWidth[i] = idx.g2();
+      const h = font.charMaskHeight[i] = idx.g2();
+      const type = idx.g1();
+      const len = w * h;
+      font.charMask[i] = new Int8Array(len);
+      if (type === 0) {
+        for (let j = 0;j < w * h; j++) {
+          font.charMask[i][j] = dat.g1b();
+        }
+      } else if (type === 1) {
+        for (let x = 0;x < w; x++) {
+          for (let y = 0;y < h; y++) {
+            font.charMask[i][x + y * w] = dat.g1b();
+          }
+        }
+      }
+      if (h > font.height2d) {
+        font.height2d = h;
+      }
+      font.charOffsetX[i] = 1;
+      font.charAdvance[i] = w + 2;
+      {
+        let space = 0;
+        for (let y = h / 7 | 0;y < h; y++) {
+          space += font.charMask[i][y * w];
+        }
+        if (space <= (h / 7 | 0)) {
+          font.charAdvance[i]--;
+          font.charOffsetX[i] = 0;
+        }
+      }
+      {
+        let space = 0;
+        for (let y = h / 7 | 0;y < h; y++) {
+          space += font.charMask[i][w + y * w - 1];
+        }
+        if (space <= (h / 7 | 0)) {
+          font.charAdvance[i]--;
+        }
+      }
+    }
+    font.charAdvance[94] = font.charAdvance[8];
+    for (let i = 0;i < 256; i++) {
+      font.drawWidth[i] = font.charAdvance[PixFont.CHARCODESET[i]];
+    }
+    return font;
+  }
+  centreString(str, x, y, rgb) {
+    if (!str) {
+      return;
+    }
+    x |= 0;
+    y |= 0;
+    this.drawString(str, x - (this.stringWid(str) / 2 | 0), y, rgb);
+  }
+  centreStringTag(str, x, y, rgb, shadowed) {
+    x |= 0;
+    y |= 0;
+    this.drawStringTag(str, x - (this.stringWid(str) / 2 | 0), y, rgb, shadowed);
+  }
+  stringWid(str) {
+    if (!str) {
+      return 0;
+    }
+    const length = str.length;
+    let w = 0;
+    for (let i = 0;i < length; i++) {
+      if (str.charAt(i) === "@" && i + 4 < length && str.charAt(i + 4) === "@") {
+        i += 4;
+      } else {
+        w += this.drawWidth[str.charCodeAt(i)];
+      }
+    }
+    return w;
+  }
+  drawString(str, x, y, rgb) {
+    if (!str) {
+      return;
+    }
+    x |= 0;
+    y |= 0;
+    y -= this.height2d;
+    for (let i = 0;i < str.length; i++) {
+      const c = PixFont.CHARCODESET[str.charCodeAt(i)];
+      if (c !== 94) {
+        this.plotLetter(this.charMask[c], x + this.charOffsetX[c], y + this.charOffsetY[c], this.charMaskWidth[c], this.charMaskHeight[c], rgb);
+      }
+      x += this.charAdvance[c];
+    }
+  }
+  centerStringWave(str, x, y, rgb, phase) {
+    if (!str) {
+      return;
+    }
+    x |= 0;
+    y |= 0;
+    x -= this.stringWid(str) / 2 | 0;
+    const offY = y - this.height2d;
+    for (let i = 0;i < str.length; i++) {
+      const c = PixFont.CHARCODESET[str.charCodeAt(i)];
+      if (c != 94) {
+        this.plotLetter(this.charMask[c], x + this.charOffsetX[c], offY + this.charOffsetY[c] + (Math.sin(i / 2 + phase / 5) * 5 | 0), this.charMaskWidth[c], this.charMaskHeight[c], rgb);
+      }
+      x += this.charAdvance[c];
+    }
+  }
+  drawStringTag(str, x, y, rgb, shadowed) {
+    x |= 0;
+    y |= 0;
+    this.strikeout = false;
+    const startX = x;
+    const length = str.length;
+    y -= this.height2d;
+    for (let i = 0;i < length; i++) {
+      if (str.charAt(i) === "@" && i + 4 < length && str.charAt(i + 4) === "@") {
+        const tag = this.updateState(str.substring(i + 1, i + 4));
+        if (tag !== -1) {
+          rgb = tag;
+        }
+        i += 4;
+      } else {
+        const c = PixFont.CHARCODESET[str.charCodeAt(i)];
+        if (c !== 94) {
+          if (shadowed) {
+            this.plotLetter(this.charMask[c], x + this.charOffsetX[c] + 1, y + this.charOffsetY[c] + 1, this.charMaskWidth[c], this.charMaskHeight[c], 0 /* BLACK */);
+          }
+          this.plotLetter(this.charMask[c], x + this.charOffsetX[c], y + this.charOffsetY[c], this.charMaskWidth[c], this.charMaskHeight[c], rgb);
+        }
+        x += this.charAdvance[c];
+      }
+    }
+    if (this.strikeout) {
+      Pix2D.hline(startX, y + (this.height2d * 0.7 | 0), x - startX, 8388608 /* DARKRED */);
+    }
+  }
+  drawStringAntiMacro(str, x, y, rgb, shadowed, seed) {
+    x |= 0;
+    y |= 0;
+    this.rand.setSeed(seed);
+    const rand = (this.rand.nextInt() & 31) + 192;
+    const offY = y - this.height2d;
+    for (let i = 0;i < str.length; i++) {
+      if (str.charAt(i) === "@" && i + 4 < str.length && str.charAt(i + 4) === "@") {
+        const tag = this.updateState(str.substring(i + 1, i + 4));
+        if (tag !== -1) {
+          rgb = tag;
+        }
+        i += 4;
+      } else {
+        const c = PixFont.CHARCODESET[str.charCodeAt(i)];
+        if (c !== 94) {
+          if (shadowed) {
+            this.plotLetterTrans(this.charMask[c], x + this.charOffsetX[c] + 1, offY + this.charOffsetY[c] + 1, this.charMaskWidth[c], this.charMaskHeight[c], 0 /* BLACK */, 192);
+          }
+          this.plotLetterTrans(this.charMask[c], x + this.charOffsetX[c], offY + this.charOffsetY[c], this.charMaskWidth[c], this.charMaskHeight[c], rgb, rand);
+        }
+        x += this.charAdvance[c];
+        if ((this.rand.nextInt() & 3) === 0) {
+          x++;
+        }
+      }
+    }
+  }
+  updateState(tag) {
+    if (tag === "red") {
+      return 16711680 /* RED */;
+    } else if (tag === "gre") {
+      return 65280 /* GREEN */;
+    } else if (tag === "blu") {
+      return 255 /* BLUE */;
+    } else if (tag === "yel") {
+      return 16776960 /* YELLOW */;
+    } else if (tag === "cya") {
+      return 65535 /* CYAN */;
+    } else if (tag === "mag") {
+      return 16711935 /* MAGENTA */;
+    } else if (tag === "whi") {
+      return 16777215 /* WHITE */;
+    } else if (tag === "bla") {
+      return 0 /* BLACK */;
+    } else if (tag === "lre") {
+      return 16748608 /* LIGHTRED */;
+    } else if (tag === "dre") {
+      return 8388608 /* DARKRED */;
+    } else if (tag === "dbl") {
+      return 128 /* DARKBLUE */;
+    } else if (tag === "or1") {
+      return 16756736 /* ORANGE1 */;
+    } else if (tag === "or2") {
+      return 16740352 /* ORANGE2 */;
+    } else if (tag === "or3") {
+      return 16723968 /* ORANGE3 */;
+    } else if (tag === "gr1") {
+      return 12648192 /* GREEN1 */;
+    } else if (tag === "gr2") {
+      return 8453888 /* GREEN2 */;
+    } else if (tag === "gr3") {
+      return 4259584 /* GREEN3 */;
+    } else {
+      if (tag === "str") {
+        this.strikeout = true;
+      }
+      return -1;
+    }
+  }
+  drawStringRight(str, x, y, rgb, shadowed = true) {
+    x |= 0;
+    y |= 0;
+    if (shadowed) {
+      this.drawString(str, x - this.stringWid(str) + 1, y + 1, 0 /* BLACK */);
+    }
+    this.drawString(str, x - this.stringWid(str), y, rgb);
+  }
+  plotLetter(data, x, y, w, h, rgb) {
+    x |= 0;
+    y |= 0;
+    w |= 0;
+    h |= 0;
+    let dstOff = x + y * Pix2D.width;
+    let dstStep = Pix2D.width - w;
+    let srcStep = 0;
+    let srcOff = 0;
+    if (y < Pix2D.clipMinY) {
+      const cutoff = Pix2D.clipMinY - y;
+      h -= cutoff;
+      y = Pix2D.clipMinY;
+      srcOff += cutoff * w;
+      dstOff += cutoff * Pix2D.width;
+    }
+    if (y + h >= Pix2D.clipMaxY) {
+      h -= y + h + 1 - Pix2D.clipMaxY;
+    }
+    if (x < Pix2D.clipMinX) {
+      const cutoff = Pix2D.clipMinX - x;
+      w -= cutoff;
+      x = Pix2D.clipMinX;
+      srcOff += cutoff;
+      dstOff += cutoff;
+      srcStep += cutoff;
+      dstStep += cutoff;
+    }
+    if (x + w >= Pix2D.clipMaxX) {
+      const cutoff = x + w + 1 - Pix2D.clipMaxX;
+      w -= cutoff;
+      srcStep += cutoff;
+      dstStep += cutoff;
+    }
+    if (w > 0 && h > 0) {
+      this.plot(Pix2D.pixels, data, rgb, srcOff, dstOff, w, h, dstStep, srcStep);
+    }
+  }
+  plot(dst, src, rgb, srcOff, dstOff, w, h, dstStep, srcStep) {
+    w |= 0;
+    h |= 0;
+    const hw = -(w >> 2);
+    w = -(w & 3);
+    for (let y = -h;y < 0; y++) {
+      for (let x = hw;x < 0; x++) {
+        if (src[srcOff++] === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+        if (src[srcOff++] === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+        if (src[srcOff++] === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+        if (src[srcOff++] === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+      }
+      for (let x = w;x < 0; x++) {
+        if (src[srcOff++] === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+      }
+      dstOff += dstStep;
+      srcOff += srcStep;
+    }
+  }
+  plotLetterTrans(data, x, y, w, h, rgb, alpha) {
+    x |= 0;
+    y |= 0;
+    w |= 0;
+    h |= 0;
+    let dstOff = x + y * Pix2D.width;
+    let dstStep = Pix2D.width - w;
+    let srcStep = 0;
+    let srcOff = 0;
+    if (y < Pix2D.clipMinY) {
+      const cutoff = Pix2D.clipMinY - y;
+      h -= cutoff;
+      y = Pix2D.clipMinY;
+      srcOff += cutoff * w;
+      dstOff += cutoff * Pix2D.width;
+    }
+    if (y + h >= Pix2D.clipMaxY) {
+      h -= y + h + 1 - Pix2D.clipMaxY;
+    }
+    if (x < Pix2D.clipMinX) {
+      const cutoff = Pix2D.clipMinX - x;
+      w -= cutoff;
+      x = Pix2D.clipMinX;
+      srcOff += cutoff;
+      dstOff += cutoff;
+      srcStep += cutoff;
+      dstStep += cutoff;
+    }
+    if (x + w >= Pix2D.clipMaxX) {
+      const cutoff = x + w + 1 - Pix2D.clipMaxX;
+      w -= cutoff;
+      srcStep += cutoff;
+      dstStep += cutoff;
+    }
+    if (w > 0 && h > 0) {
+      this.plotTrans(Pix2D.pixels, data, rgb, srcOff, dstOff, w, h, dstStep, srcStep, alpha);
+    }
+  }
+  plotTrans(dst, src, rgb, srcOff, dstOff, w, h, dstStep, srcStep, alpha) {
+    w |= 0;
+    h |= 0;
+    const mixed = ((rgb & 16711935) * alpha & 4278255360) + ((rgb & 65280) * alpha & 16711680) >> 8;
+    const invAlpha = 256 - alpha;
+    for (let y = -h;y < 0; y++) {
+      for (let x = -w;x < 0; x++) {
+        if (src[srcOff++] === 0) {
+          dstOff++;
+        } else {
+          const dstRgb = dst[dstOff];
+          dst[dstOff++] = (((dstRgb & 16711935) * invAlpha & 4278255360) + ((dstRgb & 65280) * invAlpha & 16711680) >> 8) + mixed;
+        }
+      }
+      dstOff += dstStep;
+      srcOff += srcStep;
+    }
+  }
+}
+
+// src/io/BZip2.js
+var crc32Table = [
+  0,
+  79764919,
+  159529838,
+  222504665,
+  319059676,
+  398814059,
+  445009330,
+  507990021,
+  638119352,
+  583659535,
+  797628118,
+  726387553,
+  890018660,
+  835552979,
+  1015980042,
+  944750013,
+  1276238704,
+  1221641927,
+  1167319070,
+  1095957929,
+  1595256236,
+  1540665371,
+  1452775106,
+  1381403509,
+  1780037320,
+  1859660671,
+  1671105958,
+  1733955601,
+  2031960084,
+  2111593891,
+  1889500026,
+  1952343757,
+  2552477408,
+  2632100695,
+  2443283854,
+  2506133561,
+  2334638140,
+  2414271883,
+  2191915858,
+  2254759653,
+  3190512472,
+  3135915759,
+  3081330742,
+  3009969537,
+  2905550212,
+  2850959411,
+  2762807018,
+  2691435357,
+  3560074640,
+  3505614887,
+  3719321342,
+  3648080713,
+  3342211916,
+  3287746299,
+  3467911202,
+  3396681109,
+  4063920168,
+  4143685023,
+  4223187782,
+  4286162673,
+  3779000052,
+  3858754371,
+  3904687514,
+  3967668269,
+  881225847,
+  809987520,
+  1023691545,
+  969234094,
+  662832811,
+  591600412,
+  771767749,
+  717299826,
+  311336399,
+  374308984,
+  453813921,
+  533576470,
+  25881363,
+  88864420,
+  134795389,
+  214552010,
+  2023205639,
+  2086057648,
+  1897238633,
+  1976864222,
+  1804852699,
+  1867694188,
+  1645340341,
+  1724971778,
+  1587496639,
+  1516133128,
+  1461550545,
+  1406951526,
+  1302016099,
+  1230646740,
+  1142491917,
+  1087903418,
+  2896545431,
+  2825181984,
+  2770861561,
+  2716262478,
+  3215044683,
+  3143675388,
+  3055782693,
+  3001194130,
+  2326604591,
+  2389456536,
+  2200899649,
+  2280525302,
+  2578013683,
+  2640855108,
+  2418763421,
+  2498394922,
+  3769900519,
+  3832873040,
+  3912640137,
+  3992402750,
+  4088425275,
+  4151408268,
+  4197601365,
+  4277358050,
+  3334271071,
+  3263032808,
+  3476998961,
+  3422541446,
+  3585640067,
+  3514407732,
+  3694837229,
+  3640369242,
+  1762451694,
+  1842216281,
+  1619975040,
+  1682949687,
+  2047383090,
+  2127137669,
+  1938468188,
+  2001449195,
+  1325665622,
+  1271206113,
+  1183200824,
+  1111960463,
+  1543535498,
+  1489069629,
+  1434599652,
+  1363369299,
+  622672798,
+  568075817,
+  748617968,
+  677256519,
+  907627842,
+  853037301,
+  1067152940,
+  995781531,
+  51762726,
+  131386257,
+  177728840,
+  240578815,
+  269590778,
+  349224269,
+  429104020,
+  491947555,
+  4046411278,
+  4126034873,
+  4172115296,
+  4234965207,
+  3794477266,
+  3874110821,
+  3953728444,
+  4016571915,
+  3609705398,
+  3555108353,
+  3735388376,
+  3664026991,
+  3290680682,
+  3236090077,
+  3449943556,
+  3378572211,
+  3174993278,
+  3120533705,
+  3032266256,
+  2961025959,
+  2923101090,
+  2868635157,
+  2813903052,
+  2742672763,
+  2604032198,
+  2683796849,
+  2461293480,
+  2524268063,
+  2284983834,
+  2364738477,
+  2175806836,
+  2238787779,
+  1569362073,
+  1498123566,
+  1409854455,
+  1355396672,
+  1317987909,
+  1246755826,
+  1192025387,
+  1137557660,
+  2072149281,
+  2135122070,
+  1912620623,
+  1992383480,
+  1753615357,
+  1816598090,
+  1627664531,
+  1707420964,
+  295390185,
+  358241886,
+  404320391,
+  483945776,
+  43990325,
+  106832002,
+  186451547,
+  266083308,
+  932423249,
+  861060070,
+  1041341759,
+  986742920,
+  613929101,
+  542559546,
+  756411363,
+  701822548,
+  3316196985,
+  3244833742,
+  3425377559,
+  3370778784,
+  3601682597,
+  3530312978,
+  3744426955,
+  3689838204,
+  3819031489,
+  3881883254,
+  3928223919,
+  4007849240,
+  4037393693,
+  4100235434,
+  4180117107,
+  4259748804,
+  2310601993,
+  2373574846,
+  2151335527,
+  2231098320,
+  2596047829,
+  2659030626,
+  2470359227,
+  2550115596,
+  2947551409,
+  2876312838,
+  2788305887,
+  2733848168,
+  3165939309,
+  3094707162,
+  3040238851,
+  2985771188
+];
+var masks = [
+  0,
+  1,
+  3,
+  7,
+  15,
+  31,
+  63,
+  127,
+  255,
+  511,
+  1023,
+  2047,
+  4095,
+  8191,
+  16383,
+  32767,
+  65535,
+  131071,
+  262143,
+  524287,
+  1048575,
+  2097151,
+  4194303,
+  8388607,
+  16777215,
+  33554431,
+  67108863,
+  134217727,
+  268435455,
+  536870911,
+  1073741823,
+  -2147483648
+];
+function createOrderedHuffmanTable(lengths) {
+  const z = [];
+  for (let i = 0;i < lengths.length; i += 1) {
+    z.push([i, lengths[i]]);
+  }
+  z.push([lengths.length, -1]);
+  const table = [];
+  let start = z[0][0];
+  let bits = z[0][1];
+  for (let i = 0;i < z.length; i += 1) {
+    const finish = z[i][0];
+    const endbits = z[i][1];
+    if (bits) {
+      for (let code = start;code < finish; code += 1) {
+        table.push({ code, bits, symbol: undefined });
+      }
+    }
+    start = finish;
+    bits = endbits;
+    if (endbits === -1) {
+      break;
+    }
+  }
+  table.sort((a, b) => a.bits - b.bits || a.code - b.code);
+  let tempBits = 0;
+  let symbol = -1;
+  const fastAccess = [];
+  let current;
+  for (let i = 0;i < table.length; i += 1) {
+    const t = table[i];
+    symbol += 1;
+    if (t.bits !== tempBits) {
+      symbol <<= t.bits - tempBits;
+      tempBits = t.bits;
+      current = fastAccess[tempBits] = {};
+    }
+    t.symbol = symbol;
+    current[symbol] = t;
+  }
+  return {
+    table,
+    fastAccess
+  };
+}
+function bwtReverse(src, primary) {
+  if (primary < 0 || primary >= src.length) {
+    throw RangeError("Out of bound");
+  }
+  const unsorted = src.slice();
+  src.sort((a, b) => a - b);
+  const start = {};
+  for (let i2 = src.length - 1;i2 >= 0; i2 -= 1) {
+    start[src[i2]] = i2;
+  }
+  const links = [];
+  for (let i2 = 0;i2 < src.length; i2 += 1) {
+    links.push(start[unsorted[i2]]++);
+  }
+  let i;
+  const first = src[i = primary];
+  const ret = [];
+  for (let j = 1;j < src.length; j += 1) {
+    const x = src[i = links[i]];
+    if (x === undefined) {
+      ret.push(255);
+    } else {
+      ret.push(x);
+    }
+  }
+  ret.push(first);
+  ret.reverse();
+  return ret;
+}
+function bunzip2(bytes, checkMagic = false, checkCRC = false) {
+  let index = 0;
+  let bitfield = 0;
+  let bits = 0;
+  const read = (n) => {
+    if (n >= 32) {
+      const nd = n >> 1;
+      return read(nd) * (1 << nd) + read(n - nd);
+    }
+    while (bits < n) {
+      bitfield = (bitfield << 8) + bytes[index];
+      index += 1;
+      bits += 8;
+    }
+    const m = masks[n];
+    const r = bitfield >> bits - n & m;
+    bits -= n;
+    bitfield &= ~(m << bits);
+    return r;
+  };
+  let blocksize = 1;
+  if (checkMagic) {
+    const magic = read(16);
+    if (magic !== 16986) {
+      throw new Error("Invalid magic");
+    }
+    const method = read(8);
+    if (method !== 104) {
+      throw new Error("Invalid method");
+    }
+    blocksize = read(8);
+    if (blocksize >= 49 && blocksize <= 57) {
+      blocksize -= 48;
+    } else {
+      throw new Error("Invalid blocksize");
+    }
+  }
+  let out = new Uint8Array(bytes.length * 1.5);
+  let outIndex = 0;
+  let newCRC = -1;
+  while (true) {
+    const blocktype = read(48);
+    const crc = read(32) | 0;
+    if (blocktype === 54156738319193) {
+      if (read(1)) {
+        throw new Error("do not support randomised");
+      }
+      const pointer = read(24);
+      const used = [];
+      const usedGroups = read(16);
+      for (let i2 = 1 << 15;i2 > 0; i2 >>= 1) {
+        if (!(usedGroups & i2)) {
+          for (let j = 0;j < 16; j += 1) {
+            used.push(false);
+          }
+          continue;
+        }
+        const usedChars = read(16);
+        for (let j = 1 << 15;j > 0; j >>= 1) {
+          used.push(!!(usedChars & j));
+        }
+      }
+      const groups = read(3);
+      if (groups < 2 || groups > 6) {
+        throw new Error("Invalid number of huffman groups");
+      }
+      const selectorsUsed = read(15);
+      const selectors = [];
+      const mtf = Array.from({ length: groups }, (_, i2) => i2);
+      for (let i2 = 0;i2 < selectorsUsed; i2 += 1) {
+        let c = 0;
+        while (read(1)) {
+          c += 1;
+          if (c >= groups) {
+            throw new Error("MTF table out of range");
+          }
+        }
+        const v = mtf[c];
+        for (let j = c;j > 0; mtf[j] = mtf[--j]) {}
+        selectors.push(v);
+        mtf[0] = v;
+      }
+      const symbolsInUse = used.reduce((a, b) => a + b, 0) + 2;
+      const tables = [];
+      for (let i2 = 0;i2 < groups; i2 += 1) {
+        let length = read(5);
+        const lengths = [];
+        for (let j = 0;j < symbolsInUse; j += 1) {
+          if (length < 0 || length > 20) {
+            throw new Error("Huffman group length outside range");
+          }
+          while (read(1)) {
+            length -= read(1) * 2 - 1;
+          }
+          lengths.push(length);
+        }
+        tables.push(createOrderedHuffmanTable(lengths));
+      }
+      const favourites = [];
+      for (let i2 = 0;i2 < used.length - 1; i2 += 1) {
+        if (used[i2]) {
+          favourites.push(i2);
+        }
+      }
+      let decoded = 0;
+      let selectorPointer = 0;
+      let t;
+      let r;
+      let repeat = 0;
+      let repeatPower = 0;
+      const buffer = [];
+      while (true) {
+        decoded -= 1;
+        if (decoded <= 0) {
+          decoded = 50;
+          if (selectorPointer <= selectors.length) {
+            t = tables[selectors[selectorPointer]];
+            selectorPointer += 1;
+          }
+        }
+        for (const b in t.fastAccess) {
+          if (!Object.prototype.hasOwnProperty.call(t.fastAccess, b)) {
+            continue;
+          }
+          if (bits < b) {
+            bitfield = (bitfield << 8) + bytes[index];
+            index += 1;
+            bits += 8;
+          }
+          r = t.fastAccess[b][bitfield >> bits - b];
+          if (r) {
+            bitfield &= masks[bits -= b];
+            r = r.code;
+            break;
+          }
+        }
+        if (r >= 0 && r <= 1) {
+          if (repeat === 0) {
+            repeatPower = 1;
+          }
+          repeat += repeatPower << r;
+          repeatPower <<= 1;
+          continue;
+        } else {
+          const v = favourites[0];
+          for (;repeat > 0; repeat -= 1) {
+            buffer.push(v);
+          }
+        }
+        if (r === symbolsInUse - 1) {
+          break;
+        } else {
+          const v = favourites[r - 1];
+          for (let j = r - 1;j > 0; favourites[j] = favourites[--j]) {}
+          favourites[0] = v;
+          buffer.push(v);
+        }
+      }
+      const nt = bwtReverse(buffer, pointer);
+      let i = 0;
+      while (i < nt.length) {
+        const c = nt[i];
+        let count = 1;
+        if (i < nt.length - 4 && nt[i + 1] === c && nt[i + 2] === c && nt[i + 3] === c) {
+          count = nt[i + 4] + 4;
+          i += 5;
+        } else {
+          i += 1;
+        }
+        if (outIndex + count >= out.length) {
+          const old = out;
+          out = new Uint8Array(old.length * 2);
+          out.set(old);
+        }
+        for (let j = 0;j < count; j += 1) {
+          if (checkCRC) {
+            newCRC = newCRC << 8 ^ crc32Table[(newCRC >> 24 ^ c) & 255];
+          }
+          out[outIndex] = c;
+          outIndex += 1;
+        }
+      }
+      if (checkCRC) {
+        const calculatedCRC = newCRC ^ -1;
+        if (calculatedCRC !== crc) {
+          throw new Error(`CRC mismatch: ${calculatedCRC} !== ${crc}`);
+        }
+        newCRC = -1;
+      }
+    } else if (blocktype === 25779555029136) {
+      read(bits & 7);
+      break;
+    } else {
+      throw new Error("Invalid bz2 blocktype");
+    }
+  }
+  return out.subarray(0, outIndex);
+}
+
+// src/io/Jagfile.ts
+class Jagfile {
+  static genHash(name) {
+    let hash = 0;
+    name = name.toUpperCase();
+    for (let i = 0;i < name.length; i++) {
+      hash = hash * 61 + name.charCodeAt(i) - 32 | 0;
+    }
+    return hash;
+  }
+  data;
+  unpacked;
+  fileCount;
+  fileHash;
+  fileUnpackedSize;
+  filePackedSize;
+  fileOffset;
+  fileUnpacked = [];
+  constructor(src) {
+    let data = new Packet(new Uint8Array(src));
+    const unpackedSize = data.g3();
+    const packedSize = data.g3();
+    if (unpackedSize === packedSize) {
+      this.data = src;
+      this.unpacked = false;
+    } else {
+      this.data = bunzip2(src.subarray(6));
+      data = new Packet(new Uint8Array(this.data));
+      this.unpacked = true;
+    }
+    this.fileCount = data.g2();
+    this.fileHash = [];
+    this.fileUnpackedSize = [];
+    this.filePackedSize = [];
+    this.fileOffset = [];
+    let offset = data.pos + this.fileCount * 10;
+    for (let i = 0;i < this.fileCount; i++) {
+      this.fileHash.push(data.g4());
+      this.fileUnpackedSize.push(data.g3());
+      this.filePackedSize.push(data.g3());
+      this.fileOffset.push(offset);
+      offset += this.filePackedSize[i];
+    }
+  }
+  read(name) {
+    const hash = Jagfile.genHash(name);
+    const index = this.fileHash.indexOf(hash);
+    if (index === -1) {
+      return null;
+    }
+    return this.readIndex(index);
+  }
+  readIndex(index) {
+    if (index < 0 || index >= this.fileCount) {
+      return null;
+    }
+    if (this.fileUnpacked[index]) {
+      return this.fileUnpacked[index];
+    }
+    const offset = this.fileOffset[index];
+    const length = this.filePackedSize[index];
+    const src = new Uint8Array(this.data.subarray(offset, offset + length));
+    if (this.unpacked) {
+      this.fileUnpacked[index] = src;
+      return src;
+    } else {
+      const data = bunzip2(src);
+      this.fileUnpacked[index] = data;
+      return data;
+    }
+  }
+}
+
+// src/mapview/WorldMapFont.ts
+class WorldMapFont extends Pix2D {
+  static CHARSET = `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!"£$%^&*()-_=+[{]};:'@#~,<.>/?\\| `;
+  static fontChar = new TypedArray1d(256, 0);
+  static fonts = "Arial, Helvetica, sans-serif";
+  static {
+    for (let i = 0;i < 256; i++) {
+      let c = WorldMapFont.CHARSET.indexOf(String.fromCharCode(i));
+      if (c === -1) {
+        c = 74;
+      }
+      WorldMapFont.fontChar[i] = c * 9;
+    }
+  }
+  fontCharTrans = false;
+  fontCharPos = 0;
+  fontCharInfo = new Uint8Array(1e5);
+  canvas;
+  ctx;
+  static load(jag, name) {
+    const font = new WorldMapFont;
+    const fm = jag.read(`${name}.dat`);
+    if (!fm) {
+      throw new Error;
+    }
+    font.fontCharTrans = false;
+    font.fontCharInfo = fm;
+    font.fontCharPos = fm.length;
+    return font;
+  }
+  static fromSystem(size, bold) {
+    const font = new WorldMapFont;
+    font.fontCharPos = 855;
+    font.fontCharTrans = false;
+    font.canvas = document.createElement("canvas");
+    font.canvas.width = size + 50;
+    font.canvas.height = size + 50;
+    font.ctx = font.canvas.getContext("2d", { willReadFrequently: true });
+    const style = bold ? "bold" : "";
+    font.ctx.font = `${style} ${size}px ${WorldMapFont.fonts}`;
+    for (let i = 0;i < 95; i++) {
+      font.loadGlyph(WorldMapFont.CHARSET[i], i, false);
+    }
+    if (bold && font.fontCharTrans) {
+      font.ctx.font = `${size}px ${WorldMapFont.fonts}`;
+      for (let i = 0;i < 95; i++) {
+        font.loadGlyph(WorldMapFont.CHARSET[i], i, false);
+      }
+      if (!font.fontCharTrans) {
+        font.fontCharPos = 855;
+        font.fontCharTrans = false;
+        for (let i = 0;i < 95; i++) {
+          font.loadGlyph(WorldMapFont.CHARSET[i], i, true);
+        }
+      }
+    }
+    font.fontCharInfo = font.fontCharInfo.slice(0, font.fontCharPos);
+    return font;
+  }
+  loadGlyph(c, id, offset) {
+    const metrics = this.ctx.measureText(c);
+    let width = Math.ceil(metrics.width);
+    const initialWidth = width;
+    if (offset) {
+      if (c === "/") {
+        offset = false;
+      }
+      if (c === "f" || c === "t" || c === "w" || c === "v" || c === "k" || c === "x" || c === "y" || c === "A" || c === "V" || c === "W") {
+        width++;
+      }
+    }
+    const maxAscent = Math.ceil(metrics.actualBoundingBoxAscent);
+    const maxDescent = Math.ceil(metrics.actualBoundingBoxDescent);
+    const totalDescent = maxAscent + maxDescent;
+    const height = metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent;
+    this.ctx.fillStyle = "black";
+    this.ctx.fillRect(0, 0, width, height);
+    this.ctx.fillStyle = "white";
+    this.ctx.fillText(c, 0, maxAscent);
+    if (offset) {
+      this.ctx.fillText(c, 1, maxAscent);
+    }
+    const imageData = this.ctx.getImageData(0, 0, width, height);
+    const pixels = imageData.data;
+    let top = totalDescent;
+    let left = width;
+    let bottom = 0;
+    let right = 0;
+    for (let y = 0;y < totalDescent; y++) {
+      for (let x = 0;x < width; x++) {
+        const alpha = pixels[(x + y * width) * 4];
+        if (alpha !== 0) {
+          top = Math.min(top, y);
+          bottom = Math.max(bottom, y + 1);
+          left = Math.min(left, x);
+          right = Math.max(right, x + 1);
+        }
+      }
+    }
+    this.fontCharInfo[id * 9 + 0] = this.fontCharPos >> 14;
+    this.fontCharInfo[id * 9 + 1] = this.fontCharPos >> 7 & 127;
+    this.fontCharInfo[id * 9 + 2] = this.fontCharPos & 127;
+    this.fontCharInfo[id * 9 + 3] = right - left;
+    this.fontCharInfo[id * 9 + 4] = bottom - top;
+    this.fontCharInfo[id * 9 + 5] = left;
+    this.fontCharInfo[id * 9 + 6] = maxAscent - top;
+    this.fontCharInfo[id * 9 + 7] = initialWidth;
+    this.fontCharInfo[id * 9 + 8] = height;
+    for (let y = top;y < bottom; y++) {
+      for (let x = left;x < right; x++) {
+        const alpha = pixels[(x + y * width) * 4] & 255;
+        if (alpha > 30 && alpha < 230) {
+          this.fontCharTrans = true;
+        }
+        this.fontCharInfo[this.fontCharPos++] = alpha;
+      }
+    }
+  }
+  centreString(str, x, y, rgb, shadowed) {
+    this.drawString(str, x - (this.stringWid(str) / 2 | 0), y, rgb, shadowed);
+  }
+  stringWid(str) {
+    const length = str.length;
+    let w = 0;
+    for (let i = 0;i < length; i++) {
+      if (str.charAt(i) === "@" && i + 4 < length && str.charAt(i + 4) === "@") {
+        i += 4;
+      } else if (str.charAt(i) === "~" && i + 4 < length && str.charAt(i + 4) === "~") {
+        i += 4;
+      } else {
+        const c = WorldMapFont.fontChar[str.charCodeAt(i)];
+        w += this.fontCharInfo[c + 7];
+      }
+    }
+    return w;
+  }
+  drawString(str, x, y, rgb, shadowed) {
+    if (this.fontCharTrans || rgb === 0) {
+      shadowed = false;
+    }
+    for (let i = 0;i < str.length; i++) {
+      const c = WorldMapFont.fontChar[str.charCodeAt(i)];
+      if (shadowed) {
+        this.drawChar(c, x + 1, y, 0);
+        this.drawChar(c, x, y + 1, 0);
+      }
+      this.drawChar(c, x, y, rgb);
+      x += this.fontCharInfo[c + 7];
+    }
+  }
+  drawChar(c, x, y, rgb) {
+    const info = this.fontCharInfo;
+    let dx = x + info[c + 5];
+    let dy = y - info[c + 6];
+    let w = info[c + 3];
+    let h = info[c + 4];
+    let srcOff = info[c] << 14 | info[c + 1] << 7 | info[c + 2];
+    let srcStep = 0;
+    let dstOff = dx + dy * Pix2D.width;
+    let dstStep = Pix2D.width - w;
+    if (y < Pix2D.clipMinY) {
+      const cutoff = Pix2D.clipMinY - y;
+      h -= cutoff;
+      y = Pix2D.clipMinY;
+      srcOff += cutoff * w;
+      dstOff += cutoff * Pix2D.width;
+    }
+    if (y + h > Pix2D.clipMaxY) {
+      h -= y + h - Pix2D.clipMaxY;
+    }
+    if (x < Pix2D.clipMinX) {
+      const cutoff = Pix2D.clipMinX - x;
+      w -= cutoff;
+      x = Pix2D.clipMinX;
+      srcOff += cutoff;
+      dstOff += cutoff;
+      srcStep += cutoff;
+      dstStep += cutoff;
+    }
+    if (x + w > Pix2D.clipMaxX) {
+      const cutoff = x + w - Pix2D.clipMaxX;
+      w -= cutoff;
+      srcStep += cutoff;
+      dstStep += cutoff;
+    }
+    if (w > 0 && h > 0) {
+      if (this.fontCharTrans) {
+        this.plotLetterTrans(w, h, info, rgb, srcOff, srcStep, Pix2D.pixels, dstOff, dstStep);
+      } else {
+        this.plotLetter(w, h, info, rgb, srcOff, srcStep, Pix2D.pixels, dstOff, dstStep);
+      }
+    }
+  }
+  plotLetter(w, h, mask, rgb, srcOff, srcStep, dst, dstOff, dstStep) {
+    const qw = -(w >> 2);
+    w = -(w & 3);
+    for (let y = -h;y < 0; y++) {
+      for (let x = qw;x < 0; x++) {
+        if (mask[srcOff++] === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+        if (mask[srcOff++] === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+        if (mask[srcOff++] === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+        if (mask[srcOff++] === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+      }
+      for (let x = w;x < 0; x++) {
+        if (mask[srcOff++] === 0) {
+          dstOff++;
+        } else {
+          dst[dstOff++] = rgb;
+        }
+      }
+      dstOff += dstStep;
+      srcOff += srcStep;
+    }
+  }
+  plotLetterTrans(w, h, mask, rgb, srcOff, srcStep, dst, dstOff, dstStep) {
+    for (let y = -h;y < 0; y++) {
+      for (let x = -w;x < 0; x++) {
+        const trans = mask[srcOff++] & 255;
+        if (trans === 0) {
+          dstOff++;
+        } else if (trans >= 230) {
+          dst[dstOff++] = rgb;
+        } else {
+          const dstRgb = dst[dstOff];
+          dst[dstOff++] = ((rgb & 16711935) * trans + (dstRgb & 16711935) * (256 - trans) & 4278255360) + ((rgb & 65280) * trans + (dstRgb & 65280) * (256 - trans) & 16711680) >> 8;
+        }
+      }
+      dstOff += dstStep;
+      srcOff += srcStep;
+    }
+  }
+  getHeight() {
+    return this.fontCharInfo[8] - 1;
+  }
+  getYOffset() {
+    return this.fontCharInfo[6];
+  }
+}
+
+// src/mapview/MapView.ts
+class MapView extends GameShell {
+  static shouldDrawBorders = false;
+  static shouldDrawLabels = true;
+  static shouldDrawNpcs = false;
+  static shouldDrawItems = false;
+  static shouldDrawMultimap = false;
+  static shouldDrawFreemap = false;
+  mapStartX = 50 << 6;
+  mapStartZ = 50 << 6;
+  mapWidth = 20 << 6;
+  mapHeight = 19 << 6;
+  mapOriginX = 36 << 6;
+  mapOriginZ = 44 << 6;
+  focusX = this.mapStartX - this.mapOriginX;
+  focusZ = this.mapOriginZ + this.mapHeight - this.mapStartZ;
+  mapArea = 0;
+  hasPlayerPos = false;
+  maxLabelCount = 1000;
+  mapLabelCount = 0;
+  mapLabel = [];
+  mapLabelX = [];
+  mapLabelY = [];
+  mapLabelSize = [];
+  floorcol1 = [0];
+  floorcol2 = [0];
+  floort1 = [];
+  floort2 = [];
+  floorsr = [];
+  locWall = [];
+  locMapscene = [];
+  locMapfunction = [];
+  objPos = [];
+  npcPos = [];
+  multiPos = [];
+  freePos = [];
+  mapscene = [];
+  mapfunction = [];
+  mapdot0 = null;
+  mapdot1 = null;
+  b12 = null;
+  f11 = null;
+  f12 = null;
+  f14 = null;
+  f17 = null;
+  f19 = null;
+  f22 = null;
+  f26 = null;
+  f30 = null;
+  blendedGroundColour = [];
+  redraw = true;
+  redrawTimer = 0;
+  dragFocusX = -1;
+  dragFocusZ = -1;
+  keyX = 5;
+  keyY = 13;
+  keyWidth = 140;
+  keyHeight = 470;
+  showKey = false;
+  keyPage = 0;
+  lastKeyPage = 0;
+  currentKeyHover = -1;
+  lastKeyHover = 0;
+  currentKey = 0;
+  flashTimer = 0;
+  visibleMapFunctionsX = new Int32Array(2000);
+  visibleMapFunctionsY = new Int32Array(2000);
+  visibleMapFunctions = new Int32Array(2000);
+  activeMapFunctionX = new Int32Array(2000);
+  activeMapFunctionZ = new Int32Array(2000);
+  activeMapFunctions = new Int32Array(2000);
+  activeMapFunctionCount = 0;
+  overview = null;
+  overviewHeight = 200;
+  overviewWidth = this.overviewHeight * this.mapWidth / this.mapHeight | 0;
+  overviewX = 635 - this.overviewWidth - 5;
+  overviewY = 503 - this.overviewHeight - 20;
+  showOverview = false;
+  INACTIVE_BORDER_TL = 8943445;
+  INACTIVE = 7824964;
+  INACTIVE_BORDER_BR = 6706483;
+  ACTIVE_BORDER_TL = 11141120;
+  ACTIVE = 10027008;
+  ACTIVE_BORDER_BR = 8912896;
+  zoom = 4;
+  targetZoom = 4;
+  keyNames = [
+    "General Store",
+    "Sword Shop",
+    "Magic Shop",
+    "Axe Shop",
+    "Helmet Shop",
+    "Bank",
+    "Quest Start",
+    "Amulet Shop",
+    "Mining Site",
+    "Furnace",
+    "Anvil",
+    "Combat Training",
+    "Dungeon",
+    "Staff Shop",
+    "Platebody Shop",
+    "Platelegs Shop",
+    "Scimitar Shop",
+    "Archery Shop",
+    "Shield Shop",
+    "Altar",
+    "Herbalist",
+    "Jewelery",
+    "Gem Shop",
+    "Crafting Shop",
+    "Candle Shop",
+    "Fishing Shop",
+    "Fishing Spot",
+    "Clothes Shop",
+    "Apothecary",
+    "Silk Trader",
+    "Kebab Seller",
+    "Pub/Bar",
+    "Mace Shop",
+    "Tannery",
+    "Rare Trees",
+    "Spinning Wheel",
+    "Food Shop",
+    "Cookery Shop",
+    "???",
+    "Water Source",
+    "Cooking Range",
+    "Skirt Shop",
+    "Potters Wheel",
+    "Windmill",
+    "Mining Shop",
+    "Chainmail Shop",
+    "Silver Shop",
+    "Fur Trader",
+    "Spice Shop"
+  ];
+  constructor() {
+    super(true);
+    this.run();
+  }
+  async maininit() {
+    this.keyHeight = this.sHei - this.keyY - 20;
+    this.overviewX = this.sWid - this.overviewWidth - 5;
+    this.overviewY = this.sHei - this.overviewHeight - 20;
+    this.redrawScreen = true;
+    canvas.style.cursor = "grab";
+    const worldmap = await this.loadWorldmap();
+    await this.messageBox("Please wait... Rendering Map", 100);
+    const labels = new Packet(worldmap.read("labels.dat"));
+    this.mapLabelCount = labels.g2();
+    for (let i = 0;i < this.mapLabelCount; i++) {
+      this.mapLabel[i] = labels.gjstr();
+      this.mapLabelX[i] = labels.g2();
+      this.mapLabelY[i] = labels.g2();
+      this.mapLabelSize[i] = labels.g1();
+    }
+    const floorcol = new Packet(worldmap.read("floorcol.dat"));
+    const floorcolCount = floorcol.g2();
+    for (let i = 0;i < floorcolCount; i++) {
+      this.floorcol1[i + 1] = floorcol.g4();
+      this.floorcol2[i + 1] = floorcol.g4();
+    }
+    const underlay = new Packet(worldmap.read("underlay.dat"));
+    this.floort1 = new TypedArray2d(this.mapWidth, this.mapHeight, 0);
+    this.loadUnderlay(underlay);
+    const overlay = new Packet(worldmap.read("overlay.dat"));
+    this.floort2 = new TypedArray2d(this.mapWidth, this.mapHeight, 0);
+    this.floorsr = new TypedArray2d(this.mapWidth, this.mapHeight, 0);
+    this.loadOverlay(overlay);
+    const loc = new Packet(worldmap.read("loc.dat"));
+    this.locWall = new TypedArray2d(this.mapWidth, this.mapHeight, 0);
+    this.locMapscene = new TypedArray2d(this.mapWidth, this.mapHeight, 0);
+    this.locMapfunction = new TypedArray2d(this.mapWidth, this.mapHeight, 0);
+    this.loadLoc(loc);
+    try {
+      const obj = new Packet(worldmap.read("obj.dat"));
+      this.objPos = new TypedArray2d(this.mapWidth, this.mapHeight, false);
+      this.loadObj(obj);
+      const npc = new Packet(worldmap.read("npc.dat"));
+      this.npcPos = new TypedArray2d(this.mapWidth, this.mapHeight, false);
+      this.loadNpc(npc);
+      const multi = new Packet(worldmap.read("multi.dat"));
+      this.multiPos = new TypedArray2d(this.mapWidth, this.mapHeight, false);
+      this.loadMulti(multi);
+      const free = new Packet(worldmap.read("free.dat"));
+      this.freePos = new TypedArray2d(this.mapWidth, this.mapHeight, false);
+      this.loadFree(free);
+    } catch (_e) {}
+    try {
+      for (let i = 0;i < 100; i++) {
+        this.mapscene[i] = Pix8.depack(worldmap, "mapscene", i);
+      }
+    } catch (_e) {}
+    try {
+      for (let i = 0;i < 100; i++) {
+        this.mapfunction[i] = Pix32.depack(worldmap, "mapfunction", i);
+      }
+    } catch (_e) {}
+    try {
+      this.mapdot0 = Pix32.depack(worldmap, "mapdots", 0);
+      this.mapdot1 = Pix32.depack(worldmap, "mapdots", 1);
+    } catch (_e) {}
+    this.b12 = PixFont.depack(worldmap, "b12");
+    try {
+      this.f11 = WorldMapFont.load(worldmap, "f11");
+      this.f12 = WorldMapFont.load(worldmap, "f12");
+      this.f14 = WorldMapFont.load(worldmap, "f14");
+      this.f17 = WorldMapFont.load(worldmap, "f17");
+      this.f19 = WorldMapFont.load(worldmap, "f19");
+      this.f22 = WorldMapFont.load(worldmap, "f22");
+      this.f26 = WorldMapFont.load(worldmap, "f26");
+      this.f30 = WorldMapFont.load(worldmap, "f30");
+    } catch (err) {
+      console.error(err);
+      this.f11 = WorldMapFont.fromSystem(11, true);
+      this.f12 = WorldMapFont.fromSystem(12, true);
+      this.f14 = WorldMapFont.fromSystem(14, true);
+      this.f17 = WorldMapFont.fromSystem(17, true);
+      this.f19 = WorldMapFont.fromSystem(19, true);
+      this.f22 = WorldMapFont.fromSystem(22, true);
+      this.f26 = WorldMapFont.fromSystem(26, true);
+      this.f30 = WorldMapFont.fromSystem(30, true);
+    }
+    this.blendedGroundColour = new TypedArray2d(this.mapWidth, this.mapHeight, 0);
+    this.getBlendedGroundColour();
+    this.overview = new Pix32(this.overviewWidth, this.overviewHeight);
+    this.overview.setPixels();
+    this.renderWorldMap(0, 0, this.mapWidth, this.mapHeight, 0, 0, this.overviewWidth, this.overviewHeight);
+    Pix2D.drawRect(0, 0, this.overviewWidth, this.overviewHeight, 0);
+    Pix2D.drawRect(1, 1, this.overviewWidth - 2, this.overviewHeight - 2, this.INACTIVE_BORDER_TL);
+    this.drawArea?.setPixels();
+    const _params = new URLSearchParams(window.location.search);
+    if (_params.has("nolabels"))
+      MapView.shouldDrawLabels = false;
+    if (_params.has("noborders"))
+      MapView.shouldDrawBorders = false;
+    if (_params.has("autoexport")) {
+      const _w = this.mapWidth * 2;
+      const _h = this.mapHeight * 2;
+      const _buf = new Pix32(_w, _h);
+      _buf.setPixels();
+      this.renderWorldMap(0, 0, this.mapWidth, this.mapHeight, 0, 0, _w, _h);
+      const _c = document.createElement("canvas");
+      _c.width = _w;
+      _c.height = _h;
+      const _ctx = _c.getContext("2d");
+      const _pm = new PixMap(_w, _h, _ctx);
+      _pm.setPixels();
+      _buf.quickPlotSprite(0, 0);
+      _pm.draw(0, 0);
+      this.drawArea?.setPixels();
+      const _url = _c.toDataURL("image/png").replace(/^data:image\/[^;]/, "data:application/octet-stream");
+      saveDataURL(_url, "map-254-clean.png");
+    }
+    window.addEventListener("resize", () => {
+      this.resize(window.innerWidth, window.innerHeight);
+      this.redraw = true;
+    });
+    window.addEventListener("message", (e) => {
+      if (!e.data || e.data.type !== "playerPos")
+        return;
+      this.focusX = (e.data.tileX | 0) - this.mapOriginX;
+      this.focusZ = this.mapOriginZ + this.mapHeight - (e.data.tileZ | 0);
+      this.hasPlayerPos = true;
+      this.redraw = true;
+    });
+    window.parent.postMessage({ type: "mapviewReady" }, "*");
+  }
+  async maindraw() {
+    if (this.redraw) {
+      this.redraw = false;
+      this.redrawTimer = 0;
+      Pix2D.cls();
+      const left = this.focusX - (this.sWid / this.zoom | 0);
+      const top = this.focusZ - (this.sHei / this.zoom | 0);
+      const right = this.focusX + (this.sWid / this.zoom | 0);
+      const bottom = this.focusZ + (this.sHei / this.zoom | 0);
+      this.renderWorldMap(left, top, right, bottom, 0, 0, this.sWid, this.sHei);
+      if (this.showOverview) {
+        this.overview?.quickPlotSprite(this.overviewX, this.overviewY);
+        Pix2D.fillRectTrans(this.overviewX + this.overviewWidth * left / this.mapWidth | 0, this.overviewY + this.overviewHeight * top / this.mapHeight | 0, (right - left) * this.overviewWidth / this.mapWidth | 0, (bottom - top) * this.overviewHeight / this.mapHeight | 0, 16711680, 128);
+        Pix2D.drawRect(this.overviewX + this.overviewWidth * left / this.mapWidth | 0, this.overviewY + this.overviewHeight * top / this.mapHeight | 0, (right - left) * this.overviewWidth / this.mapWidth | 0, (bottom - top) * this.overviewHeight / this.mapHeight | 0, 16711680);
+        if (this.flashTimer > 0 && this.flashTimer % 10 < 5) {
+          for (let i = 0;i < this.activeMapFunctionCount; i++) {
+            if (this.activeMapFunctions[i] == this.currentKey) {
+              const x = this.overviewX + this.overviewWidth * this.activeMapFunctionX[i] / this.mapWidth | 0;
+              const y2 = this.overviewY + this.overviewHeight * this.activeMapFunctionZ[i] / this.mapHeight | 0;
+              Pix2D.fillCircle(x, y2, 2, 16776960, 256);
+            }
+          }
+        }
+      }
+      if (this.showKey) {
+        this.drawStringBox(this.keyX, this.keyY, this.keyWidth, 18, 10066329, 7829367, 5592405, "Prev page");
+        this.drawStringBox(this.keyX, this.keyY + 18, this.keyWidth, this.keyHeight - 36, 10066329, 7829367, 5592405, "");
+        this.drawStringBox(this.keyX, this.keyY + this.keyHeight - 18, this.keyWidth, 18, 10066329, 7829367, 5592405, "Next page");
+        const maxKeys = (this.keyHeight - 20) / 18;
+        let y2 = this.keyY + 18 + 3;
+        for (let row = 0;row < maxKeys; row++) {
+          if (row + this.lastKeyPage < this.mapfunction.length && row + this.lastKeyPage < this.keyNames.length) {
+            if (this.keyNames[row + this.lastKeyPage] === "???") {
+              continue;
+            }
+            this.mapfunction[row + this.lastKeyPage].plotSprite(this.keyX + 3, y2);
+            this.b12?.drawString(this.keyNames[row + this.lastKeyPage], this.keyX + 21, y2 + 14, 0);
+            let rgb = 16777215;
+            if (this.currentKeyHover == row + this.lastKeyPage) {
+              rgb = 12298922;
+            }
+            if (this.flashTimer > 0 && this.flashTimer % 10 < 5 && this.currentKey == row + this.lastKeyPage) {
+              rgb = 16776960;
+            }
+            this.b12?.drawString(this.keyNames[row + this.lastKeyPage], this.keyX + 20, y2 + 13, rgb);
+          }
+          y2 += 17;
+        }
+      }
+      this.drawStringBox(this.overviewX, this.overviewY + this.overviewHeight, this.overviewWidth, 18, this.INACTIVE_BORDER_TL, this.INACTIVE, this.INACTIVE_BORDER_BR, "Overview");
+      this.drawStringBox(this.keyX, this.keyY + this.keyHeight, this.keyWidth, 18, this.INACTIVE_BORDER_TL, this.INACTIVE, this.INACTIVE_BORDER_BR, "Key");
+      const y = this.sHei - this.keyY - 20 + 1;
+      if (this.targetZoom == 3) {
+        this.drawStringBox(170, y, 50, 30, this.ACTIVE_BORDER_TL, this.ACTIVE, this.ACTIVE_BORDER_BR, "37%");
+      } else {
+        this.drawStringBox(170, y, 50, 30, this.INACTIVE_BORDER_TL, this.INACTIVE, this.INACTIVE_BORDER_BR, "37%");
+      }
+      if (this.targetZoom == 4) {
+        this.drawStringBox(230, y, 50, 30, this.ACTIVE_BORDER_TL, this.ACTIVE, this.ACTIVE_BORDER_BR, "50%");
+      } else {
+        this.drawStringBox(230, y, 50, 30, this.INACTIVE_BORDER_TL, this.INACTIVE, this.INACTIVE_BORDER_BR, "50%");
+      }
+      if (this.targetZoom == 6) {
+        this.drawStringBox(290, y, 50, 30, this.ACTIVE_BORDER_TL, this.ACTIVE, this.ACTIVE_BORDER_BR, "75%");
+      } else {
+        this.drawStringBox(290, y, 50, 30, this.INACTIVE_BORDER_TL, this.INACTIVE, this.INACTIVE_BORDER_BR, "75%");
+      }
+      if (this.targetZoom == 8) {
+        this.drawStringBox(350, y, 50, 30, this.ACTIVE_BORDER_TL, this.ACTIVE, this.ACTIVE_BORDER_BR, "100%");
+      } else {
+        this.drawStringBox(350, y, 50, 30, this.INACTIVE_BORDER_TL, this.INACTIVE, this.INACTIVE_BORDER_BR, "100%");
+      }
+    }
+    this.redrawTimer--;
+    if (this.redrawTimer <= 0) {
+      this.drawArea?.draw(0, 0);
+      this.redrawTimer = 50;
+      if (this.hasPlayerPos) {
+        const ctx2d = canvas.getContext("2d");
+        const cx = this.sWid / 2 | 0;
+        const cy = this.sHei / 2 | 0;
+        ctx2d.beginPath();
+        ctx2d.arc(cx, cy, 8, 0, Math.PI * 2);
+        ctx2d.fillStyle = "#0055ff";
+        ctx2d.fill();
+        ctx2d.lineWidth = 2;
+        ctx2d.strokeStyle = "#ffffff";
+        ctx2d.stroke();
+      }
+    }
+  }
+  refresh() {
+    this.redrawTimer = 0;
+  }
+  async mainloop() {
+    if (this.keyHeld[1] == 1) {
+      this.focusX = this.focusX - 16 / this.zoom | 0;
+      this.redraw = true;
+    }
+    if (this.keyHeld[2] == 1) {
+      this.focusX = this.focusX + 16 / this.zoom | 0;
+      this.redraw = true;
+    }
+    if (this.keyHeld[3] == 1) {
+      this.focusZ = this.focusZ - 16 / this.zoom | 0;
+      this.redraw = true;
+    }
+    if (this.keyHeld[4] == 1) {
+      this.focusZ = this.focusZ + 16 / this.zoom | 0;
+      this.redraw = true;
+    }
+    let key = 1;
+    do {
+      key = this.pollKey();
+      if (key === -1) {
+        break;
+      }
+      if (key == 49) {
+        this.targetZoom = 3;
+        this.redraw = true;
+      } else if (key == 50) {
+        this.targetZoom = 4;
+        this.redraw = true;
+      } else if (key == 51) {
+        this.targetZoom = 6;
+        this.redraw = true;
+      } else if (key == 52) {
+        this.targetZoom = 8;
+        this.redraw = true;
+      } else if (key == 107 || key == 75) {
+        this.showKey = !this.showKey;
+        this.redraw = true;
+      } else if (key == 111 || key == 79) {
+        this.showOverview = !this.showOverview;
+        this.redraw = true;
+      } else if (key == 101 || key == 69) {
+        const width = this.mapWidth * 2;
+        const height = this.mapHeight * 2;
+        const fullRender = new Pix32(width, height);
+        fullRender.setPixels();
+        this.renderWorldMap(0, 0, this.mapWidth, this.mapHeight, 0, 0, width, height);
+        const canvas2 = document.createElement("canvas");
+        canvas2.width = width;
+        canvas2.height = height;
+        const ctx = canvas2.getContext("2d");
+        const out = new PixMap(width, height, ctx);
+        out.setPixels();
+        fullRender.quickPlotSprite(0, 0);
+        out.draw(0, 0);
+        this.drawArea?.setPixels();
+        const map = canvas2.toDataURL("image/png").replace(/^data:image\/[^;]/, "data:application/octet-stream");
+        saveDataURL(map, "worldmap.png");
+      } else if (key == 110 || key == 78) {
+        MapView.shouldDrawNpcs = !MapView.shouldDrawNpcs;
+        this.redraw = true;
+      } else if (key == 105 || key == 73) {
+        MapView.shouldDrawItems = !MapView.shouldDrawItems;
+        this.redraw = true;
+      } else if (key == 108 || key == 76) {
+        MapView.shouldDrawLabels = !MapView.shouldDrawLabels;
+        this.redraw = true;
+      } else if (key == 98 || key == 66) {
+        MapView.shouldDrawBorders = !MapView.shouldDrawBorders;
+        this.redraw = true;
+      } else if (key == 109 || key == 77) {
+        MapView.shouldDrawMultimap = !MapView.shouldDrawMultimap;
+        this.redraw = true;
+      } else if (key == 102 || key == 70) {
+        MapView.shouldDrawFreemap = !MapView.shouldDrawFreemap;
+        this.redraw = true;
+      } else if (key === 91) {
+        await this.reloadMain();
+      } else if (key === 93) {
+        await this.reloadDungeon();
+      } else if (key === 92) {
+        await this.reloadExtra();
+      }
+    } while (key > 0);
+    if (this.mouseClickButton == 1) {
+      this.nextMouseClickX = this.mouseClickX;
+      this.nextMouseClickY = this.mouseClickY;
+      this.dragFocusX = this.focusX;
+      this.dragFocusZ = this.focusZ;
+      const zoomY = this.sHei - this.keyY - 20 + 1;
+      if (this.mouseClickX > 170 && this.mouseClickX < 220 && this.mouseClickY > zoomY) {
+        this.targetZoom = 3;
+        this.nextMouseClickX = -1;
+      } else if (this.mouseClickX > 230 && this.mouseClickX < 280 && this.mouseClickY > zoomY) {
+        this.targetZoom = 4;
+        this.nextMouseClickX = -1;
+      } else if (this.mouseClickX > 290 && this.mouseClickX < 340 && this.mouseClickY > zoomY) {
+        this.targetZoom = 6;
+        this.nextMouseClickX = -1;
+      } else if (this.mouseClickX > 350 && this.mouseClickX < 400 && this.mouseClickY > zoomY) {
+        this.targetZoom = 8;
+        this.nextMouseClickX = -1;
+      } else if (this.mouseClickX > this.keyX && this.mouseClickY > this.keyY + this.keyHeight && this.mouseClickX < this.keyX + this.keyWidth) {
+        this.showKey = !this.showKey;
+        this.nextMouseClickX = -1;
+      } else if (this.mouseClickX > this.overviewX && this.mouseClickY > this.overviewY + this.overviewHeight && this.mouseClickX < this.overviewX + this.overviewWidth) {
+        this.showOverview = !this.showOverview;
+        this.nextMouseClickX = -1;
+      }
+      if (this.showKey) {
+        if (this.mouseClickX > this.keyX && this.mouseClickY > this.keyY && this.mouseClickX < this.keyX + this.keyWidth && this.mouseClickY < this.keyY + this.keyHeight) {
+          this.nextMouseClickX = -1;
+        }
+        if (this.mouseClickX > this.keyX && this.mouseClickY > this.keyY && this.mouseClickX < this.keyX + this.keyWidth && this.mouseClickY < this.keyY + 18) {
+          this.keyPage = 0;
+        } else if (this.mouseClickX > this.keyX && this.mouseClickY > this.keyY + this.keyHeight - 18 && this.mouseClickX < this.keyX + this.keyWidth && this.mouseClickY < this.keyY + this.keyHeight) {
+          this.keyPage = 25;
+        }
+      }
+      this.redraw = true;
+    }
+    if (this.showKey) {
+      this.currentKeyHover = -1;
+      if (this.mouseX > this.keyX && this.mouseX < this.keyX + this.keyWidth) {
+        const maxKeys = (this.keyHeight - 20) / 18;
+        let y = this.keyY + 21 + 5;
+        for (let row = 0;row < maxKeys; row++) {
+          if (row + this.lastKeyPage < this.keyNames.length && this.keyNames[row + this.lastKeyPage] !== "???") {
+            if (this.mouseY >= y && this.mouseY < y + 17) {
+              this.currentKeyHover = row + this.lastKeyPage;
+              if (this.mouseClickButton == 1) {
+                this.currentKey = row + this.lastKeyPage;
+                this.flashTimer = 50;
+              }
+            }
+            y += 17;
+          }
+        }
+      }
+      if (this.currentKeyHover != this.lastKeyHover) {
+        this.lastKeyHover = this.currentKeyHover;
+        this.redraw = true;
+      }
+    }
+    if ((this.mouseButton == 1 || this.mouseClickButton == 1) && this.showOverview) {
+      let mouseClickX = this.mouseClickX;
+      let mouseClickY = this.mouseClickY;
+      if (this.mouseButton == 1) {
+        mouseClickX = this.mouseX;
+        mouseClickY = this.mouseY;
+      }
+      if (mouseClickX > this.overviewX && mouseClickY > this.overviewY && mouseClickX < this.overviewX + this.overviewWidth && mouseClickY < this.overviewY + this.overviewHeight) {
+        this.focusX = (mouseClickX - this.overviewX) * this.mapWidth / this.overviewWidth | 0;
+        this.focusZ = (mouseClickY - this.overviewY) * this.mapHeight / this.overviewHeight | 0;
+        this.nextMouseClickX = -1;
+        this.redraw = true;
+      }
+    }
+    if (this.mouseButton == 1 && this.nextMouseClickX != -1) {
+      this.focusX = this.dragFocusX + ((this.nextMouseClickX - this.mouseX) * 2 / this.targetZoom | 0);
+      this.focusZ = this.dragFocusZ + ((this.nextMouseClickY - this.mouseY) * 2 / this.targetZoom | 0);
+      this.redraw = true;
+    }
+    if (this.zoom < this.targetZoom) {
+      this.redraw = true;
+      this.zoom += this.zoom / 30;
+      if (this.zoom > this.targetZoom) {
+        this.zoom = this.targetZoom;
+      }
+    }
+    if (this.zoom > this.targetZoom) {
+      this.redraw = true;
+      this.zoom -= this.zoom / 30;
+      if (this.zoom < this.targetZoom) {
+        this.zoom = this.targetZoom;
+      }
+    }
+    if (this.lastKeyPage < this.keyPage) {
+      this.redraw = true;
+      this.lastKeyPage++;
+    }
+    if (this.lastKeyPage > this.keyPage) {
+      this.redraw = true;
+      this.lastKeyPage--;
+    }
+    if (this.flashTimer > 0) {
+      this.redraw = true;
+      this.flashTimer--;
+    }
+    const left = this.focusX - (this.sWid / this.zoom | 0);
+    const top = this.focusZ - (this.sHei / this.zoom | 0);
+    const right = this.focusX + (this.sWid / this.zoom | 0);
+    const bottom = this.focusZ + (this.sHei / this.zoom | 0);
+    if (left < 48) {
+      this.focusX = (this.sWid / this.zoom | 0) + 48;
+    }
+    if (top < 48) {
+      this.focusZ = (this.sHei / this.zoom | 0) + 48;
+    }
+    if (right > this.mapWidth - 48) {
+      this.focusX = this.mapWidth - 48 - (this.sWid / this.zoom | 0);
+    }
+    if (bottom > this.mapHeight - 48) {
+      this.focusZ = this.mapHeight - 48 - (this.sHei / this.zoom | 0);
+    }
+  }
+  worldmap = null;
+  async loadWorldmap() {
+    if (this.worldmap) {
+      return this.worldmap;
+    }
+    let data = undefined;
+    let retry = 5;
+    while (!data) {
+      await this.messageBox("Requesting map", 0);
+      try {
+        data = await downloadUrl("/worldmap.jag");
+      } catch (_e) {
+        data = undefined;
+        for (let i = retry;i > 0; i--) {
+          await this.messageBox(`Error loading - Will retry in ${i} secs.`, 0);
+          await sleep(1000);
+        }
+        retry *= 2;
+        if (retry > 60) {
+          retry = 60;
+        }
+      }
+    }
+    this.worldmap = new Jagfile(data);
+    return this.worldmap;
+  }
+  drawStringBox(x, y, width, height, borderTL, fill, borderBR, str) {
+    x = Math.trunc(x);
+    y = Math.trunc(y);
+    width = Math.trunc(width);
+    height = Math.trunc(height);
+    Pix2D.drawRect(x, y, width, height, 0);
+    const xPad = x + 1;
+    const yPad = y + 1;
+    const widthPad = width - 2;
+    const heightPad = height - 2;
+    Pix2D.fillRect(xPad, yPad, widthPad, heightPad, fill);
+    Pix2D.hline(xPad, yPad, widthPad, borderTL);
+    Pix2D.vline(xPad, yPad, heightPad, borderTL);
+    Pix2D.hline(xPad, yPad + heightPad - 1, widthPad, borderBR);
+    Pix2D.vline(xPad + widthPad - 1, yPad, heightPad, borderBR);
+    this.b12?.centreString(str, xPad + (widthPad / 2 | 0) + 1, yPad + (heightPad / 2 | 0) + 1 + 4, 0);
+    this.b12?.centreString(str, xPad + (widthPad / 2 | 0), yPad + (heightPad / 2 | 0) + 4, 16777215);
+  }
+  getBlendedGroundColour() {
+    const maxX = this.mapWidth;
+    const maxZ = this.mapHeight;
+    const average = new TypedArray1d(maxZ, 0);
+    for (let x = 5;x < maxX - 5; x++) {
+      const east = this.floort1[x + 5];
+      const west = this.floort1[x - 5];
+      for (let z = 0;z < maxZ; z++) {
+        average[z] += this.floorcol1[east[z]] - this.floorcol1[west[z]];
+      }
+      if (x > 10 && x < maxX - 10) {
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        for (let z = 5;z < maxZ - 5; z++) {
+          const north = average[z + 5];
+          const south = average[z - 5];
+          r += (north >> 20) - (south >> 20);
+          g += (north >> 10 & 1023) - (south >> 10 & 1023);
+          b += (north & 1023) - (south & 1023);
+          if (b > 0) {
+            this.blendedGroundColour[x][z] = this.getRgb(r / 8533, g / 8533, b / 8533);
+          }
+        }
+      }
+    }
+  }
+  loadUnderlay(data) {
+    while (data.available > 0) {
+      const mx = data.g1() * 64 - this.mapOriginX;
+      const mz = data.g1() * 64 - this.mapOriginZ;
+      if (mx > 0 && mz > 0 && mx + 64 < this.mapWidth && mz + 64 < this.mapHeight) {
+        for (let x = 0;x < 64; x++) {
+          let zIndex = this.mapHeight - mz - 1;
+          for (let z = -64;z < 0; z++) {
+            this.floort1[mx + x][zIndex--] = data.g1();
+          }
+        }
+      } else {
+        data.pos += 4096;
+      }
+    }
+  }
+  loadOverlay(data) {
+    while (data.available > 0) {
+      const mx = data.g1() * 64 - this.mapOriginX;
+      const mz = data.g1() * 64 - this.mapOriginZ;
+      if (mx > 0 && mz > 0 && mx + 64 < this.mapWidth && mz + 64 < this.mapHeight) {
+        for (let x = 0;x < 64; x++) {
+          let zIndex = this.mapHeight - mz - 1;
+          for (let z = -64;z < 0; z++) {
+            const opcode = data.g1();
+            if (opcode === 0) {
+              this.floort2[x + mx][zIndex--] = 0;
+            } else {
+              this.floorsr[x + mx][zIndex] = data.g1();
+              this.floort2[x + mx][zIndex--] = this.floorcol2[opcode];
+            }
+          }
+        }
+      } else {
+        for (let i = -4096;i < 0; i++) {
+          const opcode = data.g1();
+          if (opcode != 0) {
+            data.g1();
+          }
+        }
+      }
+    }
+  }
+  loadLoc(data) {
+    while (data.available > 0) {
+      const mx = data.g1() * 64 - this.mapOriginX;
+      const mz = data.g1() * 64 - this.mapOriginZ;
+      if (mx > 0 && mz > 0 && mx + 64 < this.mapWidth && mz + 64 < this.mapHeight) {
+        for (let x = 0;x < 64; x++) {
+          let zIndex = this.mapHeight - mz - 1;
+          for (let z = -64;z < 0; z++) {
+            while (true) {
+              const opcode = data.g1();
+              if (opcode === 0) {
+                zIndex--;
+                break;
+              }
+              if (opcode < 29) {
+                this.locWall[x + mx][zIndex] = opcode;
+              } else if (opcode < 160) {
+                this.locMapscene[x + mx][zIndex] = opcode - 28;
+              } else {
+                this.locMapfunction[x + mx][zIndex] = opcode - 159;
+                this.activeMapFunctions[this.activeMapFunctionCount] = opcode - 160;
+                this.activeMapFunctionX[this.activeMapFunctionCount] = x + mx;
+                this.activeMapFunctionZ[this.activeMapFunctionCount] = zIndex;
+                this.activeMapFunctionCount++;
+              }
+            }
+          }
+        }
+      } else {
+        for (let x = 0;x < 64; x++) {
+          let opcode = 0;
+          for (let z = -64;z < 0; z++) {
+            do {
+              opcode = data.g1();
+            } while (opcode != 0);
+          }
+        }
+      }
+    }
+  }
+  loadObj(data) {
+    while (data.available > 0) {
+      const mx = data.g1() * 64 - this.mapOriginX;
+      const mz = data.g1() * 64 - this.mapOriginZ;
+      if (mx > 0 && mz > 0 && mx + 64 < this.mapWidth && mz + 64 < this.mapHeight) {
+        for (let x = 0;x < 64; x++) {
+          let zIndex = this.mapHeight - mz - 1;
+          for (let z = -64;z < 0; z++) {
+            this.objPos[x + mx][zIndex--] = data.g1() == 1;
+          }
+        }
+      } else {
+        data.pos += 4096;
+      }
+    }
+  }
+  loadNpc(data) {
+    while (data.available > 0) {
+      const mx = data.g1() * 64 - this.mapOriginX;
+      const mz = data.g1() * 64 - this.mapOriginZ;
+      if (mx > 0 && mz > 0 && mx + 64 < this.mapWidth && mz + 64 < this.mapHeight) {
+        for (let x = 0;x < 64; x++) {
+          let zIndex = this.mapHeight - mz - 1;
+          for (let z = -64;z < 0; z++) {
+            this.npcPos[x + mx][zIndex--] = data.g1() == 1;
+          }
+        }
+      } else {
+        data.pos += 4096;
+      }
+    }
+  }
+  loadMulti(data) {
+    while (data.available > 0) {
+      const mx = data.g1() * 64 - this.mapOriginX;
+      const mz = data.g1() * 64 - this.mapOriginZ;
+      if (mx > 0 && mz > 0 && mx + 64 < this.mapWidth && mz + 64 < this.mapHeight) {
+        for (let x = 0;x < 64; x++) {
+          let zIndex = this.mapHeight - mz - 1;
+          for (let z = -64;z < 0; z++) {
+            this.multiPos[x + mx][zIndex--] = data.g1() == 1;
+          }
+        }
+      } else {
+        data.pos += 4096;
+      }
+    }
+  }
+  loadFree(data) {
+    while (data.available > 0) {
+      const mx = data.g1() * 64 - this.mapOriginX;
+      const mz = data.g1() * 64 - this.mapOriginZ;
+      if (mx > 0 && mz > 0 && mx + 64 < this.mapWidth && mz + 64 < this.mapHeight) {
+        for (let x = 0;x < 64; x++) {
+          let zIndex = this.mapHeight - mz - 1;
+          for (let z = -64;z < 0; z++) {
+            this.freePos[x + mx][zIndex--] = data.g1() == 1;
+          }
+        }
+      } else {
+        data.pos += 4096;
+      }
+    }
+  }
+  getRgb(hue, saturation, lightness) {
+    let r = lightness;
+    let g = lightness;
+    let b = lightness;
+    if (saturation !== 0) {
+      let q;
+      if (lightness < 0.5) {
+        q = lightness * (saturation + 1);
+      } else {
+        q = lightness + saturation - lightness * saturation;
+      }
+      const p = lightness * 2 - q;
+      let t = hue + 0.3333333333333333;
+      if (t > 1) {
+        t--;
+      }
+      let d11 = hue - 0.3333333333333333;
+      if (d11 < 0) {
+        d11++;
+      }
+      if (t * 6 < 1) {
+        r = p + (q - p) * 6 * t;
+      } else if (t * 2 < 1) {
+        r = q;
+      } else if (t * 3 < 2) {
+        r = p + (q - p) * (0.6666666666666666 - t) * 6;
+      } else {
+        r = p;
+      }
+      if (hue * 6 < 1) {
+        g = p + (q - p) * 6 * hue;
+      } else if (hue * 2 < 1) {
+        g = q;
+      } else if (hue * 3 < 2) {
+        g = p + (q - p) * (0.6666666666666666 - hue) * 6;
+      } else {
+        g = p;
+      }
+      if (d11 * 6 < 1) {
+        b = p + (q - p) * 6 * d11;
+      } else if (d11 * 2 < 1) {
+        b = q;
+      } else if (d11 * 3 < 2) {
+        b = p + (q - p) * (0.6666666666666666 - d11) * 6;
+      } else {
+        b = p;
+      }
+    }
+    const intR = r * 256 | 0;
+    const intG = g * 256 | 0;
+    const intB = b * 256 | 0;
+    return (intR << 16) + (intG << 8) + intB;
+  }
+  renderWorldMap(left, top, right, bottom, widthOffset, heightOffset, width, height) {
+    const visibleX = right - left;
+    const visibleY = bottom - top;
+    const widthRatio = (width - widthOffset << 16) / visibleX | 0;
+    const heightRatio = (height - heightOffset << 16) / visibleY | 0;
+    for (let x = 0;x < visibleX; x++) {
+      let startX = widthRatio * x >> 16;
+      let endX = widthRatio * (x + 1) >> 16;
+      const lengthX = endX - startX;
+      if (lengthX <= 0) {
+        continue;
+      }
+      startX += widthOffset;
+      endX += widthOffset;
+      const colours = this.blendedGroundColour[x + left];
+      const overlays = this.floort2[x + left];
+      const shapes = this.floorsr[x + left];
+      for (let y = 0;y < visibleY; y++) {
+        let startY = heightRatio * y >> 16;
+        let endY = heightRatio * (y + 1) >> 16;
+        const lengthY = endY - startY;
+        if (lengthY <= 0) {
+          continue;
+        }
+        startY += heightOffset;
+        endY += heightOffset;
+        const overlay = overlays[y + top];
+        if (overlay === 0) {
+          Pix2D.fillRect(startX, startY, endX - startX, endY - startY, colours[y + top]);
+        } else {
+          const info = shapes[y + top];
+          const shape = info & 252;
+          if (shape == 0 || lengthX <= 1 || lengthY <= 1) {
+            Pix2D.fillRect(startX, startY, lengthX, lengthY, overlay);
+          } else {
+            this.drawOverlayShape(Pix2D.pixels, startY * Pix2D.width + startX, colours[y + top], overlay, lengthX, lengthY, shape >> 2, info & 3);
+          }
+        }
+      }
+    }
+    if (right - left > width - widthOffset) {
+      return;
+    }
+    let visibleMapFunctionCount = 0;
+    for (let x = 0;x < visibleX; x++) {
+      let startX = widthRatio * x >> 16;
+      let endX = widthRatio * (x + 1) >> 16;
+      const lengthX = endX - startX;
+      if (lengthX <= 0) {
+        continue;
+      }
+      const walls = this.locWall[x + left];
+      const mapscenes = this.locMapscene[x + left];
+      const mapfunctions = this.locMapfunction[x + left];
+      for (let y = 0;y < visibleY; y++) {
+        let startY = heightRatio * y >> 16;
+        let endY = heightRatio * (y + 1) >> 16;
+        const lengthY = endY - startY;
+        if (lengthY <= 0) {
+          continue;
+        }
+        let wall = walls[y + top] & 255;
+        if (wall != 0) {
+          let edgeX;
+          if (lengthX == 1) {
+            edgeX = startX;
+          } else {
+            edgeX = endX - 1;
+          }
+          let edgeY;
+          if (lengthY == 1) {
+            edgeY = startY;
+          } else {
+            edgeY = endY - 1;
+          }
+          let rgb = 13421772;
+          if (wall >= 5 && wall <= 8 || wall >= 13 && wall <= 16 || wall >= 21 && wall <= 24) {
+            rgb = 13369344;
+            wall -= 4;
+          }
+          if (wall == 27 || wall == 28) {
+            rgb = 13369344;
+            wall -= 2;
+          }
+          if (wall == 1) {
+            Pix2D.vline(startX, startY, lengthY, rgb);
+          } else if (wall == 2) {
+            Pix2D.hline(startX, startY, lengthX, rgb);
+          } else if (wall == 3) {
+            Pix2D.vline(edgeX, startY, lengthY, rgb);
+          } else if (wall == 4) {
+            Pix2D.hline(startX, edgeY, lengthX, rgb);
+          } else if (wall == 9) {
+            Pix2D.vline(startX, startY, lengthY, 16777215);
+            Pix2D.hline(startX, startY, lengthX, rgb);
+          } else if (wall == 10) {
+            Pix2D.vline(edgeX, startY, lengthY, 16777215);
+            Pix2D.hline(startX, startY, lengthX, rgb);
+          } else if (wall == 11) {
+            Pix2D.vline(edgeX, startY, lengthY, 16777215);
+            Pix2D.hline(startX, edgeY, lengthX, rgb);
+          } else if (wall == 12) {
+            Pix2D.vline(startX, startY, lengthY, 16777215);
+            Pix2D.hline(startX, edgeY, lengthX, rgb);
+          } else if (wall == 17) {
+            Pix2D.hline(startX, startY, 1, rgb);
+          } else if (wall == 18) {
+            Pix2D.hline(edgeX, startY, 1, rgb);
+          } else if (wall == 19) {
+            Pix2D.hline(edgeX, edgeY, 1, rgb);
+          } else if (wall == 20) {
+            Pix2D.hline(startX, edgeY, 1, rgb);
+          } else if (wall == 25) {
+            for (let i = 0;i < lengthY; i++) {
+              Pix2D.hline(startX + i, edgeY - i, 1, rgb);
+            }
+          } else if (wall == 26) {
+            for (let i = 0;i < lengthY; i++) {
+              Pix2D.hline(startX + i, startY + i, 1, rgb);
+            }
+          }
+        }
+        const mapscene = mapscenes[y + top];
+        if (mapscene != 0) {
+          this.mapscene[mapscene - 1].scalePlotSprite(startX - (lengthX / 2 | 0), startY - (lengthY / 2 | 0), lengthX * 2, lengthY * 2);
+        }
+        const mapfunction = mapfunctions[y + top];
+        if (mapfunction != 0) {
+          this.visibleMapFunctions[visibleMapFunctionCount] = mapfunction - 1;
+          this.visibleMapFunctionsX[visibleMapFunctionCount] = startX + (lengthX / 2 | 0);
+          this.visibleMapFunctionsY[visibleMapFunctionCount] = startY + (lengthY / 2 | 0);
+          visibleMapFunctionCount++;
+        }
+      }
+    }
+    for (let i = 0;i < visibleMapFunctionCount; i++) {
+      this.mapfunction[this.visibleMapFunctions[i]].plotSprite(this.visibleMapFunctionsX[i] - 7, this.visibleMapFunctionsY[i] - 7);
+    }
+    if (MapView.shouldDrawFreemap) {
+      for (let x = 0;x < visibleX; x++) {
+        let startX = widthRatio * x >> 16;
+        let endX = widthRatio * (x + 1) >> 16;
+        let lengthX = endX - startX;
+        if (lengthX <= 0) {
+          continue;
+        }
+        startX += widthOffset;
+        endX += widthOffset;
+        let multi = this.freePos[x + left];
+        for (let y = 0;y < visibleY; y++) {
+          let startY = heightRatio * y >> 16;
+          let endY = heightRatio * (y + 1) >> 16;
+          let lengthY = endY - startY;
+          if (lengthY <= 0) {
+            continue;
+          }
+          startY += heightOffset;
+          endY += heightOffset;
+          if (multi[y + top]) {
+            Pix2D.fillRectTrans(startX, startY, lengthX, lengthY, 65280, 96);
+          }
+        }
+      }
+    }
+    if (MapView.shouldDrawMultimap) {
+      for (let x = 0;x < visibleX; x++) {
+        let startX = widthRatio * x >> 16;
+        let endX = widthRatio * (x + 1) >> 16;
+        let lengthX = endX - startX;
+        if (lengthX <= 0) {
+          continue;
+        }
+        startX += widthOffset;
+        endX += widthOffset;
+        let multi = this.multiPos[x + left];
+        for (let y = 0;y < visibleY; y++) {
+          let startY = heightRatio * y >> 16;
+          let endY = heightRatio * (y + 1) >> 16;
+          let lengthY = endY - startY;
+          if (lengthY <= 0) {
+            continue;
+          }
+          startY += heightOffset;
+          endY += heightOffset;
+          if (multi[y + top]) {
+            Pix2D.fillRectTrans(startX, startY, lengthX, lengthY, 16711680, 96);
+          }
+        }
+      }
+    }
+    if (MapView.shouldDrawItems) {
+      for (let x = 0;x < visibleX; x++) {
+        let startX = widthRatio * x >> 16;
+        let endX = widthRatio * (x + 1) >> 16;
+        const lengthX = endX - startX;
+        if (lengthX <= 0) {
+          continue;
+        }
+        startX += widthOffset;
+        endX += widthOffset;
+        for (let y = 0;y < visibleY; y++) {
+          let startY = heightRatio * y >> 16;
+          let endY = heightRatio * (y + 1) >> 16;
+          const lengthY = endY - startY;
+          if (lengthY <= 0) {
+            continue;
+          }
+          startY += heightOffset;
+          endY += heightOffset;
+          if (this.objPos[x + left][y + top]) {
+            this.mapdot0?.plotSprite(startX, startY);
+          }
+        }
+      }
+    }
+    if (MapView.shouldDrawNpcs) {
+      for (let x = 0;x < visibleX; x++) {
+        let startX = widthRatio * x >> 16;
+        let endX = widthRatio * (x + 1) >> 16;
+        const lengthX = endX - startX;
+        if (lengthX <= 0) {
+          continue;
+        }
+        startX += widthOffset;
+        endX += widthOffset;
+        for (let y = 0;y < visibleY; y++) {
+          let startY = heightRatio * y >> 16;
+          let endY = heightRatio * (y + 1) >> 16;
+          const lengthY = endY - startY;
+          if (lengthY <= 0) {
+            continue;
+          }
+          startY += heightOffset;
+          endY += heightOffset;
+          if (this.npcPos[x + left][y + top]) {
+            this.mapdot1?.plotSprite(startX, startY);
+          }
+        }
+      }
+    }
+    if (this.flashTimer > 0) {
+      for (let i = 0;i < visibleMapFunctionCount; i++) {
+        if (this.visibleMapFunctions[i] == this.currentKey) {
+          this.mapfunction[this.visibleMapFunctions[i]].plotSprite(this.visibleMapFunctionsX[i] - 7, this.visibleMapFunctionsY[i] - 7);
+          if (this.flashTimer % 10 < 5) {
+            Pix2D.fillCircle(this.visibleMapFunctionsX[i], this.visibleMapFunctionsY[i], 15, 16776960, 128);
+            Pix2D.fillCircle(this.visibleMapFunctionsX[i], this.visibleMapFunctionsY[i], 7, 16777215, 256);
+          }
+        }
+      }
+    }
+    if (this.zoom == this.targetZoom && MapView.shouldDrawLabels) {
+      for (let i = 0;i < this.mapLabelCount; i++) {
+        let x = this.mapLabelX[i];
+        let y = this.mapLabelY[i];
+        x -= this.mapOriginX;
+        y = this.mapOriginZ + this.mapHeight - y;
+        const drawX = widthOffset + (width - widthOffset) * (x - left) / (right - left) | 0;
+        let drawY = heightOffset + (height - heightOffset) * (y - top) / (bottom - top) | 0;
+        const labelSize = this.mapLabelSize[i];
+        let rgb = 16777215;
+        let font = null;
+        if (labelSize == 0) {
+          if (this.zoom == 3) {
+            font = this.f11;
+          } else if (this.zoom == 4) {
+            font = this.f12;
+          } else if (this.zoom == 6) {
+            font = this.f14;
+          } else if (this.zoom == 8) {
+            font = this.f17;
+          }
+        } else if (labelSize == 1) {
+          if (this.zoom == 3) {
+            font = this.f14;
+          } else if (this.zoom == 4) {
+            font = this.f17;
+          } else if (this.zoom == 6) {
+            font = this.f19;
+          } else if (this.zoom == 8) {
+            font = this.f22;
+          }
+        } else if (labelSize == 2) {
+          rgb = 16755200;
+          if (this.zoom == 3) {
+            font = this.f19;
+          } else if (this.zoom == 4) {
+            font = this.f22;
+          } else if (this.zoom == 6) {
+            font = this.f26;
+          } else if (this.zoom == 8) {
+            font = this.f30;
+          }
+        }
+        if (font !== null) {
+          let label = this.mapLabel[i];
+          let lineCount = 1;
+          for (let j = 0;j < label.length; j++) {
+            if (label[j] === "/") {
+              lineCount++;
+            }
+          }
+          drawY -= font.getHeight() * (lineCount - 1) / 2 | 0;
+          drawY += font.getYOffset() / 2 | 0;
+          while (true) {
+            const newline = label.indexOf("/");
+            if (newline === -1) {
+              font.centreString(label, drawX, drawY, rgb, true);
+              break;
+            }
+            const part = label.substring(0, newline);
+            font.centreString(part, drawX, drawY, rgb, true);
+            drawY += font.getHeight();
+            label = label.substring(newline + 1);
+          }
+        }
+      }
+    }
+    if (MapView.shouldDrawBorders) {
+      for (let mx = this.mapOriginX / 64;mx < (this.mapOriginX + this.mapWidth) / 64; mx++) {
+        for (let mz = this.mapOriginZ / 64;mz < (this.mapOriginZ + this.mapHeight) / 64; mz++) {
+          let x = mx * 64;
+          let z = mz * 64;
+          x -= this.mapOriginX;
+          z = this.mapOriginZ + this.mapHeight - z;
+          const drawLeft = widthOffset + (width - widthOffset) * (x - left) / (right - left) | 0;
+          const drawTop = heightOffset + (height - heightOffset) * (z - 64 - top) / (bottom - top) | 0;
+          const drawRight = widthOffset + (width - widthOffset) * (x + 64 - left) / (right - left) | 0;
+          const drawBottom = heightOffset + (height - heightOffset) * (z - top) / (bottom - top) | 0;
+          if (drawLeft >= width || drawTop >= height || drawRight <= 0 || drawBottom <= 0) {
+            continue;
+          }
+          Pix2D.drawRect(drawLeft, drawTop, drawRight - drawLeft, drawBottom - drawTop, 16777215);
+          this.b12?.drawStringRight(mx + "_" + mz, drawRight - 5, drawBottom - 5, 16777215, false);
+          if (mx == 33 && mz >= 71 && mz <= 73) {
+            this.b12?.centreString("u_pass", (drawRight + drawLeft) / 2 | 0, (drawBottom + drawTop) / 2 | 0, 16711680);
+          } else if (mx >= 32 && mx <= 34 && mz >= 70 && mz <= 74) {
+            this.b12?.centreString("u_pass", (drawRight + drawLeft) / 2 | 0, (drawBottom + drawTop) / 2 | 0, 16776960);
+          }
+        }
+      }
+    }
+  }
+  drawOverlayShape(data, off, underlay, overlay, width, height, shape, rotation) {
+    const step = Pix2D.width - width;
+    if (shape == 9) {
+      shape = 1;
+      rotation = rotation + 1 & 3;
+    } else if (shape == 10) {
+      shape = 1;
+      rotation = rotation + 3 & 3;
+    } else if (shape == 11) {
+      shape = 8;
+      rotation = rotation + 3 & 3;
+    }
+    if (shape == 1) {
+      if (rotation == 0) {
+        for (let y = 0;y < height; y++) {
+          for (let x = 0;x < width; x++) {
+            if (x <= y) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 1) {
+        for (let y = height - 1;y >= 0; y--) {
+          for (let x = 0;x < width; x++) {
+            if (x <= y) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 2) {
+        for (let y = 0;y < height; y++) {
+          for (let x = 0;x < width; x++) {
+            if (x >= y) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 3) {
+        for (let y = height - 1;y >= 0; y--) {
+          for (let x = 0;x < width; x++) {
+            if (x >= y) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      }
+    } else if (shape == 2) {
+      if (rotation == 0) {
+        for (let y = height - 1;y >= 0; y--) {
+          for (let x = 0;x < width; x++) {
+            if (x <= y >> 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 1) {
+        for (let y = 0;y < height; y++) {
+          for (let x = 0;x < width; x++) {
+            if (x >= y << 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 2) {
+        for (let y = 0;y < height; y++) {
+          for (let x = width - 1;x >= 0; x--) {
+            if (x <= y >> 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 3) {
+        for (let y = height - 1;y >= 0; y--) {
+          for (let x = width - 1;x >= 0; x--) {
+            if (x >= y << 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      }
+    } else if (shape == 3) {
+      if (rotation == 0) {
+        for (let y = height - 1;y >= 0; y--) {
+          for (let x = width - 1;x >= 0; x--) {
+            if (x <= y >> 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 1) {
+        for (let y = height - 1;y >= 0; y--) {
+          for (let x = 0;x < width; x++) {
+            if (x >= y << 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 2) {
+        for (let y = 0;y < height; y++) {
+          for (let x = 0;x < width; x++) {
+            if (x <= y >> 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 3) {
+        for (let y = 0;y < height; y++) {
+          for (let x = width - 1;x >= 0; x--) {
+            if (x >= y << 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      }
+    } else if (shape == 4) {
+      if (rotation == 0) {
+        for (let y = height - 1;y >= 0; y--) {
+          for (let x = 0;x < width; x++) {
+            if (x >= y >> 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 1) {
+        for (let y = 0;y < height; y++) {
+          for (let x = 0;x < width; x++) {
+            if (x <= y << 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 2) {
+        for (let y = 0;y < height; y++) {
+          for (let x = width - 1;x >= 0; x--) {
+            if (x >= y >> 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 3) {
+        for (let y = height - 1;y >= 0; y--) {
+          for (let x = width - 1;x >= 0; x--) {
+            if (x <= y << 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      }
+    } else if (shape == 5) {
+      if (rotation == 0) {
+        for (let y = height - 1;y >= 0; y--) {
+          for (let x = width - 1;x >= 0; x--) {
+            if (x >= y >> 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 1) {
+        for (let y = height - 1;y >= 0; y--) {
+          for (let x = 0;x < width; x++) {
+            if (x <= y << 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 2) {
+        for (let y = 0;y < height; y++) {
+          for (let x = 0;x < width; x++) {
+            if (x >= y >> 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 3) {
+        for (let y = 0;y < height; y++) {
+          for (let x = width - 1;x >= 0; x--) {
+            if (x <= y << 1) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      }
+    } else if (shape == 6) {
+      if (rotation == 0) {
+        for (let y = 0;y < height; y++) {
+          for (let x = 0;x < width; x++) {
+            if (x <= (width / 2 | 0)) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 1) {
+        for (let y = 0;y < height; y++) {
+          for (let x = 0;x < width; x++) {
+            if (y <= (height / 2 | 0)) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 2) {
+        for (let y = 0;y < height; y++) {
+          for (let x = 0;x < width; x++) {
+            if (x >= (width / 2 | 0)) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 3) {
+        for (let y = 0;y < height; y++) {
+          for (let x = 0;x < width; x++) {
+            if (y >= (height / 2 | 0)) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      }
+    } else if (shape == 7) {
+      if (rotation == 0) {
+        for (let y = 0;y < height; y++) {
+          for (let x = 0;x < width; x++) {
+            if (x <= y - (height / 2 | 0)) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 1) {
+        for (let y = height - 1;y >= 0; y--) {
+          for (let x = 0;x < width; x++) {
+            if (x <= y - (height / 2 | 0)) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 2) {
+        for (let y = height - 1;y >= 0; y--) {
+          for (let x = width - 1;x >= 0; x--) {
+            if (x <= y - (height / 2 | 0)) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 3) {
+        for (let y = 0;y < height; y++) {
+          for (let x = width - 1;x >= 0; x--) {
+            if (x <= y - (height / 2 | 0)) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      }
+    } else if (shape == 8) {
+      if (rotation == 0) {
+        for (let y = 0;y < height; y++) {
+          for (let x = 0;x < width; x++) {
+            if (x >= y - (height / 2 | 0)) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 1) {
+        for (let y = height - 1;y >= 0; y--) {
+          for (let x = 0;x < width; x++) {
+            if (x >= y - (height / 2 | 0)) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 2) {
+        for (let y = height - 1;y >= 0; y--) {
+          for (let x = width - 1;x >= 0; x--) {
+            if (x >= y - (height / 2 | 0)) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      } else if (rotation == 3) {
+        for (let y = 0;y < height; y++) {
+          for (let x = width - 1;x >= 0; x--) {
+            if (x >= y - (height / 2 | 0)) {
+              data[off++] = overlay;
+            } else {
+              data[off++] = underlay;
+            }
+          }
+          off += step;
+        }
+      }
+    }
+  }
+  async reloadMain() {
+    if (this.mapArea === 0) {
+      return;
+    }
+    this.mapStartX = 50 << 6;
+    this.mapStartZ = 50 << 6;
+    this.mapWidth = 20 << 6;
+    this.mapHeight = 19 << 6;
+    this.mapOriginX = 36 << 6;
+    this.mapOriginZ = 44 << 6;
+    this.mapArea = 0;
+    this.focusX = this.mapStartX - this.mapOriginX;
+    this.focusZ = this.mapOriginZ + this.mapHeight - this.mapStartZ;
+    this.dragFocusX = -1;
+    this.dragFocusZ = -1;
+    this.redraw = true;
+    Pix2D.cls();
+    await this.maininit();
+  }
+  async reloadDungeon() {
+    if (this.mapArea === 1) {
+      return;
+    }
+    this.mapStartX = 50 << 6;
+    this.mapStartZ = 150 << 6;
+    this.mapWidth = 21 << 6;
+    this.mapHeight = 19 << 6;
+    this.mapOriginX = 35 << 6;
+    this.mapOriginZ = 144 << 6;
+    this.mapArea = 1;
+    this.focusX = this.mapStartX - this.mapOriginX;
+    this.focusZ = this.mapOriginZ + this.mapHeight - this.mapStartZ;
+    this.dragFocusX = -1;
+    this.dragFocusZ = -1;
+    this.redraw = true;
+    Pix2D.cls();
+    await this.maininit();
+  }
+  async reloadExtra() {
+    if (this.mapArea === 2) {
+      return;
+    }
+    this.mapStartX = 39 << 6;
+    this.mapStartZ = 74 << 6;
+    this.mapWidth = 21 << 6;
+    this.mapHeight = 15 << 6;
+    this.mapOriginX = 28 << 6;
+    this.mapOriginZ = 65 << 6;
+    this.mapArea = 2;
+    this.focusX = this.mapStartX - this.mapOriginX;
+    this.focusZ = this.mapOriginZ + this.mapHeight - this.mapStartZ;
+    this.dragFocusX = -1;
+    this.dragFocusZ = -1;
+    this.redraw = true;
+    await this.maininit();
+  }
+  dragging = false;
+  activePointerId = null;
+  mouseDown(x, y, e) {
+    this.nextMouseClickX = x;
+    this.nextMouseClickY = y;
+    this.mouseX = x;
+    this.mouseY = y;
+    if (e.button === 2) {
+      this.nextMouseClickButton = 2;
+      this.mouseButton = 2;
+    } else {
+      this.nextMouseClickButton = 1;
+      this.mouseButton = 1;
+      canvas.style.cursor = "grabbing";
+      this.dragging = true;
+    }
+  }
+  mouseUp(_x, _y, e) {
+    this.dragging = false;
+    canvas.style.cursor = "grab";
+    this.mouseX = -1;
+    this.mouseY = -1;
+    this.mouseButton = 0;
+    this.nextMouseClickX = -1;
+    this.nextMouseClickY = -1;
+    this.nextMouseClickButton = 0;
+  }
+  pointerDown(x, y, e) {
+    this.idleTimer = performance.now();
+    this.mouseX = x;
+    this.mouseY = y;
+    this.mouseButton = 1;
+    this.nextMouseClickX = x;
+    this.nextMouseClickY = y;
+    this.nextMouseClickButton = 1;
+  }
+  pointerUp(_x, _y, e) {
+    this.mouseX = -1;
+    this.mouseY = -1;
+    this.mouseButton = 0;
+    this.nextMouseClickX = -1;
+    this.nextMouseClickY = -1;
+    this.nextMouseClickButton = 0;
+  }
+  pointerEnter() {}
+  pointerLeave() {}
+  pointerMove(x, y, _e) {
+    if (!this.dragging) {
+      this.mouseX = x;
+      this.mouseY = y;
+    }
+  }
+  windowMouseUp(e) {
+    this.dragging = false;
+    canvas.style.cursor = "grab";
+    this.mouseX = -1;
+    this.mouseY = -1;
+    this.mouseButton = 0;
+    this.nextMouseClickX = -1;
+    this.nextMouseClickY = -1;
+    this.nextMouseClickButton = 0;
+  }
+  windowMouseMove(e) {
+    if (this.dragging) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left | 0;
+      const y = e.clientY - rect.top | 0;
+      this.mouseX = x;
+      this.mouseY = y;
+    }
+  }
+}
+setTimeout(() => {
+  try {
+    new MapView;
+  } catch (e) {
+    console.error("MapView auto-start failed:", e);
+  }
+}, 100);
+export {
+  MapView
+};
+
+//# debugId=814DC2718A38938E64756E2164756E21

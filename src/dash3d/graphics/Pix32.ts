@@ -1,6 +1,6 @@
-import Pix2D from '#/graphics/Pix2D.js';
-import { decodeJpeg } from '#/graphics/Jpeg.js';
-import Pix8 from '#/graphics/Pix8.js';
+import Pix2D from '#/dash3d/graphics/Pix2D.js';
+import { decodeJpeg } from '#/dash3d/graphics/Jpeg.js';
+import Pix8 from '#/dash3d/graphics/Pix8.js';
 
 import Jagfile from '#/io/Jagfile.js';
 import Packet from '#/io/Packet.js';

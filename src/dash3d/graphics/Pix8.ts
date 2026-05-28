@@ -1,4 +1,4 @@
-import Pix2D from '#/graphics/Pix2D.js';
+import Pix2D from '#/dash3d/graphics/Pix2D.js';
 
 import Jagfile from '#/io/Jagfile.js';
 import Packet from '#/io/Packet.js';

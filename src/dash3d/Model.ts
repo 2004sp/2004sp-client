@@ -1,7 +1,8 @@
 import AnimBase, { AnimTransform } from '#/dash3d/AnimBase.js';
 import AnimFrame from '#/dash3d/AnimFrame.js';
-import Pix2D from '#/graphics/Pix2D.js';
+import Pix2D from '#/dash3d/graphics/Pix2D.js';
 import Pix3D from '#/dash3d/Pix3D.js';
+import HDRenderer from '#/hd/HDRenderer.js';
 
 import Packet from '#/io/Packet.js';
 
@@ -1166,6 +1167,68 @@ export default class Model extends ModelSource {
         }
     }
 
+    animateTween(id: number, nextId: number, alpha: number): void {
+        if (!this.labelVertices || id === -1) {
+            return;
+        }
+
+        if (nextId === -1 || alpha <= 0 || id === nextId) {
+            this.animate(id);
+            return;
+        }
+
+        if (alpha >= 1) {
+            this.animate(nextId);
+            return;
+        }
+
+        const current: AnimFrame = AnimFrame.get(id);
+        const next: AnimFrame = AnimFrame.get(nextId);
+        if (!current || !next || current.base !== next.base || !current.base || !current.base.labels || !current.base.type || !current.ti || !next.ti) {
+            this.animate(id);
+            return;
+        }
+
+        const skeleton: AnimBase = current.base;
+        Model.oX = 0;
+        Model.oY = 0;
+        Model.oZ = 0;
+
+        const curIndex = new Map<number, number>();
+        const nextIndex = new Map<number, number>();
+        for (let i = 0; i < current.size; i++) {
+            curIndex.set(current.ti[i], i);
+        }
+        for (let i = 0; i < next.size; i++) {
+            nextIndex.set(next.ti[i], i);
+        }
+
+        for (let base = 0; base < skeleton.size; base++) {
+            const ci = curIndex.get(base);
+            const ni = nextIndex.get(base);
+            if (ci === undefined && ni === undefined) {
+                continue;
+            }
+
+            const type = skeleton.type[base];
+            const defaultValue = type === AnimTransform.SCALE ? 128 : 0;
+
+            const cx = ci === undefined || !current.tx ? defaultValue : current.tx[ci];
+            const cy = ci === undefined || !current.ty ? defaultValue : current.ty[ci];
+            const cz = ci === undefined || !current.tz ? defaultValue : current.tz[ci];
+
+            const nx = ni === undefined || !next.tx ? defaultValue : next.tx[ni];
+            const ny = ni === undefined || !next.ty ? defaultValue : next.ty[ni];
+            const nz = ni === undefined || !next.tz ? defaultValue : next.tz[ni];
+
+            const x = (cx + (nx - cx) * alpha) | 0;
+            const y = (cy + (ny - cy) * alpha) | 0;
+            const z = (cz + (nz - cz) * alpha) | 0;
+
+            this.animate2(x, y, z, skeleton.labels[base], type);
+        }
+    }
+
     maskAnimate(primaryId: number, secondaryId: number, mask: Int32Array | null): void {
         if (primaryId === -1) {
             return;
@@ -1839,12 +1902,22 @@ export default class Model extends ModelSource {
             }
         }
 
+        HDRenderer.queueModel(this, yaw, relativeX, relativeY, relativeZ);
+
         try {
             // try catch for example a model being drawn from 3d can crash like at baxtorian falls
             this.render2(clipped, picking, typecode);
         } catch (_e) {
             // empty
         }
+    }
+
+    queueHdModel(yaw: number, relativeX: number, relativeY: number, relativeZ: number): void {
+        HDRenderer.queueModel(this, yaw, relativeX, relativeY, relativeZ);
+    }
+
+    override hdRender(_loopCycle: number, yaw: number, relativeX: number, relativeY: number, relativeZ: number): void {
+        this.queueHdModel(yaw, relativeX, relativeY, relativeZ);
     }
 
     private render2(clipped: boolean, picking: boolean, typecode: number): void {

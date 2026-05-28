@@ -5,8 +5,13 @@ import ModelSource from '#/dash3d/ModelSource.js';
 import { TypedArray1d } from '#/util/Arrays.js';
 
 export default abstract class ClientEntity extends ModelSource {
+    /** Render-only fraction between two 50 TPS game ticks. */
+    static renderAlpha: number = 0;
+
     x: number = 0;
     z: number = 0;
+    prevX: number = 0;
+    prevZ: number = 0;
     yaw: number = 0;
     needsForwardDrawPadding: boolean = false;
     size: number = 1;
@@ -60,6 +65,29 @@ export default abstract class ClientEntity extends ModelSource {
     animDelayMove: number = 0;
     preanimRouteLength: number = 0;
     turnspeed: number = 32;
+
+
+    protected getTweenFrame(seq: SeqType | null, frame: number, cycle: number): { current: number; next: number; alpha: number } {
+        if (!seq || !seq.frames || frame < 0 || frame >= seq.numFrames) {
+            return { current: -1, next: -1, alpha: 0 };
+        }
+
+        const current = seq.frames[frame];
+        let nextFrame = frame + 1;
+        if (nextFrame >= seq.numFrames) {
+            nextFrame = seq.loops > 0 ? nextFrame - seq.loops : frame;
+        }
+
+        if (nextFrame < 0 || nextFrame >= seq.numFrames) {
+            nextFrame = frame;
+        }
+
+        const next = seq.frames[nextFrame];
+        const duration = Math.max(1, seq.getDuration(frame));
+        const alpha = Math.max(0, Math.min(1, (cycle + ClientEntity.renderAlpha) / duration));
+
+        return { current, next, alpha };
+    }
 
     abstract isReady(): boolean;
 
