@@ -13,6 +13,21 @@ const define = {
     'process.env.BUILD_TIME': JSON.stringify(new Date().toISOString())
 };
 
+const hdRuntimeDefaults = `(() => {
+    const g = globalThis;
+    // HD static scenery is cached and should not depend on the old software
+    // camera visibility pass. Give the cache enough room to keep walls,
+    // fences, bridges and wall-decor queued across dense areas so they do
+    // not disappear/reappear while rotating the camera.
+    g.HD_FAR_TILE_BUDGET ??= 2601;
+    g.HD_FAR_MODEL_CANDIDATES ??= 50000;
+    g.HD_FAR_MODEL_BUDGET ??= 30000;
+    g.HD_MODEL_BUDGET ??= 30000;
+    g.HD_MODEL_VERTEX_BUDGET ??= 4000000;
+    g.HD_FAR_TIME_BUDGET_MS ??= 0;
+})();
+`;
+
 // ----
 
 type BunOutput = {
@@ -71,6 +86,14 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
                     'tileZ',
                     'type',
                     'playerPos',
+
+                    // HD runtime debug/budget globals
+                    'HD_FAR_TILE_BUDGET',
+                    'HD_FAR_MODEL_CANDIDATES',
+                    'HD_FAR_MODEL_BUDGET',
+                    'HD_MODEL_BUDGET',
+                    'HD_MODEL_VERTEX_BUDGET',
+                    'HD_FAR_TIME_BUDGET_MS',
 
                     // stdlib
                     'willReadFrequently',
@@ -154,6 +177,10 @@ for (const file of entrypoints) {
 
     const script = await bunBuild(file, [], prod, prod ? ['console'] : []);
     if (script) {
+        if (output === 'client.js') {
+            script.source = hdRuntimeDefaults + script.source;
+        }
+
         if (prod) {
             await applyTerser(script);
         }
