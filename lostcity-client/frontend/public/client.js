@@ -6453,7 +6453,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-28T18:49:18.443Z";
+var HD_RENDERER_BUILD = "2026-05-28T22:08:04.095Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -7278,8 +7278,16 @@ class HDRenderer {
   static terrainVertexCount = 0;
   static modelBatches = new Map;
   static transparentBatches = [];
+  static dynamicModelBatches = new Map;
+  static dynamicTransparentBatches = [];
+  static lastGoodDynamicModelBatches = new Map;
+  static lastGoodDynamicTransparentBatches = [];
+  static dynamicModelBuffers = new Map;
+  static dynamicModelVaos = new Map;
   static staticFarModelBatches = new Map;
   static staticFarTransparentBatches = [];
+  static pendingStaticFarModelBatches = new Map;
+  static pendingStaticFarTransparentBatches = [];
   static staticFarModelBuffers = new Map;
   static staticFarModelVaos = new Map;
   static staticFarGpuDirty = true;
@@ -7325,6 +7333,10 @@ class HDRenderer {
   static staticFarTransparentBuffers = new Map;
   static staticFarTransparentVaos = new Map;
   static farModelDrawCount = 0;
+  static dynamicModelQueueing = false;
+  static dynamicModelDrawCount = 0;
+  static dynamicModelVertexCount = 0;
+  static lastGoodDynamicFrameNumber = 0;
   static modelObjectIds = new WeakMap;
   static nextModelObjectId = 1;
   static lastCameraRange = null;
@@ -7425,20 +7437,32 @@ class HDRenderer {
     if (this.staticFarSceneKey === key && !this.staticFarGpuDirty) {
       return false;
     }
-    this.staticFarSceneKey = key;
-    this.staticFarModelBatches.clear();
-    this.staticFarTransparentBatches.length = 0;
+    this.pendingStaticFarModelBatches.clear();
+    this.pendingStaticFarTransparentBatches.length = 0;
     this.staticFarSceneBuilding = true;
-    this.staticFarGpuDirty = true;
+    this.staticFarSceneKey = key;
     return true;
   }
   static endStaticFarScene() {
+    if (this.staticFarSceneBuilding) {
+      this.staticFarModelBatches = this.pendingStaticFarModelBatches;
+      this.staticFarTransparentBatches = this.pendingStaticFarTransparentBatches;
+      this.pendingStaticFarModelBatches = new Map;
+      this.pendingStaticFarTransparentBatches = [];
+      this.staticFarGpuDirty = true;
+    }
     this.staticFarSceneBuilding = false;
+  }
+  static invalidateStaticFarScene() {
+    this.staticFarSceneKey = "";
+    this.staticFarGpuDirty = true;
   }
   static clearStaticFarScene() {
     this.staticFarSceneKey = "";
     this.staticFarModelBatches.clear();
     this.staticFarTransparentBatches.length = 0;
+    this.pendingStaticFarModelBatches.clear();
+    this.pendingStaticFarTransparentBatches.length = 0;
     this.staticFarGpuDirty = true;
     this.staticFarSceneBuilding = false;
     if (this.gl) {
@@ -7517,9 +7541,13 @@ class HDRenderer {
     this.visibleGroundKeys.clear();
     this.modelBatches.clear();
     this.transparentBatches.length = 0;
+    this.dynamicModelBatches.clear();
+    this.dynamicTransparentBatches.length = 0;
     this.modelDrawCount = 0;
     this.farModelDrawCount = 0;
+    this.dynamicModelDrawCount = 0;
     this.modelVertexCount = 0;
+    this.dynamicModelVertexCount = 0;
     this.modelBatchCount = 0;
     this.clippedTriangleCount = 0;
     this.skippedBackfaceCount = 0;
@@ -7531,6 +7559,40 @@ class HDRenderer {
     this.frameStarted = true;
     this.frameNumber++;
   }
+  static beginDynamicModelQueue() {
+    this.dynamicModelQueueing = true;
+  }
+  static endDynamicModelQueue() {
+    this.dynamicModelQueueing = false;
+  }
+  static cloneBatchMap(source) {
+    const clone = new Map;
+    for (const [key, vertices] of source) {
+      clone.set(key, vertices.slice());
+    }
+    return clone;
+  }
+  static cloneTransparentBatches(source) {
+    return source.map((batch) => ({
+      depth: batch.depth,
+      priority: batch.priority,
+      texture: batch.texture,
+      vertices: batch.vertices.slice()
+    }));
+  }
+  static stabiliseDynamicModelsForFrame() {
+    const holdFrames = Number(globalThis.HD_DYNAMIC_HOLD_FRAMES ?? 6);
+    if (this.dynamicModelDrawCount > 0) {
+      this.lastGoodDynamicModelBatches = this.cloneBatchMap(this.dynamicModelBatches);
+      this.lastGoodDynamicTransparentBatches = this.cloneTransparentBatches(this.dynamicTransparentBatches);
+      this.lastGoodDynamicFrameNumber = this.frameNumber;
+      return;
+    }
+    if (this.lastGoodDynamicFrameNumber > 0 && this.frameNumber - this.lastGoodDynamicFrameNumber <= holdFrames) {
+      this.dynamicModelBatches = this.cloneBatchMap(this.lastGoodDynamicModelBatches);
+      this.dynamicTransparentBatches = this.cloneTransparentBatches(this.lastGoodDynamicTransparentBatches);
+    }
+  }
   static queueModel(model, yaw, relativeX, relativeY, relativeZ) {
     if (!this.enabled || !this.frameStarted || !this.camera) {
       return;
@@ -7540,9 +7602,10 @@ class HDRenderer {
     }
     const warmingUp = this.safeWarmupFrames > 0;
     const isFarSceneModel = globalThis._HD_FAR_SCENE_QUEUING === true;
+    const isDynamicModel = this.dynamicModelQueueing && !isFarSceneModel;
     const cacheStaticFarScene = this.staticFarSceneBuilding && isFarSceneModel;
-    const targetModelBatches = cacheStaticFarScene ? this.staticFarModelBatches : this.modelBatches;
-    const targetTransparentBatches = cacheStaticFarScene ? this.staticFarTransparentBatches : this.transparentBatches;
+    const targetModelBatches = cacheStaticFarScene ? this.pendingStaticFarModelBatches : isDynamicModel ? this.dynamicModelBatches : this.modelBatches;
+    const targetTransparentBatches = cacheStaticFarScene ? this.pendingStaticFarTransparentBatches : isDynamicModel ? this.dynamicTransparentBatches : this.transparentBatches;
     if (!model.vertexX || !model.vertexY || !model.vertexZ || !model.faceVertexA || !model.faceVertexB || !model.faceVertexC || !model.faceColourA) {
       return;
     }
@@ -7552,8 +7615,14 @@ class HDRenderer {
       return;
     }
     const modelBudget = Number(globalThis.HD_MODEL_BUDGET ?? (isFarSceneModel ? 9000 : warmingUp ? 650 : 1600));
-    if (this.modelDrawCount >= modelBudget) {
+    if (!isDynamicModel && this.modelDrawCount >= modelBudget) {
       return;
+    }
+    if (isDynamicModel) {
+      const dynamicBudget = Number(globalThis.HD_DYNAMIC_MODEL_BUDGET ?? 1024);
+      if (this.dynamicModelDrawCount >= dynamicBudget) {
+        return;
+      }
     }
     if (isFarSceneModel) {
       const farModelBudget = Number(globalThis.HD_FAR_MODEL_BUDGET ?? (warmingUp ? 2500 : 9000));
@@ -7567,10 +7636,15 @@ class HDRenderer {
       return;
     }
     const vertexBudget = Number(globalThis.HD_MODEL_VERTEX_BUDGET ?? (isFarSceneModel ? 1800000 : warmingUp ? 120000 : 320000));
-    if (this.modelVertexCount + faceCount * 3 > vertexBudget) {
+    if (isDynamicModel) {
+      const dynamicVertexBudget = Number(globalThis.HD_DYNAMIC_VERTEX_BUDGET ?? 500000);
+      if (this.dynamicModelVertexCount + faceCount * 3 > dynamicVertexBudget) {
+        return;
+      }
+    } else if (this.modelVertexCount + faceCount * 3 > vertexBudget) {
       return;
     }
-    const modelKey = `${this.modelObjectId(model)}:${yaw}:${relativeX}:${relativeY}:${relativeZ}`;
+    const modelKey = `${isDynamicModel ? "d" : "m"}:${this.modelObjectId(model)}:${yaw}:${relativeX}:${relativeY}:${relativeZ}`;
     if (this.queuedModelKeys.has(modelKey)) {
       return;
     }
@@ -7750,13 +7824,21 @@ class HDRenderer {
           vertices: batch.slice(beforeFloats)
         });
       }
-      this.modelVertexCount += (batch.length - beforeFloats) / VERTEX_FLOATS;
+      if (isDynamicModel) {
+        this.dynamicModelVertexCount += (batch.length - beforeFloats) / VERTEX_FLOATS;
+      } else {
+        this.modelVertexCount += (batch.length - beforeFloats) / VERTEX_FLOATS;
+      }
     }
-    this.modelDrawCount++;
+    if (isDynamicModel) {
+      this.dynamicModelDrawCount++;
+    } else {
+      this.modelDrawCount++;
+    }
     if (isFarSceneModel) {
       this.farModelDrawCount++;
     }
-    this.modelBatchCount = this.modelBatches.size + this.transparentBatches.length + this.staticFarModelBatches.size + this.staticFarTransparentBatches.length;
+    this.modelBatchCount = this.modelBatches.size + this.transparentBatches.length + this.dynamicModelBatches.size + this.dynamicTransparentBatches.length + this.staticFarModelBatches.size + this.staticFarTransparentBatches.length;
   }
   static modelObjectId(model) {
     const objectModel = model;
@@ -7945,7 +8027,9 @@ class HDRenderer {
       globalThis._hdPhase = "renderFrame-lightMatrix";
       this.buildLightSpaceMatrix(this.camera);
       globalThis._hdPhase = "renderFrame-uploadModels";
+      this.stabiliseDynamicModelsForFrame();
       this.uploadModelBuffers();
+      this.uploadDynamicModelBuffers();
       this.uploadStaticFarModelBuffers();
       const hdShadowsEnabled = globalThis.ENABLE_HD_SHADOWS === true;
       if (hdShadowsEnabled) {
@@ -7973,6 +8057,7 @@ class HDRenderer {
       }
       this.drawStaticFarModels();
       this.uploadAndDrawModels();
+      this.uploadAndDrawDynamicModels();
       gl.flush();
       this.compositeViewportToGameCanvas(viewport);
       gl.disable(gl.SCISSOR_TEST);
@@ -8616,6 +8701,22 @@ class HDRenderer {
     this.showTextureDebugOverlay(normalised);
     this.sceneDirty = true;
     this.modelBatches.clear();
+    this.dynamicModelBatches.clear();
+    this.dynamicTransparentBatches.length = 0;
+    this.lastGoodDynamicModelBatches.clear();
+    this.lastGoodDynamicTransparentBatches.length = 0;
+    this.dynamicModelVaos.forEach((vao) => {
+      if (this.gl && vao) {
+        this.gl.deleteVertexArray(vao);
+      }
+    });
+    this.dynamicModelVaos.clear();
+    this.dynamicModelBuffers.forEach((buffer) => {
+      if (this.gl && buffer) {
+        this.gl.deleteBuffer(buffer);
+      }
+    });
+    this.dynamicModelBuffers.clear();
     this.modelVaos.forEach((vao) => {
       if (this.gl && vao) {
         this.gl.deleteVertexArray(vao);
@@ -9432,6 +9533,39 @@ class HDRenderer {
       }
     }
   }
+  static uploadDynamicModelBuffers() {
+    const gl = this.gl;
+    if (!gl) {
+      return;
+    }
+    for (const [texture, vertices] of this.dynamicModelBatches) {
+      if (vertices.length === 0) {
+        continue;
+      }
+      let buffer = this.dynamicModelBuffers.get(texture);
+      if (!buffer) {
+        buffer = gl.createBuffer();
+        if (!buffer) {
+          continue;
+        }
+        this.dynamicModelBuffers.set(texture, buffer);
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      const n = vertices.length;
+      if (n > this._uploadBuf.length) {
+        this._uploadBuf = new Float32Array(n * 2);
+      }
+      this._uploadBuf.set(vertices, 0);
+      gl.bufferData(gl.ARRAY_BUFFER, this._uploadBuf.subarray(0, n), gl.DYNAMIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      if (!this.dynamicModelVaos.has(texture)) {
+        const vao = this.setupVao(buffer);
+        if (vao) {
+          this.dynamicModelVaos.set(texture, vao);
+        }
+      }
+    }
+  }
   static uploadStaticFarModelBuffers() {
     const gl = this.gl;
     if (!gl || !this.staticFarGpuDirty) {
@@ -9602,6 +9736,77 @@ class HDRenderer {
       gl.disable(gl.BLEND);
     }
     this.pruneModelGpuObjects(gl, this.modelUsedKeys);
+  }
+  static uploadAndDrawDynamicModels() {
+    const gl = this.gl;
+    if (!gl) {
+      return;
+    }
+    const liveKeys = new Set;
+    for (const [texture, vertices] of this.dynamicModelBatches) {
+      if (vertices.length === 0) {
+        continue;
+      }
+      liveKeys.add(texture);
+      const vao = this.dynamicModelVaos.get(texture);
+      if (vao) {
+        this.drawBuffer(vao, vertices.length / VERTEX_FLOATS);
+      }
+    }
+    if (this.dynamicTransparentBatches.length > 0) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      this.dynamicTransparentBatches.sort((a, b) => b.depth - a.depth);
+      for (const batch of this.dynamicTransparentBatches) {
+        if (batch.vertices.length === 0) {
+          continue;
+        }
+        liveKeys.add(batch.texture);
+        let buffer = this.dynamicModelBuffers.get(batch.texture);
+        if (!buffer) {
+          buffer = gl.createBuffer();
+          if (!buffer) {
+            continue;
+          }
+          this.dynamicModelBuffers.set(batch.texture, buffer);
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        const n = batch.vertices.length;
+        if (n > this._uploadBuf.length) {
+          this._uploadBuf = new Float32Array(n * 2);
+        }
+        this._uploadBuf.set(batch.vertices, 0);
+        gl.bufferData(gl.ARRAY_BUFFER, this._uploadBuf.subarray(0, n), gl.DYNAMIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        let vao = this.dynamicModelVaos.get(batch.texture);
+        if (!vao) {
+          const created = this.setupVao(buffer);
+          if (!created) {
+            continue;
+          }
+          vao = created;
+          this.dynamicModelVaos.set(batch.texture, vao);
+        }
+        this.drawBuffer(vao, batch.vertices.length / VERTEX_FLOATS);
+      }
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+    }
+    for (const [texture, vao] of this.dynamicModelVaos) {
+      if (!liveKeys.has(texture)) {
+        if (vao) {
+          gl.deleteVertexArray(vao);
+        }
+        this.dynamicModelVaos.delete(texture);
+      }
+    }
+    for (const [texture, buffer] of this.dynamicModelBuffers) {
+      if (!liveKeys.has(texture)) {
+        gl.deleteBuffer(buffer);
+        this.dynamicModelBuffers.delete(texture);
+      }
+    }
   }
   static pruneModelGpuObjects(gl, activeKeys) {
     if (!gl) {
@@ -14927,6 +15132,11 @@ class World {
   dynamicCount = 0;
   minLevel = 0;
   shareTic = 0;
+  invalidateHdStaticScene() {
+    if (HDRenderer.isEnabled()) {
+      HDRenderer.invalidateStaticFarScene();
+    }
+  }
   constructor(levelHeightmaps, maxTileZ, maxLevel, maxTileX) {
     this.maxTileLevel = maxLevel;
     this.maxTileX = maxTileX;
@@ -15051,6 +15261,7 @@ class World {
     const tile = this.levelTiles[tileLevel][tileX][tileZ];
     if (tile) {
       tile.groundDecor = new GroundDecor(y, tileX * 128 + 64, tileZ * 128 + 64, model, typecode, typecode2);
+      this.invalidateHdStaticScene();
     }
   }
   delGroundDecor(level, x, z) {
@@ -15059,6 +15270,7 @@ class World {
       return;
     }
     tile.groundDecor = null;
+    this.invalidateHdStaticScene();
   }
   setObj(stx, stz, y, level, typecode, topObj, middleObj, bottomObj) {
     let stackOffset = 0;
@@ -15080,6 +15292,7 @@ class World {
     const tile2 = this.levelTiles[level][stx][stz];
     if (tile2) {
       tile2.groundObject = new GroundObject(y, stx * 128 + 64, stz * 128 + 64, topObj, middleObj, bottomObj, typecode, stackOffset);
+      this.invalidateHdStaticScene();
     }
   }
   delObj(level, x, z) {
@@ -15088,6 +15301,7 @@ class World {
       return;
     }
     tile.groundObject = null;
+    this.invalidateHdStaticScene();
   }
   setWall(level, tileX, tileZ, y, angle1, angle2, model1, model2, typecode1, typecode2) {
     if (!model1 && !model2) {
@@ -15101,6 +15315,7 @@ class World {
     const tile = this.levelTiles[level][tileX][tileZ];
     if (tile) {
       tile.wall = new Wall(y, tileX * 128 + 64, tileZ * 128 + 64, angle1, angle2, model1, model2, typecode1, typecode2);
+      this.invalidateHdStaticScene();
     }
   }
   delWall(level, x, z) {
@@ -15109,6 +15324,7 @@ class World {
       return;
     }
     tile.wall = null;
+    this.invalidateHdStaticScene();
   }
   setDecor(level, tileX, tileZ, y, offsetX, offsetZ, typecode, model, info, angle, type) {
     if (!model) {
@@ -15122,6 +15338,7 @@ class World {
     const tile = this.levelTiles[level][tileX][tileZ];
     if (tile) {
       tile.decor = new Decor(y, tileX * 128 + offsetX + 64, tileZ * 128 + offsetZ + 64, type, angle, model, typecode, info);
+      this.invalidateHdStaticScene();
     }
   }
   delDecor(level, x, z) {
@@ -15130,6 +15347,7 @@ class World {
       return;
     }
     tile.decor = null;
+    this.invalidateHdStaticScene();
   }
   setDecorOffset(level, x, z, offset) {
     const tile = this.levelTiles[level][x][z];
@@ -15144,6 +15362,7 @@ class World {
     const sz = z * 128 + 64;
     decor.x = sx + ((decor.x - sx) * offset / 16 | 0);
     decor.z = sz + ((decor.z - sz) * offset / 16 | 0);
+    this.invalidateHdStaticScene();
   }
   setDecorModel(level, x, z, model) {
     if (!model) {
@@ -15158,6 +15377,7 @@ class World {
       return;
     }
     decor.model = model;
+    this.invalidateHdStaticScene();
   }
   setGroundDecorModel(level, x, z, model) {
     if (!model) {
@@ -15172,6 +15392,7 @@ class World {
       return;
     }
     decor.model = model;
+    this.invalidateHdStaticScene();
   }
   setWallModel(level, x, z, model) {
     if (!model) {
@@ -15186,6 +15407,7 @@ class World {
       return;
     }
     wall.model1 = model;
+    this.invalidateHdStaticScene();
   }
   setWallModels(x, z, level, modelA, modelB) {
     if (!modelA) {
@@ -15201,6 +15423,7 @@ class World {
     }
     wall.model1 = modelA;
     wall.model2 = modelB;
+    this.invalidateHdStaticScene();
   }
   addScenery(level, tileX, tileZ, y, model, typecode, info, width, length, yaw) {
     if (!model) {
@@ -15208,7 +15431,11 @@ class World {
     }
     const sceneX = tileX * 128 + width * 64;
     const sceneZ = tileZ * 128 + length * 64;
-    return this.setSprite(sceneX, sceneZ, y, level, tileX, tileZ, width, length, model, typecode, info, yaw, false);
+    const added = this.setSprite(sceneX, sceneZ, y, level, tileX, tileZ, width, length, model, typecode, info, yaw, false);
+    if (added) {
+      this.invalidateHdStaticScene();
+    }
+    return added;
   }
   addDynamic(level, x, y, z, model, typecode, yaw, padding, forwardPadding) {
     if (!model) {
@@ -15250,6 +15477,7 @@ class World {
       const loc = tile.sprites[l];
       if (loc && (loc.typecode >> 29 & 3) === 2 && loc.minTileX === x && loc.minTileZ === z) {
         this.delSprite(loc);
+        this.invalidateHdStaticScene();
         return;
       }
     }
@@ -15607,7 +15835,7 @@ class World {
                     visible = true;
                     break check_areas;
                   }
-                  if (matrix[pitchLevel][(yawLevel + 1) % 31][x + dx + 25 + 1][z + dz + 25 + 1]) {
+                  if (matrix[pitchLevel][(yawLevel + 1) % 32][x + dx + 25 + 1][z + dz + 25 + 1]) {
                     visible = true;
                     break check_areas;
                   }
@@ -15615,7 +15843,7 @@ class World {
                     visible = true;
                     break check_areas;
                   }
-                  if (matrix[pitchLevel + 1][(yawLevel + 1) % 31][x + dx + 25 + 1][z + dz + 25 + 1]) {
+                  if (matrix[pitchLevel + 1][(yawLevel + 1) % 32][x + dx + 25 + 1][z + dz + 25 + 1]) {
                     visible = true;
                     break check_areas;
                   }
@@ -15707,6 +15935,7 @@ class World {
         maxTileX: hdMaxX,
         maxTileZ: hdMaxZ
       });
+      this.queueHdDynamicSprites(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
       if (globalThis.DISABLE_HD_FAR_MODELS !== true) {
         const farSceneKey = `${hdMinX}:${hdMinZ}:${hdMaxX}:${hdMaxZ}:${maxLevel}`;
         if (HDRenderer.beginStaticFarScene(farSceneKey)) {
@@ -15719,7 +15948,6 @@ class World {
           }
         }
       }
-      this.queueHdDynamicSprites(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
     }
     this.calcOcclude();
     World.fillLeft = 0;
@@ -15899,24 +16127,29 @@ class World {
     const budget = Number(globalThis.HD_DYNAMIC_MODEL_BUDGET ?? 512);
     let queued = 0;
     const seen = new Set;
-    for (let i = 0;i < this.dynamicCount && queued < budget; i++) {
-      const sprite = this.dynamicSprites[i];
-      if (!sprite || seen.has(sprite)) {
-        continue;
+    HDRenderer.beginDynamicModelQueue();
+    try {
+      for (let i = 0;i < this.dynamicCount && queued < budget; i++) {
+        const sprite = this.dynamicSprites[i];
+        if (!sprite || seen.has(sprite)) {
+          continue;
+        }
+        seen.add(sprite);
+        if (sprite.level > maxLevel) {
+          continue;
+        }
+        if (sprite.maxTileX < minTileX || sprite.minTileX >= maxTileX || sprite.maxTileZ < minTileZ || sprite.minTileZ >= maxTileZ) {
+          continue;
+        }
+        const spriteSceneType = sprite.typecode >> 29 & 3;
+        if (sprite.typecode > 0 && spriteSceneType === 2) {
+          continue;
+        }
+        sprite.model?.hdRender(loopCycle, sprite.yaw, sprite.x - World.cx, sprite.y - World.cy, sprite.z - World.cz);
+        queued++;
       }
-      seen.add(sprite);
-      if (sprite.level > maxLevel) {
-        continue;
-      }
-      if (sprite.maxTileX < minTileX || sprite.minTileX >= maxTileX || sprite.maxTileZ < minTileZ || sprite.minTileZ >= maxTileZ) {
-        continue;
-      }
-      const spriteSceneType = sprite.typecode >> 29 & 3;
-      if (sprite.typecode > 0 && spriteSceneType === 2) {
-        continue;
-      }
-      sprite.model?.hdRender(loopCycle, sprite.yaw, sprite.x - World.cx, sprite.y - World.cy, sprite.z - World.cz);
-      queued++;
+    } finally {
+      HDRenderer.endDynamicModelQueue();
     }
   }
   queueHdFarTile(tile, loopCycle, renderedSprites, softwareVisibleRegion, remainingBudget) {
@@ -15994,7 +16227,7 @@ class World {
           return false;
         }
         const tile = this.levelTiles[level][tx][tz];
-        if (tile && tile.spriteCount >= 5) {
+        if (!dynamic && tile && tile.spriteCount >= 5) {
           return false;
         }
       }
@@ -16021,7 +16254,7 @@ class World {
           }
         }
         const tile = this.levelTiles[level][tx][tz];
-        if (tile) {
+        if (tile && tile.spriteCount < 5) {
           tile.sprites[tile.spriteCount] = sprite;
           tile.spriteSpan[tile.spriteCount] = spans;
           tile.spriteSpans |= spans;
@@ -33878,4 +34111,4 @@ export {
   Client
 };
 
-//# debugId=ADC96B7F8998DAEC64756E2164756E21
+//# debugId=CEDC40D6DC6B52DB64756E2164756E21

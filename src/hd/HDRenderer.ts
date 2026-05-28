@@ -945,10 +945,21 @@ export default class HDRenderer {
     private static terrainVertexCount: number = 0;
     private static modelBatches: Map<number, number[]> = new Map();
     private static transparentBatches: TransparentBatch[] = [];
+    // Live players/NPCs/bots are isolated from normal model batching. If a camera
+    // movement spike causes one frame to miss actor queuing, HD can reuse the last
+    // good actor batch instead of clearing them for a visible flicker.
+    private static dynamicModelBatches: Map<number, number[]> = new Map();
+    private static dynamicTransparentBatches: TransparentBatch[] = [];
+    private static lastGoodDynamicModelBatches: Map<number, number[]> = new Map();
+    private static lastGoodDynamicTransparentBatches: TransparentBatch[] = [];
+    private static dynamicModelBuffers: Map<number, WebGLBuffer> = new Map();
+    private static dynamicModelVaos: Map<number, WebGLVertexArrayObject> = new Map();
     // Static far-scene cache: expensive 25-tile scenery is built only when the
     // loaded HD tile range changes, then drawn from cached GPU buffers every frame.
     private static staticFarModelBatches: Map<number, number[]> = new Map();
     private static staticFarTransparentBatches: TransparentBatch[] = [];
+    private static pendingStaticFarModelBatches: Map<number, number[]> = new Map();
+    private static pendingStaticFarTransparentBatches: TransparentBatch[] = [];
     private static staticFarModelBuffers: Map<number, WebGLBuffer> = new Map();
     private static staticFarModelVaos: Map<number, WebGLVertexArrayObject> = new Map();
     private static staticFarGpuDirty: boolean = true;
@@ -994,6 +1005,10 @@ export default class HDRenderer {
     private static staticFarTransparentBuffers: Map<number, WebGLBuffer> = new Map();
     private static staticFarTransparentVaos: Map<number, WebGLVertexArrayObject> = new Map();
     private static farModelDrawCount: number = 0;
+    private static dynamicModelQueueing: boolean = false;
+    private static dynamicModelDrawCount: number = 0;
+    private static dynamicModelVertexCount: number = 0;
+    private static lastGoodDynamicFrameNumber: number = 0;
     private static modelObjectIds: WeakMap<object, number> = new WeakMap();
     private static nextModelObjectId: number = 1;
     private static lastCameraRange: { minX: number; minZ: number; maxX: number; maxZ: number; maxLevel: number } | null = null;
@@ -1123,22 +1138,38 @@ export default class HDRenderer {
             return false;
         }
 
-        this.staticFarSceneKey = key;
-        this.staticFarModelBatches.clear();
-        this.staticFarTransparentBatches.length = 0;
+        // Build into a pending cache first.  If a camera/movement spike happens
+        // during the rebuild, the previous good static scene remains drawable
+        // instead of clearing fences/bridges/gates for one visible frame.
+        this.pendingStaticFarModelBatches.clear();
+        this.pendingStaticFarTransparentBatches.length = 0;
         this.staticFarSceneBuilding = true;
-        this.staticFarGpuDirty = true;
+        this.staticFarSceneKey = key;
         return true;
     }
 
     static endStaticFarScene(): void {
+        if (this.staticFarSceneBuilding) {
+            this.staticFarModelBatches = this.pendingStaticFarModelBatches;
+            this.staticFarTransparentBatches = this.pendingStaticFarTransparentBatches;
+            this.pendingStaticFarModelBatches = new Map();
+            this.pendingStaticFarTransparentBatches = [];
+            this.staticFarGpuDirty = true;
+        }
         this.staticFarSceneBuilding = false;
+    }
+
+    static invalidateStaticFarScene(): void {
+        this.staticFarSceneKey = '';
+        this.staticFarGpuDirty = true;
     }
 
     private static clearStaticFarScene(): void {
         this.staticFarSceneKey = '';
         this.staticFarModelBatches.clear();
         this.staticFarTransparentBatches.length = 0;
+        this.pendingStaticFarModelBatches.clear();
+        this.pendingStaticFarTransparentBatches.length = 0;
         this.staticFarGpuDirty = true;
         this.staticFarSceneBuilding = false;
 
@@ -1236,9 +1267,13 @@ export default class HDRenderer {
         this.visibleGroundKeys.clear();
         this.modelBatches.clear();
         this.transparentBatches.length = 0;
+        this.dynamicModelBatches.clear();
+        this.dynamicTransparentBatches.length = 0;
         this.modelDrawCount = 0;
         this.farModelDrawCount = 0;
+        this.dynamicModelDrawCount = 0;
         this.modelVertexCount = 0;
+        this.dynamicModelVertexCount = 0;
         this.modelBatchCount = 0;
         this.clippedTriangleCount = 0;
         this.skippedBackfaceCount = 0;
@@ -1249,6 +1284,46 @@ export default class HDRenderer {
         this.queuedModelKeys.clear();
         this.frameStarted = true;
         this.frameNumber++;
+    }
+
+    static beginDynamicModelQueue(): void {
+        this.dynamicModelQueueing = true;
+    }
+
+    static endDynamicModelQueue(): void {
+        this.dynamicModelQueueing = false;
+    }
+
+    private static cloneBatchMap(source: Map<number, number[]>): Map<number, number[]> {
+        const clone = new Map<number, number[]>();
+        for (const [key, vertices] of source) {
+            clone.set(key, vertices.slice());
+        }
+        return clone;
+    }
+
+    private static cloneTransparentBatches(source: TransparentBatch[]): TransparentBatch[] {
+        return source.map((batch) => ({
+            depth: batch.depth,
+            priority: batch.priority,
+            texture: batch.texture,
+            vertices: batch.vertices.slice()
+        }));
+    }
+
+    private static stabiliseDynamicModelsForFrame(): void {
+        const holdFrames = Number((globalThis as any).HD_DYNAMIC_HOLD_FRAMES ?? 6);
+        if (this.dynamicModelDrawCount > 0) {
+            this.lastGoodDynamicModelBatches = this.cloneBatchMap(this.dynamicModelBatches);
+            this.lastGoodDynamicTransparentBatches = this.cloneTransparentBatches(this.dynamicTransparentBatches);
+            this.lastGoodDynamicFrameNumber = this.frameNumber;
+            return;
+        }
+
+        if (this.lastGoodDynamicFrameNumber > 0 && this.frameNumber - this.lastGoodDynamicFrameNumber <= holdFrames) {
+            this.dynamicModelBatches = this.cloneBatchMap(this.lastGoodDynamicModelBatches);
+            this.dynamicTransparentBatches = this.cloneTransparentBatches(this.lastGoodDynamicTransparentBatches);
+        }
     }
 
     static queueModel(model: HDModelInput, yaw: number, relativeX: number, relativeY: number, relativeZ: number): void {
@@ -1266,9 +1341,10 @@ export default class HDRenderer {
 
         const warmingUp = this.safeWarmupFrames > 0;
         const isFarSceneModel = (globalThis as any)._HD_FAR_SCENE_QUEUING === true;
+        const isDynamicModel = this.dynamicModelQueueing && !isFarSceneModel;
         const cacheStaticFarScene = this.staticFarSceneBuilding && isFarSceneModel;
-        const targetModelBatches = cacheStaticFarScene ? this.staticFarModelBatches : this.modelBatches;
-        const targetTransparentBatches = cacheStaticFarScene ? this.staticFarTransparentBatches : this.transparentBatches;
+        const targetModelBatches = cacheStaticFarScene ? this.pendingStaticFarModelBatches : (isDynamicModel ? this.dynamicModelBatches : this.modelBatches);
+        const targetTransparentBatches = cacheStaticFarScene ? this.pendingStaticFarTransparentBatches : (isDynamicModel ? this.dynamicTransparentBatches : this.transparentBatches);
 
         if (!model.vertexX || !model.vertexY || !model.vertexZ || !model.faceVertexA || !model.faceVertexB || !model.faceVertexC || !model.faceColourA) {
             return;
@@ -1281,8 +1357,14 @@ export default class HDRenderer {
         }
 
         const modelBudget = Number((globalThis as any).HD_MODEL_BUDGET ?? (isFarSceneModel ? 9000 : (warmingUp ? 650 : 1600)));
-        if (this.modelDrawCount >= modelBudget) {
+        if (!isDynamicModel && this.modelDrawCount >= modelBudget) {
             return;
+        }
+        if (isDynamicModel) {
+            const dynamicBudget = Number((globalThis as any).HD_DYNAMIC_MODEL_BUDGET ?? 1024);
+            if (this.dynamicModelDrawCount >= dynamicBudget) {
+                return;
+            }
         }
 
         // The far-scene pass now runs during login warmup so static locs do not pop
@@ -1302,11 +1384,16 @@ export default class HDRenderer {
         }
 
         const vertexBudget = Number((globalThis as any).HD_MODEL_VERTEX_BUDGET ?? (isFarSceneModel ? 1800000 : (warmingUp ? 120000 : 320000)));
-        if (this.modelVertexCount + faceCount * 3 > vertexBudget) {
+        if (isDynamicModel) {
+            const dynamicVertexBudget = Number((globalThis as any).HD_DYNAMIC_VERTEX_BUDGET ?? 500000);
+            if (this.dynamicModelVertexCount + faceCount * 3 > dynamicVertexBudget) {
+                return;
+            }
+        } else if (this.modelVertexCount + faceCount * 3 > vertexBudget) {
             return;
         }
 
-        const modelKey = `${this.modelObjectId(model)}:${yaw}:${relativeX}:${relativeY}:${relativeZ}`;
+        const modelKey = `${isDynamicModel ? 'd' : 'm'}:${this.modelObjectId(model)}:${yaw}:${relativeX}:${relativeY}:${relativeZ}`;
         if (this.queuedModelKeys.has(modelKey)) {
             return;
         }
@@ -1508,14 +1595,22 @@ export default class HDRenderer {
                 });
             }
 
-            this.modelVertexCount += (batch.length - beforeFloats) / VERTEX_FLOATS;
+            if (isDynamicModel) {
+                this.dynamicModelVertexCount += (batch.length - beforeFloats) / VERTEX_FLOATS;
+            } else {
+                this.modelVertexCount += (batch.length - beforeFloats) / VERTEX_FLOATS;
+            }
         }
 
-        this.modelDrawCount++;
+        if (isDynamicModel) {
+            this.dynamicModelDrawCount++;
+        } else {
+            this.modelDrawCount++;
+        }
         if (isFarSceneModel) {
             this.farModelDrawCount++;
         }
-        this.modelBatchCount = this.modelBatches.size + this.transparentBatches.length + this.staticFarModelBatches.size + this.staticFarTransparentBatches.length;
+        this.modelBatchCount = this.modelBatches.size + this.transparentBatches.length + this.dynamicModelBatches.size + this.dynamicTransparentBatches.length + this.staticFarModelBatches.size + this.staticFarTransparentBatches.length;
     }
 
     private static modelObjectId(model: HDModelInput): number {
@@ -1698,7 +1793,9 @@ export default class HDRenderer {
             (globalThis as any)._hdPhase = 'renderFrame-lightMatrix';
             this.buildLightSpaceMatrix(this.camera);
             (globalThis as any)._hdPhase = 'renderFrame-uploadModels';
+            this.stabiliseDynamicModelsForFrame();
             this.uploadModelBuffers();
+            this.uploadDynamicModelBuffers();
             this.uploadStaticFarModelBuffers();
 
             // Keep shadows off by default for now. This keeps HD visibly enabled while
@@ -1737,6 +1834,7 @@ export default class HDRenderer {
 
             this.drawStaticFarModels();
             this.uploadAndDrawModels();
+            this.uploadAndDrawDynamicModels();
             gl.flush();
             this.compositeViewportToGameCanvas(viewport);
             gl.disable(gl.SCISSOR_TEST);
@@ -2641,6 +2739,22 @@ export default class HDRenderer {
         // also affect CPU-side batches in older builds.
         this.sceneDirty = true;
         this.modelBatches.clear();
+        this.dynamicModelBatches.clear();
+        this.dynamicTransparentBatches.length = 0;
+        this.lastGoodDynamicModelBatches.clear();
+        this.lastGoodDynamicTransparentBatches.length = 0;
+        this.dynamicModelVaos.forEach((vao) => {
+            if (this.gl && vao) {
+                this.gl.deleteVertexArray(vao);
+            }
+        });
+        this.dynamicModelVaos.clear();
+        this.dynamicModelBuffers.forEach((buffer) => {
+            if (this.gl && buffer) {
+                this.gl.deleteBuffer(buffer);
+            }
+        });
+        this.dynamicModelBuffers.clear();
         this.modelVaos.forEach((vao) => {
             if (this.gl && vao) {
                 this.gl.deleteVertexArray(vao);
@@ -3586,6 +3700,44 @@ export default class HDRenderer {
         }
     }
 
+    private static uploadDynamicModelBuffers(): void {
+        const gl = this.gl;
+        if (!gl) {
+            return;
+        }
+
+        for (const [texture, vertices] of this.dynamicModelBatches) {
+            if (vertices.length === 0) {
+                continue;
+            }
+
+            let buffer = this.dynamicModelBuffers.get(texture);
+            if (!buffer) {
+                buffer = gl.createBuffer();
+                if (!buffer) {
+                    continue;
+                }
+                this.dynamicModelBuffers.set(texture, buffer);
+            }
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            const n = vertices.length;
+            if (n > this._uploadBuf.length) {
+                this._uploadBuf = new Float32Array(n * 2);
+            }
+            this._uploadBuf.set(vertices, 0);
+            gl.bufferData(gl.ARRAY_BUFFER, this._uploadBuf.subarray(0, n), gl.DYNAMIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+            if (!this.dynamicModelVaos.has(texture)) {
+                const vao = this.setupVao(buffer);
+                if (vao) {
+                    this.dynamicModelVaos.set(texture, vao);
+                }
+            }
+        }
+    }
+
     private static uploadStaticFarModelBuffers(): void {
         const gl = this.gl;
         if (!gl || !this.staticFarGpuDirty) {
@@ -3791,6 +3943,87 @@ export default class HDRenderer {
         }
 
         this.pruneModelGpuObjects(gl, this.modelUsedKeys);
+    }
+
+    private static uploadAndDrawDynamicModels(): void {
+        const gl = this.gl;
+        if (!gl) {
+            return;
+        }
+
+        const liveKeys = new Set<number>();
+        for (const [texture, vertices] of this.dynamicModelBatches) {
+            if (vertices.length === 0) {
+                continue;
+            }
+            liveKeys.add(texture);
+            const vao = this.dynamicModelVaos.get(texture);
+            if (vao) {
+                this.drawBuffer(vao, vertices.length / VERTEX_FLOATS);
+            }
+        }
+
+        if (this.dynamicTransparentBatches.length > 0) {
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            gl.depthMask(false);
+            this.dynamicTransparentBatches.sort((a, b) => b.depth - a.depth);
+
+            for (const batch of this.dynamicTransparentBatches) {
+                if (batch.vertices.length === 0) {
+                    continue;
+                }
+                liveKeys.add(batch.texture);
+
+                let buffer = this.dynamicModelBuffers.get(batch.texture);
+                if (!buffer) {
+                    buffer = gl.createBuffer();
+                    if (!buffer) {
+                        continue;
+                    }
+                    this.dynamicModelBuffers.set(batch.texture, buffer);
+                }
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+                const n = batch.vertices.length;
+                if (n > this._uploadBuf.length) {
+                    this._uploadBuf = new Float32Array(n * 2);
+                }
+                this._uploadBuf.set(batch.vertices, 0);
+                gl.bufferData(gl.ARRAY_BUFFER, this._uploadBuf.subarray(0, n), gl.DYNAMIC_DRAW);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+                let vao = this.dynamicModelVaos.get(batch.texture);
+                if (!vao) {
+                    const created = this.setupVao(buffer);
+                    if (!created) {
+                        continue;
+                    }
+                    vao = created;
+                    this.dynamicModelVaos.set(batch.texture, vao);
+                }
+
+                this.drawBuffer(vao, batch.vertices.length / VERTEX_FLOATS);
+            }
+
+            gl.depthMask(true);
+            gl.disable(gl.BLEND);
+        }
+
+        for (const [texture, vao] of this.dynamicModelVaos) {
+            if (!liveKeys.has(texture)) {
+                if (vao) {
+                    gl.deleteVertexArray(vao);
+                }
+                this.dynamicModelVaos.delete(texture);
+            }
+        }
+        for (const [texture, buffer] of this.dynamicModelBuffers) {
+            if (!liveKeys.has(texture)) {
+                gl.deleteBuffer(buffer);
+                this.dynamicModelBuffers.delete(texture);
+            }
+        }
     }
 
     private static pruneModelGpuObjects(gl: WebGL2RenderingContext | null, activeKeys: Set<number>): void {

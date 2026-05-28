@@ -149,6 +149,12 @@ export default class World {
     private minLevel: number = 0;
     private shareTic: number = 0;
 
+    private invalidateHdStaticScene(): void {
+        if (HDRenderer.isEnabled()) {
+            HDRenderer.invalidateStaticFarScene();
+        }
+    }
+
     constructor(levelHeightmaps: Int32Array[][], maxTileZ: number, maxLevel: number, maxTileX: number) {
         this.maxTileLevel = maxLevel;
         this.maxTileX = maxTileX;
@@ -327,6 +333,7 @@ export default class World {
         const tile: Square | null = this.levelTiles[tileLevel][tileX][tileZ];
         if (tile) {
             tile.groundDecor = new GroundDecor(y, tileX * 128 + 64, tileZ * 128 + 64, model, typecode, typecode2);
+            this.invalidateHdStaticScene();
         }
     }
 
@@ -337,6 +344,7 @@ export default class World {
         }
 
         tile.groundDecor = null;
+        this.invalidateHdStaticScene();
     }
 
     setObj(stx: number, stz: number, y: number, level: number, typecode: number, topObj: ModelSource | null, middleObj: ModelSource | null, bottomObj: ModelSource | null): void {
@@ -362,6 +370,7 @@ export default class World {
         const tile2: Square | null = this.levelTiles[level][stx][stz];
         if (tile2) {
             tile2.groundObject = new GroundObject(y, stx * 128 + 64, stz * 128 + 64, topObj, middleObj, bottomObj, typecode, stackOffset);
+            this.invalidateHdStaticScene();
         }
     }
 
@@ -372,6 +381,7 @@ export default class World {
         }
 
         tile.groundObject = null;
+        this.invalidateHdStaticScene();
     }
 
     setWall(level: number, tileX: number, tileZ: number, y: number, angle1: number, angle2: number, model1: ModelSource | null, model2: ModelSource | null, typecode1: number, typecode2: number): void {
@@ -388,6 +398,7 @@ export default class World {
         const tile: Square | null = this.levelTiles[level][tileX][tileZ];
         if (tile) {
             tile.wall = new Wall(y, tileX * 128 + 64, tileZ * 128 + 64, angle1, angle2, model1, model2, typecode1, typecode2);
+            this.invalidateHdStaticScene();
         }
     }
 
@@ -398,6 +409,7 @@ export default class World {
         }
 
         tile.wall = null;
+        this.invalidateHdStaticScene();
     }
 
     setDecor(level: number, tileX: number, tileZ: number, y: number, offsetX: number, offsetZ: number, typecode: number, model: ModelSource | null, info: number, angle: number, type: number): void {
@@ -414,6 +426,7 @@ export default class World {
         const tile: Square | null = this.levelTiles[level][tileX][tileZ];
         if (tile) {
             tile.decor = new Decor(y, tileX * 128 + offsetX + 64, tileZ * 128 + offsetZ + 64, type, angle, model, typecode, info);
+            this.invalidateHdStaticScene();
         }
     }
 
@@ -424,6 +437,7 @@ export default class World {
         }
 
         tile.decor = null;
+        this.invalidateHdStaticScene();
     }
 
     setDecorOffset(level: number, x: number, z: number, offset: number): void {
@@ -441,6 +455,7 @@ export default class World {
         const sz: number = z * 128 + 64;
         decor.x = sx + ((((decor.x - sx) * offset) / 16) | 0);
         decor.z = sz + ((((decor.z - sz) * offset) / 16) | 0);
+        this.invalidateHdStaticScene();
     }
 
     setDecorModel(level: number, x: number, z: number, model: Model | null): void {
@@ -459,6 +474,7 @@ export default class World {
         }
 
         decor.model = model;
+        this.invalidateHdStaticScene();
     }
 
     setGroundDecorModel(level: number, x: number, z: number, model: Model | null): void {
@@ -477,6 +493,7 @@ export default class World {
         }
 
         decor.model = model;
+        this.invalidateHdStaticScene();
     }
 
     setWallModel(level: number, x: number, z: number, model: Model | null): void {
@@ -495,6 +512,7 @@ export default class World {
         }
 
         wall.model1 = model;
+        this.invalidateHdStaticScene();
     }
 
     setWallModels(x: number, z: number, level: number, modelA: Model | null, modelB: Model | null): void {
@@ -514,6 +532,7 @@ export default class World {
 
         wall.model1 = modelA;
         wall.model2 = modelB;
+        this.invalidateHdStaticScene();
     }
 
     addScenery(level: number, tileX: number, tileZ: number, y: number, model: ModelSource | null, typecode: number, info: number, width: number, length: number, yaw: number): boolean {
@@ -523,7 +542,11 @@ export default class World {
 
         const sceneX: number = tileX * 128 + width * 64;
         const sceneZ: number = tileZ * 128 + length * 64;
-        return this.setSprite(sceneX, sceneZ, y, level, tileX, tileZ, width, length, model, typecode, info, yaw, false);
+        const added = this.setSprite(sceneX, sceneZ, y, level, tileX, tileZ, width, length, model, typecode, info, yaw, false);
+        if (added) {
+            this.invalidateHdStaticScene();
+        }
+        return added;
     }
 
     addDynamic(level: number, x: number, y: number, z: number, model: ModelSource | null, typecode: number, yaw: number, padding: number, forwardPadding: boolean): boolean {
@@ -573,6 +596,7 @@ export default class World {
             const loc: Sprite | null = tile.sprites[l];
             if (loc && ((loc.typecode >> 29) & 0x3) === 2 && loc.minTileX === x && loc.minTileZ === z) {
                 this.delSprite(loc);
+                this.invalidateHdStaticScene();
                 return;
             }
         }
@@ -992,7 +1016,7 @@ export default class World {
                                     break check_areas;
                                 }
 
-                                if (matrix[pitchLevel][(yawLevel + 1) % 31][x + dx + 25 + 1][z + dz + 25 + 1]) {
+                                if (matrix[pitchLevel][(yawLevel + 1) % 32][x + dx + 25 + 1][z + dz + 25 + 1]) {
                                     visible = true;
                                     break check_areas;
                                 }
@@ -1002,7 +1026,7 @@ export default class World {
                                     break check_areas;
                                 }
 
-                                if (matrix[pitchLevel + 1][(yawLevel + 1) % 31][x + dx + 25 + 1][z + dz + 25 + 1]) {
+                                if (matrix[pitchLevel + 1][(yawLevel + 1) % 32][x + dx + 25 + 1][z + dz + 25 + 1]) {
                                     visible = true;
                                     break check_areas;
                                 }
@@ -1109,6 +1133,10 @@ export default class World {
                 maxTileZ: hdMaxZ
             });
 
+            // Queue live actors before far/static scenery so players, bots and NPCs
+            // cannot lose a frame when static scenery rebuilds or hits the HD budget.
+            this.queueHdDynamicSprites(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
+
             // Queue HD models for the wider HD terrain radius too. Relying only on the
             // old software visibility pass makes locs/foliage/fences appear only when
             // they are extremely close to the camera, because the HD canvas covers the
@@ -1131,13 +1159,6 @@ export default class World {
                 }
             }
 
-            // Dynamic actors must not be stored in the cached static far-scene, or
-            // they leave ghost copies while walking.  But if we rely only on the
-            // old software visibility walk, players/NPCs/bots can flicker out at
-            // certain camera angles. Queue live dynamic sprites every HD frame
-            // inside the same 25-tile radius; HDRenderer's per-frame key de-dupe
-            // prevents double drawing if the software pass also queues them.
-            this.queueHdDynamicSprites(hdMinX, hdMinZ, hdMaxX, hdMaxZ, maxLevel, loopCycle);
         }
 
         this.calcOcclude();
@@ -1349,30 +1370,35 @@ export default class World {
         let queued = 0;
         const seen = new Set<Sprite>();
 
-        for (let i: number = 0; i < this.dynamicCount && queued < budget; i++) {
-            const sprite: Sprite | null = this.dynamicSprites[i];
-            if (!sprite || seen.has(sprite)) {
-                continue;
-            }
-            seen.add(sprite);
+        HDRenderer.beginDynamicModelQueue();
+        try {
+            for (let i: number = 0; i < this.dynamicCount && queued < budget; i++) {
+                const sprite: Sprite | null = this.dynamicSprites[i];
+                if (!sprite || seen.has(sprite)) {
+                    continue;
+                }
+                seen.add(sprite);
 
-            if (sprite.level > maxLevel) {
-                continue;
-            }
-            if (sprite.maxTileX < minTileX || sprite.minTileX >= maxTileX || sprite.maxTileZ < minTileZ || sprite.minTileZ >= maxTileZ) {
-                continue;
-            }
+                if (sprite.level > maxLevel) {
+                    continue;
+                }
+                if (sprite.maxTileX < minTileX || sprite.minTileX >= maxTileX || sprite.maxTileZ < minTileZ || sprite.minTileZ >= maxTileZ) {
+                    continue;
+                }
 
-            // Static loc/scenery sprites are handled by the cached far scene. This
-            // pass is only for live moving entities, so it fixes rotation flicker
-            // without reintroducing the old cached actor ghost/trail bug.
-            const spriteSceneType = (sprite.typecode >> 29) & 0x3;
-            if (sprite.typecode > 0 && spriteSceneType === 2) {
-                continue;
-            }
+                // Static loc/scenery sprites are handled by the cached far scene. This
+                // pass is only for live moving entities, so it fixes rotation flicker
+                // without reintroducing the old cached actor ghost/trail bug.
+                const spriteSceneType = (sprite.typecode >> 29) & 0x3;
+                if (sprite.typecode > 0 && spriteSceneType === 2) {
+                    continue;
+                }
 
-            sprite.model?.hdRender(loopCycle, sprite.yaw, sprite.x - World.cx, sprite.y - World.cy, sprite.z - World.cz);
-            queued++;
+                sprite.model?.hdRender(loopCycle, sprite.yaw, sprite.x - World.cx, sprite.y - World.cy, sprite.z - World.cz);
+                queued++;
+            }
+        } finally {
+            HDRenderer.endDynamicModelQueue();
         }
     }
 
@@ -1488,7 +1514,7 @@ export default class World {
                 }
 
                 const tile: Square | null = this.levelTiles[level][tx][tz];
-                if (tile && tile.spriteCount >= 5) {
+                if (!dynamic && tile && tile.spriteCount >= 5) {
                     return false;
                 }
             }
@@ -1518,7 +1544,7 @@ export default class World {
                 }
 
                 const tile: Square | null = this.levelTiles[level][tx][tz];
-                if (tile) {
+                if (tile && tile.spriteCount < 5) {
                     tile.sprites[tile.spriteCount] = sprite;
                     tile.spriteSpan[tile.spriteCount] = spans;
                     tile.spriteSpans |= spans;
