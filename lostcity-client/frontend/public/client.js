@@ -1,3 +1,16 @@
+(() => {
+    const g = globalThis;
+    // HD static scenery is cached and should not depend on the old software
+    // camera visibility pass. Give the cache enough room to keep walls,
+    // fences, bridges and wall-decor queued across dense areas so they do
+    // not disappear/reappear while rotating the camera.
+    g.HD_FAR_TILE_BUDGET ??= 2601;
+    g.HD_FAR_MODEL_CANDIDATES ??= 50000;
+    g.HD_FAR_MODEL_BUDGET ??= 30000;
+    g.HD_MODEL_BUDGET ??= 30000;
+    g.HD_MODEL_VERTEX_BUDGET ??= 4000000;
+    g.HD_FAR_TIME_BUDGET_MS ??= 0;
+})();
 // src/3rdparty/audio.js
 (function() {
   window.AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -6453,7 +6466,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-28T22:08:04.095Z";
+var HD_RENDERER_BUILD = "2026-05-28T22:49:33.078Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -34111,4 +34124,4 @@ export {
   Client
 };
 
-//# debugId=CEDC40D6DC6B52DB64756E2164756E21
+//# debugId=01EF4B4C7253D0EA64756E2164756E21
