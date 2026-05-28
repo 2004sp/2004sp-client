@@ -56,6 +56,39 @@ async function bunBuild(entry: string, external: string[] = [], minify = true, d
     };
 }
 
+function patchClientBundle(script: BunOutput): void {
+    // In the original 2004 client, "high detail" also controlled whether audio
+    // was loaded. Our launcher now has three modes:
+    //   Default    = normal software client, audio on, 50 FPS
+    //   Low memory = reduced memory, audio off, 50 FPS
+    //   HD         = WebGL HD renderer, audio on, 60 FPS/render-refresh smoothing
+    // Keep the HD renderer toggle separate from the old software high-detail flag.
+    const replacements: Array<[string, string]> = [
+        [
+            'Pix3D.highDetail = enabled;\n        Pix3D.lowDetail = !enabled;\n        (window as any).CLIENT_HD_MODE = enabled;',
+            'Pix3D.highDetail = enabled || (window as any).CLIENT_LOW_MEMORY !== true;\n        Pix3D.lowDetail = !Pix3D.highDetail;\n        (window as any).CLIENT_HD_MODE = enabled;'
+        ],
+        [
+            'if (Pix3D.highDetail) {\n                    this.areaViewport?.drawKeyed(4, 4, HD_VIEWPORT_KEY);\n                } else {',
+            'if (HDRenderer.isEnabled()) {\n                    this.areaViewport?.drawKeyed(4, 4, HD_VIEWPORT_KEY);\n                } else {'
+        ],
+        [
+            'if(!Client.lowMem){',
+            'if(!Client.lowMem||globalThis.CLIENT_LOW_MEMORY!==true){'
+        ],
+        [
+            'if (!Client.lowMem) {',
+            'if (!Client.lowMem || (globalThis as any).CLIENT_LOW_MEMORY !== true) {'
+        ]
+    ];
+
+    for (const [from, to] of replacements) {
+        script.source = script.source.split(from).join(to);
+    }
+
+    script.source = hdRuntimeDefaults + script.source;
+}
+
 async function applyTerser(script: BunOutput): Promise<boolean> {
     const mini = await minify(script.source, {
         sourceMap: {
@@ -94,6 +127,8 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
                     'HD_MODEL_BUDGET',
                     'HD_MODEL_VERTEX_BUDGET',
                     'HD_FAR_TIME_BUDGET_MS',
+                    'CLIENT_LOW_MEMORY',
+                    'CLIENT_HD_MODE',
 
                     // stdlib
                     'willReadFrequently',
@@ -178,7 +213,7 @@ for (const file of entrypoints) {
     const script = await bunBuild(file, [], prod, prod ? ['console'] : []);
     if (script) {
         if (output === 'client.js') {
-            script.source = hdRuntimeDefaults + script.source;
+            patchClientBundle(script);
         }
 
         if (prod) {
