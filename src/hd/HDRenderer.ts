@@ -4811,7 +4811,12 @@ private static showTextureAtlasPreview(): string | null {
         }
         this.textureAtlasLoadedCount = loadedCount;
 
-        this.startColorAtlasLoads();
+        // Disabled by default: these async PNG overrides were replacing the correct
+        // 254/cache texture atlas after login, causing textures to flash correct
+        // for a moment and then revert to the wrong-looking versions.
+        if ((globalThis as any).ENABLE_HD_COLOR_TEXTURE_OVERRIDES === true) {
+            this.startColorAtlasLoads();
+        }
         this.ensureHdTextureAtlas();
     }
 

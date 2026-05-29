@@ -6495,7 +6495,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-29T20:39:30.417Z";
+var HD_RENDERER_BUILD = "2026-05-29T20:43:23.991Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -10564,7 +10564,9 @@ class HDRenderer {
       this.textureAtlasReady = true;
     }
     this.textureAtlasLoadedCount = loadedCount;
-    this.startColorAtlasLoads();
+    if (globalThis.ENABLE_HD_COLOR_TEXTURE_OVERRIDES === true) {
+      this.startColorAtlasLoads();
+    }
     this.ensureHdTextureAtlas();
   }
   static ensureHdTextureAtlas() {
@@ -34986,4 +34988,4 @@ export {
   Client
 };
 
-//# debugId=0D7FB2C1EEF61B6B64756E2164756E21
+//# debugId=91007BE3D7C57F7864756E2164756E21
