@@ -1,9 +1,29 @@
 (() => {
     const g = globalThis;
-    // HD static scenery is cached and should not depend on the old software
-    // camera visibility pass. Give the cache enough room to keep walls,
-    // fences, bridges and wall-decor queued across dense areas so they do
-    // not disappear/reappear while rotating the camera.
+
+    // HD water tuning
+    g.HD_WATER_TEXTURE_DIFFUSE ??= 0.10;
+    g.HD_WATER_FRESNEL_STRENGTH ??= 0.95;
+    g.HD_WATER_SPECULAR_STRENGTH ??= 0.65;
+    g.HD_WATER_FOAM_STRENGTH ??= 0.25;
+
+    // HD environment lighting
+    g.HD_ENV_AMBIENT_R ??= 0.72;
+    g.HD_ENV_AMBIENT_G ??= 0.76;
+    g.HD_ENV_AMBIENT_B ??= 0.82;
+
+    g.HD_ENV_SUN_R ??= 1.00;
+    g.HD_ENV_SUN_G ??= 0.92;
+    g.HD_ENV_SUN_B ??= 0.78;
+
+    g.HD_ENV_FOG_R ??= 0.46;
+    g.HD_ENV_FOG_G ??= 0.56;
+    g.HD_ENV_FOG_B ??= 0.66;
+
+    g.HD_ENV_SKY_STRENGTH ??= 0.22;
+    g.HD_ENV_EXPOSURE ??= 0.92;
+    g.HD_ENV_CONTRAST ??= 1.08;
+
     g.HD_FAR_TILE_BUDGET ??= 2601;
     g.HD_FAR_MODEL_CANDIDATES ??= 50000;
     g.HD_FAR_MODEL_BUDGET ??= 30000;
@@ -6466,7 +6486,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-29T16:13:16.965Z";
+var HD_RENDERER_BUILD = "2026-05-29T17:18:35.078Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -6913,6 +6933,19 @@ uniform sampler2D u_shadowMap;
 uniform float u_shadowStrength;
 uniform sampler2D u_normalAtlas;
 uniform float u_waterTextureDiffuse;
+uniform float u_waterFresnelStrength;
+uniform float u_waterSpecularStrength;
+uniform float u_waterFoamStrength;
+uniform sampler2D u_waterNormalMap;
+uniform sampler2D u_waterFlowMap;
+uniform sampler2D u_waterFoamMap;
+uniform float u_waterMapsReady;
+uniform vec3 u_hdAmbientColour;
+uniform vec3 u_hdSunColour;
+uniform vec3 u_hdFogColour;
+uniform float u_hdSkyStrength;
+uniform float u_hdExposure;
+uniform float u_hdContrast;
 
 out vec4 outColour;
 
@@ -6960,6 +6993,24 @@ float noise2(vec2 p) {
     float c = hash21(i + vec2(0.0, 1.0));
     float d = hash21(i + vec2(1.0, 1.0));
     return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+vec2 waterWorldUvs(float scale) {
+    return -v_worldPos.xz / (128.0 * scale);
+}
+
+vec3 waterMapNormal(vec2 uv) {
+    vec3 packed = texture(u_waterNormalMap, fract(uv)).rgb * 2.0 - 1.0;
+    return normalize(vec3(packed.x, 0.0, packed.y));
+}
+
+vec2 waterFlowMap(vec2 uv) {
+    vec2 flow = texture(u_waterFlowMap, fract(uv)).rg * 2.0 - 1.0;
+    return flow * 0.055;
+}
+
+float waterFoamMap(vec2 uv) {
+    return texture(u_waterFoamMap, fract(uv)).r;
 }
 
 vec3 untexturedTerrainDetail(vec3 colour, float material) {
@@ -7129,102 +7180,88 @@ void main() {
     if (material == 12.0) {
         light = 1.0;
     } else if (material == 1.0) {
-        // Water: ported from RLHD (117HD RuneLite plugin) water.glsl
-        // https://github.com/117HD/RLHD — © 117, BSD 2-Clause
-        // Adapted for WebGL2: noise replaces normal-map texture samples;
-        // uniforms mapped to u_ambient/u_diffuseStrength/u_skyColour.
+        // Water: RLHD-style mapped water.  Uses world-space UVs, flow map,
+        // dual normal samples, foam mask, Fresnel, specular sparkle and seabed tint.
+        // If the three PNGs are missing, it falls back to the old procedural noise.
         float t = u_time;
+        float mapsReady = step(0.5, u_waterMapsReady);
 
-        // World-space UVs — mirrors RLHD worldUvs(scale) = -pos.xz / (128 * scale)
-        vec2 wuv3  = -v_worldPos.xz / (128.0 * 3.0);
-        vec2 wuv15 = -v_worldPos.xz / (128.0 * 15.0);
+        vec2 wuv3  = waterWorldUvs(3.0);
+        vec2 wuv15 = waterWorldUvs(15.0);
 
-        // Procedural flow field (RLHD samples a flow-map texture at worldUvs(15))
-        vec2 flowOff = vec2(
+        vec2 proceduralFlow = vec2(
             noise2(wuv15 * 4.0 + vec2(t * 0.0020,  0.0)),
             noise2(wuv15 * 4.0 + vec2(0.0, -t * 0.0015))
         ) * 0.025;
+        vec2 mappedFlow = waterFlowMap(wuv15 + vec2(t * 0.006, -t * 0.004));
+        vec2 flowOff = mix(proceduralFlow, mappedFlow, mapsReady);
 
-        // Two counter-scrolling UV layers (RLHD uv1 = wuv3.yx - frame, uv2 = wuv3 + frame)
         vec2 uv1 = wuv3.yx - vec2(t * 0.020, 0.0) + flowOff;
-        vec2 uv2 = wuv3    + vec2(0.0, t * 0.017)  + flowOff;
+        vec2 uv2 = wuv3    + vec2(0.0, t * 0.017)  - flowOff.yx;
 
-        // Normal perturbation via noise gradients (RLHD samples waterType.normalMap twice)
-        // RLHD WaterType.normalStrength = 0.9
         const float E = 0.04;
         float n1c  = noise2(uv1 * 8.0);
         float n1dx = noise2(uv1 * 8.0 + vec2(E, 0.0)) - noise2(uv1 * 8.0 - vec2(E, 0.0));
         float n1dz = noise2(uv1 * 8.0 + vec2(0.0, E)) - noise2(uv1 * 8.0 - vec2(0.0, E));
         float n2dx = noise2(uv2 * 8.0 + vec2(E, 0.0)) - noise2(uv2 * 8.0 - vec2(E, 0.0));
         float n2dz = noise2(uv2 * 8.0 + vec2(0.0, E)) - noise2(uv2 * 8.0 - vec2(0.0, E));
+        vec3 proceduralNormal = normalize(normal + vec3((n1dx + n2dx) * 0.090, 0.0, (n1dz + n2dz) * 0.090));
 
-        vec3 waterNormal = normalize(normal + vec3(
-            (n1dx + n2dx) * 0.9 * 0.10,
-            0.0,
-            (n1dz + n2dz) * 0.9 * 0.10
-        ));
+        vec3 mappedN1 = waterMapNormal(uv1);
+        vec3 mappedN2 = waterMapNormal(uv2 * 1.37 + vec2(0.21, -0.13));
+        vec3 mappedNormal = normalize(normal + (mappedN1 + mappedN2) * 0.070);
+        vec3 waterNormal = normalize(mix(proceduralNormal, mappedNormal, mapsReady));
 
         float lightDotN = max(dot(waterNormal, sunDir), 0.0);
         float viewDotN  = clamp(dot(viewDir, waterNormal), 0.0, 1.0);
-
-        // RLHD Fresnel — baseOpacity = 0.4 (WaterType.baseOpacity)
-        float baseOpacity  = 0.4;
+        float baseOpacity  = 0.40;
         float fresnel      = 1.0 - viewDotN;
-        float finalFresnel = clamp(mix(baseOpacity, 1.0, fresnel * 1.2), 0.0, 1.0);
+        float finalFresnel = clamp(mix(baseOpacity, 1.0, fresnel * 1.2 * max(u_waterFresnelStrength, 0.0)), 0.0, 1.0);
 
-        // Fresnel colour gradient (RLHD waterColorDark / Mid / Light environment uniforms)
-        // Overworld defaults; tune live with window.HD_WATER_COLOR_*
-        vec3 waterColorDark  = vec3(0.05, 0.13, 0.30);
-        vec3 waterColorMid   = vec3(0.18, 0.40, 0.65);
-        vec3 waterColorLight = vec3(0.48, 0.70, 0.85);
+        vec3 waterColorDark  = vec3(0.035, 0.105, 0.245);
+        vec3 waterColorMid   = vec3(0.160, 0.360, 0.590);
+        vec3 waterColorLight = vec3(0.520, 0.760, 0.910);
+        vec3 surfaceColor = finalFresnel < 0.5
+            ? mix(waterColorDark, waterColorMid, finalFresnel * 2.0)
+            : mix(waterColorMid, waterColorLight, (finalFresnel - 0.5) * 2.0);
 
-        vec3 surfaceColor;
-        if (finalFresnel < 0.5) {
-            surfaceColor = mix(waterColorDark, waterColorMid, finalFresnel * 2.0);
-        } else {
-            surfaceColor = mix(waterColorMid, waterColorLight, (finalFresnel - 0.5) * 2.0);
-        }
-
-        // RLHD lighting — mapped to our uniform names
-        // specularStrength = 0.8, specularGloss = 420  (from WaterType.CAVE_WATER reference)
-        float specularStrength = 0.8;
-        float specularGloss    = 420.0;
-
-        vec3 ambientLightOut = u_skyColour * u_ambient;                        // RLHD: ambientColor * ambientStrength
-        vec3 dirLight        = vec3(u_diffuseStrength);                        // RLHD: lightColor * lightStrength
+        vec3 ambientLightOut = u_hdAmbientColour * u_ambient;
+        vec3 dirLight        = u_hdSunColour * u_diffuseStrength;
         vec3 lightOut        = lightDotN * dirLight;
         vec3 halfVec         = normalize(viewDir + sunDir);
-        float spec           = pow(max(dot(waterNormal, halfVec), 0.0), specularGloss);
-        vec3 lightSpecOut    = dirLight * spec * specularStrength;             // RLHD: lightSpecularOut
-        vec3 skyLightOut     = max(-waterNormal.y, 0.0) * u_skyColour * 0.5;  // RLHD: fogColor * 0.5
+        float sparkleMask    = pow(max(noise2(uv1 * 28.0 + uv2 * 11.0) - 0.62, 0.0) / 0.38, 2.0);
+        float spec           = pow(max(dot(waterNormal, halfVec), 0.0), 420.0) * (0.75 + sparkleMask * 0.45);
+        vec3 lightSpecOut    = dirLight * spec * 0.82 * max(u_waterSpecularStrength, 0.0);
+        vec3 skyLightOut     = u_hdFogColour * max(-waterNormal.y, 0.0) * u_hdSkyStrength;
+        vec3 compositeLight  = ambientLightOut + lightOut + lightSpecOut + skyLightOut + surfaceColor * 0.80;
 
-        vec3 surfaceColorOut = surfaceColor * max(specularStrength, 0.2);
-        vec3 compositeLight  = ambientLightOut + lightOut + lightSpecOut + skyLightOut + surfaceColorOut;
-
-        // RLHD: baseColor = waterType.surfaceColor * compositeLight
-        //       mixed with Fresnel gradient at fresnelAmount
-        // WATER_FLAT: surfaceColor = #69809C = (0.412, 0.502, 0.612), fresnelAmount = 0.85
         vec3 waterSurfaceColor = vec3(0.412, 0.502, 0.612);
-        vec3 baseColor         = waterSurfaceColor * compositeLight;
-        baseColor              = mix(baseColor, surfaceColor, 0.85);
+        vec3 baseColor = mix(waterSurfaceColor * compositeLight, surfaceColor, 0.85);
 
-        // Foam — RLHD uses a foam mask texture + shore blend weight.
-        // We generate it procedurally from the same UV layers.
-        float foamMask   = noise2(uv1 * 12.0 + uv2 * 8.0 + vec2(t * 0.008, 0.0));
-        float foamAmount = clamp(pow(max(foamMask - 0.72, 0.0) / 0.28, 3.0), 0.0, 0.8);
-        vec3  foamColor  = vec3(0.95, 0.97, 1.00) * compositeLight;
-        foamAmount      *= foamMask;
-        baseColor        = mix(baseColor, foamColor, foamAmount);
+        float proceduralFoam = pow(max(noise2(uv1 * 12.0 + uv2 * 8.0 + vec2(t * 0.008, 0.0)) - 0.72, 0.0) / 0.28, 3.0);
+        float mappedFoam = waterFoamMap(uv1 * 0.75 + uv2 * 0.25 + flowOff * 2.0);
 
-        // RLHD: baseColor += pointLightsSpecularOut + lightSpecularOut / 3
+        // Shore foam without adjacency data: tile/water edge proximity creates a thin,
+        // broken edge band. This is cheap and stable because it uses world-space tile UVs.
+        vec2 tileUv = fract(v_worldPos.xz / 128.0);
+        float edgeDistance = min(min(tileUv.x, 1.0 - tileUv.x), min(tileUv.y, 1.0 - tileUv.y));
+        float shoreBand = 1.0 - smoothstep(0.020, 0.135, edgeDistance);
+        shoreBand *= smoothstep(0.18, 0.85, noise2(v_worldPos.xz / 92.0 + vec2(t * 0.015, -t * 0.012)));
+
+        float foamAmount = clamp((mix(proceduralFoam, mappedFoam, mapsReady) * 0.50 + shoreBand * 0.42) * max(u_waterFoamStrength, 0.0), 0.0, 0.88);
+        vec3 foamColor = vec3(0.93, 0.97, 1.0) * (ambientLightOut + lightOut + vec3(0.18));
+        baseColor = mix(baseColor, foamColor, foamAmount);
+
+        // Underwater/seabed tint: water gets deeper and more blue with alpha-depth.
+        float depthHint = clamp(v_alpha, 0.0, 1.0);
+        vec3 seabedTint = vec3(0.035, 0.105, 0.210);
+        baseColor = mix(baseColor, seabedTint, depthHint * 0.18);
+
         baseColor += lightSpecOut / 3.0;
-
-        // RS water texture blend (window.HD_WATER_TEXTURE_DIFFUSE, default 0.25)
         if (validCacheTexture) {
             baseColor = mix(baseColor, baseColour, u_waterTextureDiffuse);
         }
 
-        // RLHD alpha: max(baseOpacity, max(foamAmount, max(finalFresnel, length(specular/3))))
         alpha      = max(baseOpacity, max(foamAmount, max(finalFresnel, length(lightSpecOut / 3.0))));
         light      = 1.0;
         baseColour = baseColor;
@@ -7284,14 +7321,27 @@ void main() {
         alpha = 1.0;
     }
 
-    // Sky ambient: RLHD-inspired sky light contribution on upward-facing surfaces.
+    // RLHD-style environment lighting: cool ambient/sky + warmer sun.
+    // Water is already composited in its own branch above, so avoid double-lighting it here.
     // In RS coordinate space, "up" = negative Y direction, so normal.y < 0 = facing sky.
     float skyFacing = max(-normal.y, 0.0);
-    vec3 colour = baseColour * light + baseColour * u_skyColour * 0.07 * skyFacing;
+    vec3 colour;
+    if (material == 1.0 || material == 12.0) {
+        colour = baseColour;
+    } else {
+        vec3 envAmbient = baseColour * u_hdAmbientColour * u_ambient * (1.0 - shadowFactor * 0.35);
+        vec3 envSun     = baseColour * u_hdSunColour * diffuse * u_diffuseStrength * (1.0 - shadowFactor);
+        vec3 envSky     = baseColour * u_hdFogColour * skyFacing * u_hdSkyStrength;
+        colour = envAmbient + envSun + envSky;
+    }
+
+    colour = max(colour * u_hdExposure, vec3(0.0));
+    colour = (colour - 0.5) * u_hdContrast + 0.5;
+    colour = clamp(colour, 0.0, 1.6);
 
     float fogLinear = clamp((v_distance - u_fogStart) / max(u_fogDistance - u_fogStart, 1.0), 0.0, 1.0);
     float fog = smoothstep(0.0, 1.0, fogLinear);
-    colour = mix(colour, u_skyColour, fog * 0.95);
+    colour = mix(colour, u_hdFogColour, fog * 0.95);
 
     outColour = vec4(colour, alpha);
 }
@@ -7407,6 +7457,10 @@ class HDRenderer {
   static smoothNormalCache = new Map;
   static normalAtlas = null;
   static normalAtlasPendingImages = [];
+  static waterNormalMap = null;
+  static waterFlowMap = null;
+  static waterFoamMap = null;
+  static waterMapsReady = false;
   static shadowProgram = null;
   static shadowFbo = null;
   static shadowDepthTexture = null;
@@ -9325,6 +9379,82 @@ class HDRenderer {
       }).catch(() => {});
     }
   }
+  static initWaterMaps(gl) {
+    if (this.waterNormalMap && this.waterFlowMap && this.waterFoamMap) {
+      return;
+    }
+    const makeFallback = (kind) => {
+      const size = 128;
+      const data = new Uint8Array(size * size * 4);
+      for (let y = 0;y < size; y++) {
+        for (let x = 0;x < size; x++) {
+          const i = (x + y * size) * 4;
+          const n = (Math.sin(x * 0.19 + y * 0.07) + Math.sin(x * 0.05 - y * 0.17)) * 0.25 + 0.5;
+          if (kind === "normal") {
+            data[i + 0] = 128 + Math.round((n - 0.5) * 46);
+            data[i + 1] = 128 + Math.round((0.5 - n) * 46);
+            data[i + 2] = 255;
+          } else if (kind === "flow") {
+            data[i + 0] = 128 + Math.round(Math.sin(y * 0.09) * 48);
+            data[i + 1] = 128 + Math.round(Math.cos(x * 0.08) * 48);
+            data[i + 2] = 128;
+          } else {
+            const edge = Math.min(Math.min(x, size - 1 - x), Math.min(y, size - 1 - y)) / size;
+            data[i + 0] = edge < 0.08 && n > 0.45 ? 235 : Math.round(Math.max(0, n - 0.72) * 255);
+            data[i + 1] = data[i + 0];
+            data[i + 2] = data[i + 0];
+          }
+          data[i + 3] = 255;
+        }
+      }
+      const tex = gl.createTexture();
+      if (!tex) {
+        return null;
+      }
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      return tex;
+    };
+    this.waterNormalMap = makeFallback("normal");
+    this.waterFlowMap = makeFallback("flow");
+    this.waterFoamMap = makeFallback("foam");
+    const load = (url, assign) => {
+      fetch(url).then((r) => r.ok ? r.blob() : Promise.reject(url)).then((blob) => createImageBitmap(blob)).then((bitmap) => {
+        const tex = gl.createTexture();
+        if (!tex) {
+          bitmap.close();
+          return;
+        }
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
+        bitmap.close();
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        assign(tex);
+        this.waterMapsReady = Boolean(this.waterNormalMap && this.waterFlowMap && this.waterFoamMap);
+      }).catch(() => {});
+    };
+    load("/hd/textures/water_normal.png", (tex) => {
+      this.waterNormalMap = tex;
+    });
+    load("/hd/textures/water_flow.png", (tex) => {
+      this.waterFlowMap = tex;
+    });
+    load("/hd/textures/water_foam.png", (tex) => {
+      this.waterFoamMap = tex;
+    });
+    this.waterMapsReady = false;
+  }
   static renderShadowPass() {
     const gl = this.gl;
     if (!gl || !this.shadowProgram || !this.shadowFbo || this.terrainVertexCount === 0 || !this.terrainVao) {
@@ -9456,6 +9586,7 @@ class HDRenderer {
     this.cacheUniforms();
     this.initShadowMap();
     this.initNormalAtlas(gl);
+    this.initWaterMaps(gl);
     this.reason = "ready";
   }
   static cacheUniforms() {
@@ -9488,7 +9619,20 @@ class HDRenderer {
       "u_shadowMap",
       "u_shadowStrength",
       "u_normalAtlas",
-      "u_waterTextureDiffuse"
+      "u_waterTextureDiffuse",
+      "u_waterFresnelStrength",
+      "u_waterSpecularStrength",
+      "u_waterFoamStrength",
+      "u_waterNormalMap",
+      "u_waterFlowMap",
+      "u_waterFoamMap",
+      "u_waterMapsReady",
+      "u_hdAmbientColour",
+      "u_hdSunColour",
+      "u_hdFogColour",
+      "u_hdSkyStrength",
+      "u_hdExposure",
+      "u_hdContrast"
     ]) {
       this.uniformCache.set(name, gl.getUniformLocation(p, name));
     }
@@ -9561,6 +9705,24 @@ class HDRenderer {
     gl.uniform1f(u("u_farPlane"), HD_FAR_PLANE);
     gl.uniform3f(u("u_sunDirection"), -0.45, 0.8, -0.35);
     gl.uniform3f(u("u_skyColour"), HD_SKY_COLOUR[0], HD_SKY_COLOUR[1], HD_SKY_COLOUR[2]);
+    const hdEnvAmbientR = Number.isFinite(Number(globalThis.HD_ENV_AMBIENT_R)) ? Number(globalThis.HD_ENV_AMBIENT_R) : 0.72;
+    const hdEnvAmbientG = Number.isFinite(Number(globalThis.HD_ENV_AMBIENT_G)) ? Number(globalThis.HD_ENV_AMBIENT_G) : 0.76;
+    const hdEnvAmbientB = Number.isFinite(Number(globalThis.HD_ENV_AMBIENT_B)) ? Number(globalThis.HD_ENV_AMBIENT_B) : 0.82;
+    const hdEnvSunR = Number.isFinite(Number(globalThis.HD_ENV_SUN_R)) ? Number(globalThis.HD_ENV_SUN_R) : 1;
+    const hdEnvSunG = Number.isFinite(Number(globalThis.HD_ENV_SUN_G)) ? Number(globalThis.HD_ENV_SUN_G) : 0.92;
+    const hdEnvSunB = Number.isFinite(Number(globalThis.HD_ENV_SUN_B)) ? Number(globalThis.HD_ENV_SUN_B) : 0.78;
+    const hdEnvFogR = Number.isFinite(Number(globalThis.HD_ENV_FOG_R)) ? Number(globalThis.HD_ENV_FOG_R) : 0.46;
+    const hdEnvFogG = Number.isFinite(Number(globalThis.HD_ENV_FOG_G)) ? Number(globalThis.HD_ENV_FOG_G) : 0.56;
+    const hdEnvFogB = Number.isFinite(Number(globalThis.HD_ENV_FOG_B)) ? Number(globalThis.HD_ENV_FOG_B) : 0.66;
+    const hdEnvSkyStrength = Number.isFinite(Number(globalThis.HD_ENV_SKY_STRENGTH)) ? Number(globalThis.HD_ENV_SKY_STRENGTH) : 0.22;
+    const hdEnvExposure = Number.isFinite(Number(globalThis.HD_ENV_EXPOSURE)) ? Number(globalThis.HD_ENV_EXPOSURE) : 0.92;
+    const hdEnvContrast = Number.isFinite(Number(globalThis.HD_ENV_CONTRAST)) ? Number(globalThis.HD_ENV_CONTRAST) : 1.08;
+    gl.uniform3f(u("u_hdAmbientColour"), hdEnvAmbientR, hdEnvAmbientG, hdEnvAmbientB);
+    gl.uniform3f(u("u_hdSunColour"), hdEnvSunR, hdEnvSunG, hdEnvSunB);
+    gl.uniform3f(u("u_hdFogColour"), hdEnvFogR, hdEnvFogG, hdEnvFogB);
+    gl.uniform1f(u("u_hdSkyStrength"), hdEnvSkyStrength);
+    gl.uniform1f(u("u_hdExposure"), hdEnvExposure);
+    gl.uniform1f(u("u_hdContrast"), hdEnvContrast);
     const hdAmbient = Number.isFinite(Number(globalThis.HD_AMBIENT)) ? Number(globalThis.HD_AMBIENT) : 0.78;
     const hdDiffuse = Number.isFinite(Number(globalThis.HD_DIFFUSE)) ? Number(globalThis.HD_DIFFUSE) : 0.48;
     const hdFogStart = Number.isFinite(Number(globalThis.HD_FOG_START)) ? Number(globalThis.HD_FOG_START) : HD_FOG_START;
@@ -9571,7 +9733,14 @@ class HDRenderer {
     gl.uniform1f(u("u_fogDistance"), hdFogEnd);
     gl.uniform1f(u("u_time"), performance.now() / 1000);
     const hdWaterTextureDiffuse = Number.isFinite(Number(globalThis.HD_WATER_TEXTURE_DIFFUSE)) ? Number(globalThis.HD_WATER_TEXTURE_DIFFUSE) : 0.25;
+    const hdWaterFresnelStrength = Number.isFinite(Number(globalThis.HD_WATER_FRESNEL_STRENGTH)) ? Number(globalThis.HD_WATER_FRESNEL_STRENGTH) : 1;
+    const hdWaterSpecularStrength = Number.isFinite(Number(globalThis.HD_WATER_SPECULAR_STRENGTH)) ? Number(globalThis.HD_WATER_SPECULAR_STRENGTH) : 1;
+    const hdWaterFoamStrength = Number.isFinite(Number(globalThis.HD_WATER_FOAM_STRENGTH)) ? Number(globalThis.HD_WATER_FOAM_STRENGTH) : 1;
     gl.uniform1f(u("u_waterTextureDiffuse"), hdWaterTextureDiffuse);
+    gl.uniform1f(u("u_waterFresnelStrength"), hdWaterFresnelStrength);
+    gl.uniform1f(u("u_waterSpecularStrength"), hdWaterSpecularStrength);
+    gl.uniform1f(u("u_waterFoamStrength"), hdWaterFoamStrength);
+    gl.uniform1f(u("u_waterMapsReady"), this.waterMapsReady ? 1 : 0);
     gl.uniform1i(u("u_textureDebugMode"), this.textureDebugMode());
     gl.uniform1i(u("u_cacheTextureCount"), CACHE_TEXTURE_COUNT);
     gl.uniformMatrix4fv(u("u_lightSpaceMatrix"), false, this.lightSpaceMatrix);
@@ -10044,6 +10213,21 @@ class HDRenderer {
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D, this.normalAtlas);
       gl.uniform1i(this.uniformCache.get("u_normalAtlas") ?? null, 3);
+    }
+    if (this.waterNormalMap) {
+      gl.activeTexture(gl.TEXTURE4);
+      gl.bindTexture(gl.TEXTURE_2D, this.waterNormalMap);
+      gl.uniform1i(this.uniformCache.get("u_waterNormalMap") ?? null, 4);
+    }
+    if (this.waterFlowMap) {
+      gl.activeTexture(gl.TEXTURE5);
+      gl.bindTexture(gl.TEXTURE_2D, this.waterFlowMap);
+      gl.uniform1i(this.uniformCache.get("u_waterFlowMap") ?? null, 5);
+    }
+    if (this.waterFoamMap) {
+      gl.activeTexture(gl.TEXTURE6);
+      gl.bindTexture(gl.TEXTURE_2D, this.waterFoamMap);
+      gl.uniform1i(this.uniformCache.get("u_waterFoamMap") ?? null, 6);
     }
     for (let id = 0;id < ATLAS_SIZE; id++) {
       const rect = this.textureRects[id] ?? { u0: 0, v0: 0, u1: 1, v1: 1 };
@@ -34307,4 +34491,4 @@ export {
   Client
 };
 
-//# debugId=D953C9C78656428164756E2164756E21
+//# debugId=0CB3F11DE56EEF5464756E2164756E21

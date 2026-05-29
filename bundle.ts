@@ -15,10 +15,30 @@ const define = {
 
 const hdRuntimeDefaults = `(() => {
     const g = globalThis;
-    // HD static scenery is cached and should not depend on the old software
-    // camera visibility pass. Give the cache enough room to keep walls,
-    // fences, bridges and wall-decor queued across dense areas so they do
-    // not disappear/reappear while rotating the camera.
+
+    // HD water tuning
+    g.HD_WATER_TEXTURE_DIFFUSE ??= 0.10;
+    g.HD_WATER_FRESNEL_STRENGTH ??= 0.95;
+    g.HD_WATER_SPECULAR_STRENGTH ??= 0.65;
+    g.HD_WATER_FOAM_STRENGTH ??= 0.25;
+
+    // HD environment lighting
+    g.HD_ENV_AMBIENT_R ??= 0.72;
+    g.HD_ENV_AMBIENT_G ??= 0.76;
+    g.HD_ENV_AMBIENT_B ??= 0.82;
+
+    g.HD_ENV_SUN_R ??= 1.00;
+    g.HD_ENV_SUN_G ??= 0.92;
+    g.HD_ENV_SUN_B ??= 0.78;
+
+    g.HD_ENV_FOG_R ??= 0.46;
+    g.HD_ENV_FOG_G ??= 0.56;
+    g.HD_ENV_FOG_B ??= 0.66;
+
+    g.HD_ENV_SKY_STRENGTH ??= 0.22;
+    g.HD_ENV_EXPOSURE ??= 0.92;
+    g.HD_ENV_CONTRAST ??= 1.08;
+
     g.HD_FAR_TILE_BUDGET ??= 2601;
     g.HD_FAR_MODEL_CANDIDATES ??= 50000;
     g.HD_FAR_MODEL_BUDGET ??= 30000;
@@ -244,6 +264,10 @@ const entrypoints = [
     'src/client/Client.ts',
     'src/mapview/MapView.ts'
 ];
+
+fs.mkdirSync('out', { recursive: true });
+fs.mkdirSync('lostcity-client/frontend/dist', { recursive: true });
+fs.mkdirSync('lostcity-client/frontend/public', { recursive: true });
 
 for (const file of entrypoints) {
     const output = path.basename(file).replace('.ts', '.js').toLowerCase();
