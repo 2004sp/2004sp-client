@@ -6495,7 +6495,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-29T20:18:22.922Z";
+var HD_RENDERER_BUILD = "2026-05-29T20:39:30.417Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -7125,11 +7125,15 @@ vec3 untexturedTerrainDetail(vec3 colour, float material) {
 
 
 bool hdGroundMaterial(float material, bool validCacheTexture) {
-    // Terrain-focused material replacement.  Foliage is only treated as grass
-    // when it is untextured terrain; textured foliage models keep their cache texture.
+    // Do not replace real 254/cache textures.
+    // Only apply HD ground material detail to untextured terrain.
+    if (validCacheTexture) {
+        return false;
+    }
+
     return material == 4.0 || material == 7.0 || material == 8.0 ||
            material == 13.0 || material == 14.0 ||
-           (material == 9.0 && !validCacheTexture);
+           material == 9.0;
 }
 
 vec3 hdMaterialBaseColour(float material) {
@@ -7363,7 +7367,7 @@ void main() {
         vec4 texel = texture(u_textureAtlas, atlasUv);
         // HD texture override: replace vanilla RGB with RLHD high-res art where available.
         // Vanilla alpha is preserved so transparent textures (foliage etc.) keep their silhouette.
-        if (u_hdAtlasReady > 0.5 && atlasTexture < 50 && material != 1.0) {
+        if (false && u_hdAtlasReady > 0.5 && atlasTexture < 50 && material != 1.0) {
             vec4 hdRect = u_hdAtlasRects[atlasTexture];
             vec2 hdAtlasUv = mix(hdRect.xy, hdRect.zw, fract(uv));
             vec4 hdTexel = texture(u_hdTextureAtlas, hdAtlasUv);
@@ -34982,4 +34986,4 @@ export {
   Client
 };
 
-//# debugId=F33F10C5A5AF1ACA64756E2164756E21
+//# debugId=0D7FB2C1EEF61B6B64756E2164756E21

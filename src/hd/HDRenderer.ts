@@ -651,11 +651,15 @@ vec3 untexturedTerrainDetail(vec3 colour, float material) {
 
 
 bool hdGroundMaterial(float material, bool validCacheTexture) {
-    // Terrain-focused material replacement.  Foliage is only treated as grass
-    // when it is untextured terrain; textured foliage models keep their cache texture.
+    // Do not replace real 254/cache textures.
+    // Only apply HD ground material detail to untextured terrain.
+    if (validCacheTexture) {
+        return false;
+    }
+
     return material == 4.0 || material == 7.0 || material == 8.0 ||
            material == 13.0 || material == 14.0 ||
-           (material == 9.0 && !validCacheTexture);
+           material == 9.0;
 }
 
 vec3 hdMaterialBaseColour(float material) {
@@ -889,7 +893,7 @@ void main() {
         vec4 texel = texture(u_textureAtlas, atlasUv);
         // HD texture override: replace vanilla RGB with RLHD high-res art where available.
         // Vanilla alpha is preserved so transparent textures (foliage etc.) keep their silhouette.
-        if (u_hdAtlasReady > 0.5 && atlasTexture < 50 && material != 1.0) {
+        if (false && u_hdAtlasReady > 0.5 && atlasTexture < 50 && material != 1.0) {
             vec4 hdRect = u_hdAtlasRects[atlasTexture];
             vec2 hdAtlasUv = mix(hdRect.xy, hdRect.zw, fract(uv));
             vec4 hdTexel = texture(u_hdTextureAtlas, hdAtlasUv);
