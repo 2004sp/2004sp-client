@@ -22,6 +22,12 @@ g.HD_GROUND_NORMAL_STRENGTH ??= 0.35;
 g.HD_GROUND_TEXTURE_SCALE ??= 256.0;
 g.HD_GROUND_MACRO_STRENGTH ??= 0.08;
 
+// Force-disable the old PNG colour override path.
+// 117/RLHD textures now render from the dedicated HD atlas.
+// Leaving this enabled can cause: blurry -> HD flash -> blurry again after login.
+g['ENABLE_HD_COLOR_TEXTURE_OVERRIDES'] = false;
+g['HD_TEXTURE_OVERRIDES_LOCKED'] = true;
+
 // HD water tuning
 g.HD_WATER_TEXTURE_DIFFUSE ??= 0.10;
 g.HD_WATER_FRESNEL_STRENGTH ??= 0.95;
