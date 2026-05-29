@@ -6495,7 +6495,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-29T21:30:36.359Z";
+var HD_RENDERER_BUILD = "2026-05-29T21:57:44.570Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -7354,6 +7354,7 @@ void main() {
         light = 1.0;
     } else if (u_textureDebugMode != 1 && validCacheTexture) {
         int atlasTexture = u_textureDebugMode == 3 ? 0 : v_texture;
+
         vec4 rect = u_atlasRects[atlasTexture];
         vec2 uv = fract(v_uv);
         if (material == 1.0) {
@@ -7395,9 +7396,12 @@ void main() {
         baseColour = untexturedTerrainDetail(baseColour, material);
     }
 
-    if (u_textureDebugMode == 0) {
-        baseColour = applyHdGroundMaterial(baseColour, material, validCacheTexture);
-    }
+// Only use generated/ground-material textures on untextured terrain.
+// If a real cache texture/HD override exists, keep that texture instead of
+// covering it with the blurry ground atlas/procedural fallback.
+if (u_textureDebugMode == 0 && !validCacheTexture) {
+    baseColour = applyHdGroundMaterial(baseColour, material, validCacheTexture);
+}
 
     // Texture-space normal mapping.
     // Textured surfaces (validCacheTexture) use the per-texture atlas slot with the same
@@ -9258,7 +9262,7 @@ class HDRenderer {
       document.body.appendChild(overlay);
       this.debugOverlay = overlay;
     }
-    this.debugOverlay.textContent = `HD ${HD_RENDERER_BUILD} | texture debug: ${mode}  |  F6 cycle, Shift+F6 back, F7 normal, F8 pink, F9 flat, F10/Ctrl+Shift+D diag, F11/Ctrl+Shift+A atlas | water: blue plain, yellow shaped, magenta model, cyan/orange inferred`;
+    this.debugOverlay.textContent = `HD ${HD_RENDERER_BUILD} | texture debug: DIAG-BUILD-2026-05-29 | ${mode}  |  F6 cycle, Shift+F6 back, F7 normal, F8 pink, F9 flat, F10/Ctrl+Shift+D diag, F11/Ctrl+Shift+A atlas | water: blue plain, yellow shaped, magenta model, cyan/orange inferred`;
     this.debugOverlay.style.display = this.enabled ? "block" : "none";
   }
   static isValid254Texture(texture) {
@@ -10168,23 +10172,14 @@ class HDRenderer {
     if (!this.gl || !this.canvas || viewport.width <= 0 || viewport.height <= 0) {
       return;
     }
-    const blit = () => {
-      if (!this.canvas || viewport.width <= 0 || viewport.height <= 0) {
-        return;
-      }
-      const gameCanvas = document.getElementById("canvas");
-      const gameCtx = gameCanvas?.getContext("2d");
-      if (!gameCanvas || !gameCtx) {
-        return;
-      }
-      const srcX = viewport.x;
-      const srcY = this.canvas.height - viewport.y - viewport.height;
-      gameCtx.drawImage(this.canvas, srcX, srcY, viewport.width, viewport.height, VIEWPORT_X, VIEWPORT_Y, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
-    };
-    blit();
-    setTimeout(blit, 0);
-    requestAnimationFrame(blit);
-    setTimeout(blit, 33);
+    const gameCanvas = document.getElementById("canvas");
+    const gameCtx = gameCanvas?.getContext("2d");
+    if (!gameCanvas || !gameCtx) {
+      return;
+    }
+    const srcX = viewport.x;
+    const srcY = this.canvas.height - viewport.y - viewport.height;
+    gameCtx.drawImage(this.canvas, srcX, srcY, viewport.width, viewport.height, VIEWPORT_X, VIEWPORT_Y, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
   }
   static uploadModelBuffers() {
     const gl = this.gl;
@@ -34998,4 +34993,4 @@ export {
   Client
 };
 
-//# debugId=7F1225CE0E1C899364756E2164756E21
+//# debugId=7EC0C467C8015E9164756E2164756E21

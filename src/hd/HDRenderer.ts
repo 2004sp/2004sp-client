@@ -881,13 +881,6 @@ void main() {
     } else if (u_textureDebugMode != 1 && validCacheTexture) {
         int atlasTexture = u_textureDebugMode == 3 ? 0 : v_texture;
 
-        // DIAG-BUILD-2026-05-29:
-        // Force all non-water valid cache textures to RLHD brick slot 2.
-        // If the game does not visibly change, the rebuilt app is not using this file.
-        if (u_textureDebugMode == 0 && material != 1.0) {
-            atlasTexture = 2;
-        }
-
         vec4 rect = u_atlasRects[atlasTexture];
         vec2 uv = fract(v_uv);
         if (material == 1.0) {
@@ -929,9 +922,12 @@ void main() {
         baseColour = untexturedTerrainDetail(baseColour, material);
     }
 
-    if (u_textureDebugMode == 0) {
-        baseColour = applyHdGroundMaterial(baseColour, material, validCacheTexture);
-    }
+// Only use generated/ground-material textures on untextured terrain.
+// If a real cache texture/HD override exists, keep that texture instead of
+// covering it with the blurry ground atlas/procedural fallback.
+if (u_textureDebugMode == 0 && !validCacheTexture) {
+    baseColour = applyHdGroundMaterial(baseColour, material, validCacheTexture);
+}
 
     // Texture-space normal mapping.
     // Textured surfaces (validCacheTexture) use the per-texture atlas slot with the same
