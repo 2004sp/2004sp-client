@@ -3091,13 +3091,19 @@ export default class HDRenderer {
         };
     }
 
-    private static showTextureAtlasPreview(): string | null {
-        if (typeof document === 'undefined') {
-            return null;
-        }
+private static showTextureAtlasPreview(): string | null {
+    if (typeof document === 'undefined') {
+        return null;
+    }
 
-        const scale = 2;
-        const canvas = document.createElement('canvas');
+    const existingAtlasPreview = document.getElementById('hd-texture-atlas-preview');
+    if (existingAtlasPreview) {
+        existingAtlasPreview.remove();
+        return null;
+    }
+
+    const scale = 2;
+    const canvas = document.createElement('canvas');
         canvas.width = ATLAS_COLS * TEXTURE_SIZE;
         canvas.height = ATLAS_ROWS * TEXTURE_SIZE;
         const ctx = canvas.getContext('2d');

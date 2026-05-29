@@ -6466,7 +6466,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-28T22:49:33.078Z";
+var HD_RENDERER_BUILD = "2026-05-29T01:29:35.991Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -9013,6 +9013,11 @@ class HDRenderer {
   }
   static showTextureAtlasPreview() {
     if (typeof document === "undefined") {
+      return null;
+    }
+    const existingAtlasPreview = document.getElementById("hd-texture-atlas-preview");
+    if (existingAtlasPreview) {
+      existingAtlasPreview.remove();
       return null;
     }
     const scale = 2;
@@ -15868,6 +15873,19 @@ class World {
       }
     }
   }
+  static HD_ALWAYS_VISIBLE_ROOF_SHAPED_LOCS = new Set([
+    3239,
+    3240,
+    3247,
+    3248,
+    3249,
+    3250,
+    3251,
+    3252,
+    3253,
+    3254,
+    1271
+  ]);
   static testPoint(x, z, y) {
     const px = z * this.cameraSinY + x * this.cameraCosY >> 16;
     const tmp = z * this.cameraCosY - x * this.cameraSinY >> 16;
@@ -16223,12 +16241,28 @@ class World {
     }
     return queued;
   }
-  shouldLeaveHdLocToSoftwareVisibility(typecode, typecode2, _softwareVisibleRegion) {
+  shouldLeaveHdLocToSoftwareVisibility(locId, typecode, typecode2, _softwareVisibleRegion) {
     if (typecode <= 0) {
       return false;
     }
     const shape = typecode2 & 63;
-    return shape >= 12 /* ROOF_STRAIGHT */ && shape <= 21 /* ROOFEDGE_SQUARE_CORNER */;
+    if (shape < 12 /* ROOF_STRAIGHT */ || shape > 21 /* ROOFEDGE_SQUARE_CORNER */) {
+      return false;
+    }
+    const loc = LocType.get(locId);
+    const name = (loc?.name ?? "").toLowerCase();
+    if (shape >= 12 /* ROOF_STRAIGHT */ && shape <= 21 /* ROOFEDGE_SQUARE_CORNER */) {
+      console.log("[HD roof-shaped loc]", {
+        locIdlocId,
+        shape,
+        typecode,
+        typecode2
+      });
+    }
+    if (name.includes("bridge") || name.includes("walkway") || name.includes("platform") || name.includes("floor") || name.includes("deck")) {
+      return false;
+    }
+    return true;
   }
   setSprite(x, z, y, level, tileX, tileZ, tileSizeX, tileSizeZ, model, typecode, info, yaw, dynamic) {
     if (!model) {
@@ -24253,7 +24287,7 @@ class Client extends GameShell {
       Model.init(this.onDemand.getFileCount(0), this.onDemand);
       await this.messageBox("Preloading cache", 62);
       await this.onDemand.prefetchAll();
-      if (!Client.lowMem) {
+      if (!Client.lowMem || globalThis.CLIENT_LOW_MEMORY !== true) {
         this.midiSong = 0;
         this.midiFading = false;
         this.onDemand.request(2, this.midiSong);
@@ -24343,7 +24377,7 @@ class Client extends GameShell {
         }
       }
       await this.onDemand.prefetchMaps(Client.memServer);
-      if (!Client.lowMem) {
+      if (!Client.lowMem || globalThis.CLIENT_LOW_MEMORY !== true) {
         const midiCount = this.onDemand.getFileCount(2);
         for (let i2 = 0;i2 < midiCount; i2++) {
           if (this.onDemand.isMidiJingle(i2)) {
@@ -24470,7 +24504,7 @@ class Client extends GameShell {
       SpotType.init(config);
       VarpType.init(config);
       VarBitType.init(config);
-      if (!Client.lowMem) {
+      if (!Client.lowMem || globalThis.CLIENT_LOW_MEMORY !== true) {
         await this.messageBox("Unpacking sounds", 90);
         const soundsDat = sounds.read("sounds.dat");
         JagFX.unpack(new Packet(soundsDat));
@@ -26909,7 +26943,7 @@ class Client extends GameShell {
       if (this.nextMusicDelay < 0) {
         this.nextMusicDelay = 0;
       }
-      if (this.nextMusicDelay === 0 && this.midiActive && !Client.lowMem) {
+      if (this.nextMusicDelay === 0 && this.midiActive) {
         this.midiSong = this.nextMidiSong;
         this.midiFading = false;
         this.onDemand?.request(2, this.midiSong);
@@ -28078,7 +28112,7 @@ class Client extends GameShell {
     }
   }
   textureRunAnims(cycle) {
-    if (!Client.lowMem) {
+    if (!Client.lowMem || globalThis.CLIENT_LOW_MEMORY !== true) {
       if (Pix3D.textureCycle[17] >= cycle) {
         const texture = Pix3D.textures[17];
         if (!texture) {
@@ -29998,7 +30032,7 @@ class Client extends GameShell {
         const id = this.in.g2();
         const loop = this.in.g1();
         const delay = this.in.g2();
-        if (this.waveEnabled && !Client.lowMem && this.waveCount < 50) {
+        if (this.waveEnabled && this.waveCount < 50) {
           this.waveIds[this.waveCount] = id;
           this.waveLoops[this.waveCount] = loop;
           this.waveDelay[this.waveCount] = delay + JagFX.delays[id];
@@ -30012,7 +30046,7 @@ class Client extends GameShell {
         if (id == 65535) {
           id = -1;
         }
-        if (this.nextMidiSong != id && this.midiActive && !Client.lowMem) {
+        if (this.nextMidiSong != id && this.midiActive) {
           this.midiSong = id;
           this.midiFading = true;
           this.onDemand?.request(2, this.midiSong);
@@ -30025,7 +30059,7 @@ class Client extends GameShell {
       if (this.ptype === 242 /* MIDI_JINGLE */) {
         const id = this.in.g2();
         const delay = this.in.g2();
-        if (this.midiActive && !Client.lowMem) {
+        if (this.midiActive) {
           this.midiSong = id;
           this.midiFading = false;
           this.onDemand?.request(2, this.midiSong);
@@ -34124,4 +34158,4 @@ export {
   Client
 };
 
-//# debugId=01EF4B4C7253D0EA64756E2164756E21
+//# debugId=5EAE3995AB7108B864756E2164756E21
