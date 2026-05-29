@@ -880,6 +880,14 @@ void main() {
         light = 1.0;
     } else if (u_textureDebugMode != 1 && validCacheTexture) {
         int atlasTexture = u_textureDebugMode == 3 ? 0 : v_texture;
+
+        // DIAG-BUILD-2026-05-29:
+        // Force all non-water valid cache textures to RLHD brick slot 2.
+        // If the game does not visibly change, the rebuilt app is not using this file.
+        if (u_textureDebugMode == 0 && material != 1.0) {
+            atlasTexture = 2;
+        }
+
         vec4 rect = u_atlasRects[atlasTexture];
         vec2 uv = fract(v_uv);
         if (material == 1.0) {
@@ -2199,16 +2207,9 @@ static queueGroundTile(level: number, x: number, z: number): void {
 
             (globalThis as any)._hdPhase = 'renderFrame-mainPass';
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-            // DOM overlay mode: clear the whole WebGL overlay to transparent first,
-            // then draw only the 3D viewport opaque. This keeps the software Pix2D UI
-            // visible while preventing the software viewport from repainting over HD.
-            gl.disable(gl.SCISSOR_TEST);
-            gl.viewport(0, 0, canvas.width, canvas.height);
-            gl.clearColor(0, 0, 0, 0);
-            gl.clearDepth(1);
-            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
+            // Do not clear the whole WebGL canvas here. The 254 UI is drawn later as
+            // PixMap layers, and many panels only redraw when dirty just like the
+            // original software client. Only clear the 3D viewport every frame.
             gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
             gl.enable(gl.SCISSOR_TEST);
             gl.scissor(viewport.x, viewport.y, viewport.width, viewport.height);
@@ -2244,7 +2245,7 @@ static queueGroundTile(level: number, x: number, z: number): void {
             }
 
             gl.flush();
-            // No drawImage composite: HD canvas is now a transparent DOM overlay.
+            this.compositeViewportToGameCanvas(viewport);
             gl.disable(gl.SCISSOR_TEST);
             if (this.safeWarmupFrames > 0) {
                 this.safeWarmupFrames--;
@@ -3319,7 +3320,7 @@ static queueGroundTile(level: number, x: number, z: number): void {
             document.body.appendChild(overlay);
             this.debugOverlay = overlay;
         }
-        this.debugOverlay.textContent = `HD ${HD_RENDERER_BUILD} | texture debug: ${mode}  |  F6 cycle, Shift+F6 back, F7 normal, F8 pink, F9 flat, F10/Ctrl+Shift+D diag, F11/Ctrl+Shift+A atlas | water: blue plain, yellow shaped, magenta model, cyan/orange inferred`;
+        this.debugOverlay.textContent = `HD ${HD_RENDERER_BUILD} | texture debug: DIAG-BUILD-2026-05-29 | ${mode}  |  F6 cycle, Shift+F6 back, F7 normal, F8 pink, F9 flat, F10/Ctrl+Shift+D diag, F11/Ctrl+Shift+A atlas | water: blue plain, yellow shaped, magenta model, cyan/orange inferred`;
         this.debugOverlay.style.display = this.enabled ? 'block' : 'none';
     }
 
@@ -4173,29 +4174,17 @@ private static showTextureAtlasPreview(): string | null {
     }
 
     private static attachCanvas(): void {
-        // Keep HD as a transparent DOM overlay above the software canvas.
-        // The old drawImage composite path could be overwritten by the software
-        // 254 viewport one frame later, causing: pixelated -> HD flash -> pixelated.
-        // Pointer events stay on the original canvas, and renderFrame clears the
-        // overlay transparent outside the 3D viewport so Pix2D UI remains visible.
+        // Reverted WebGL UI presentation: keep the WebGL canvas off-DOM so it
+        // cannot cover the software Pix2D UI. renderFrame() composites only the
+        // 3D viewport into #canvas, then the normal client can draw UI on top.
         if (!this.canvas) {
-            return;
-        }
-
-        const gameCanvas = document.getElementById('canvas') as HTMLCanvasElement | null;
-        if (!gameCanvas || !gameCanvas.parentElement) {
             return;
         }
 
         this.canvas.id = 'hd-canvas';
         this.canvas.setAttribute('aria-hidden', 'true');
-        this.canvas.style.position = 'fixed';
-        this.canvas.style.pointerEvents = 'none';
-        this.canvas.style.zIndex = '2147483000';
-        this.canvas.style.background = 'transparent';
-
-        if (!this.canvas.isConnected) {
-            document.body.appendChild(this.canvas);
+        if (this.canvas.isConnected) {
+            this.canvas.remove();
         }
     }
 
@@ -4216,12 +4205,6 @@ private static showTextureAtlasPreview(): string | null {
         if (this.canvas.height !== height) {
             this.canvas.height = height;
         }
-
-        // Track the software canvas exactly, but remain transparent outside viewport.
-        this.canvas.style.left = `${rect.left}px`;
-        this.canvas.style.top = `${rect.top}px`;
-        this.canvas.style.width = `${rect.width}px`;
-        this.canvas.style.height = `${rect.height}px`;
 
         this.setSoftwareCanvasHidden(false);
     }
@@ -4368,9 +4351,21 @@ private static showTextureAtlasPreview(): string | null {
         gl.bindVertexArray(null);
     }
 
-    private static compositeViewportToGameCanvas(_viewport: { x: number; y: number; width: number; height: number }): void {
-        // No-op in DOM overlay mode. Drawing into the software canvas was the cause
-        // of the HD texture flash being overwritten by the software 254 viewport.
+    private static compositeViewportToGameCanvas(viewport: { x: number; y: number; width: number; height: number }): void {
+        if (!this.gl || !this.canvas || viewport.width <= 0 || viewport.height <= 0) {
+            return;
+        }
+
+        const gameCanvas = document.getElementById('canvas') as HTMLCanvasElement | null;
+        const gameCtx = gameCanvas?.getContext('2d');
+        if (!gameCanvas || !gameCtx) {
+            return;
+        }
+
+        // Convert viewport from OpenGL coords (Y from bottom) to canvas image coords (Y from top).
+        const srcX = viewport.x;
+        const srcY = this.canvas.height - viewport.y - viewport.height;
+        gameCtx.drawImage(this.canvas, srcX, srcY, viewport.width, viewport.height, VIEWPORT_X, VIEWPORT_Y, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
     }
 
     private static uploadModelBuffers(): void {
