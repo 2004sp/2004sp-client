@@ -836,10 +836,6 @@ void main() {
 
     bool hasTextureId = v_texture >= 0;
     bool validCacheTexture = hasTextureId && v_texture < u_cacheTextureCount;
-    // True when this fragment sampled a real 254/cache texture.
-    // In normal mode we keep these textures raw so the HD shader cannot tint
-    // them into the wrong-looking colours after the software view flashes.
-    bool sampledCacheTexture = false;
 
     if (u_textureDebugMode == 9) {
         // Shader/uniform proof mode. If F8 works, the whole HD scene turns bright pink.
@@ -897,7 +893,7 @@ void main() {
         vec4 texel = texture(u_textureAtlas, atlasUv);
         // HD texture override: replace vanilla RGB with RLHD high-res art where available.
         // Vanilla alpha is preserved so transparent textures (foliage etc.) keep their silhouette.
-        if (false && u_hdAtlasReady > 0.5 && atlasTexture < 50 && material != 1.0) {
+        if (u_hdAtlasReady > 0.5 && atlasTexture < 50 && material != 1.0) {
             vec4 hdRect = u_hdAtlasRects[atlasTexture];
             vec2 hdAtlasUv = mix(hdRect.xy, hdRect.zw, fract(uv));
             vec4 hdTexel = texture(u_hdTextureAtlas, hdAtlasUv);
@@ -911,13 +907,9 @@ void main() {
                 baseColour = mix(baseColour, texel.rgb, u_waterTextureDiffuse);
             }
         } else if (texel.a >= 0.05) {
-            // Use the exact cache texture colour. The old mix with vertex colour
-            // plus later material lighting/tinting is what made correct textures
-            // appear for a moment, then look wrong once HD took over.
-            baseColour = texel.rgb;
-            sampledCacheTexture = true;
+            baseColour = mix(baseColour, texel.rgb, 0.9);
             if (u_textureDebugMode == 5) {
-                outColour = vec4(texel.rgb, texel.a);
+                outColour = vec4(texel.rgb, 1.0);
                 return;
             }
         } else {
@@ -925,10 +917,7 @@ void main() {
         }
     }
 
-    // Disabled by default: this was changing untextured 254 terrain after the
-    // software/correct view flashed for a moment. Keep original vertex colours
-    // unless HD_UNTEXTURED_TERRAIN_DETAIL is deliberately re-enabled in code.
-    if (false && !validCacheTexture && u_textureDebugMode == 0) {
+    if (!validCacheTexture && u_textureDebugMode == 0) {
         baseColour = untexturedTerrainDetail(baseColour, material);
     }
 
@@ -940,7 +929,7 @@ void main() {
     // Textured surfaces (validCacheTexture) use the per-texture atlas slot with the same
     // UV as the colour sample.  Untextured terrain uses a per-material slot (50+material)
     // sampled with world-space planar UVs so the detail tiles independently of tile size.
-    if (u_textureDebugMode == 0 && !sampledCacheTexture && material != 1.0 && material != 2.0 && material != 12.0 && material != 14.0) {
+    if (u_textureDebugMode == 0 && material != 1.0 && material != 2.0 && material != 12.0 && material != 14.0) {
         int normalSlot;
         vec2 normalUv;
         if (validCacheTexture) {
@@ -976,15 +965,6 @@ void main() {
     }
 
     float alpha = v_alpha;
-
-    if (sampledCacheTexture && u_textureDebugMode == 0) {
-        // Final fix for Wails/no-console testing: keep real 254/cache textures
-        // unmodified in normal HD mode. Untextured terrain still uses the HD
-        // material path, but textured floors/walls/models no longer get the
-        // extra material tint, normal map, fog, exposure or contrast pass.
-        outColour = vec4(baseColour, alpha);
-        return;
-    }
 
     if (material == 12.0) {
         light = 1.0;
@@ -2590,27 +2570,16 @@ static queueGroundTile(level: number, x: number, z: number): void {
         const pb: [number, number, number] = [ground.vertexX[b], ground.vertexY[b], ground.vertexZ[b]];
         const pc: [number, number, number] = [ground.vertexX[c], ground.vertexY[c], ground.vertexZ[c]];
         const textureCandidate = ground.faceTexture && ground.faceTexture[faceIndex] >= 0 ? ground.faceTexture[faceIndex] : -1;
-        const terrainTexture = this.isValid254Texture(textureCandidate) ? textureCandidate : -1;
+        let texture = this.isValid254Texture(textureCandidate) ? textureCandidate : -1;
         const colourA = this.colourIndexToRgb(ground.faceColourA[faceIndex]);
         const colourB = this.colourIndexToRgb(ground.faceColourB[faceIndex]);
         const colourC = this.colourIndexToRgb(ground.faceColourC[faceIndex]);
         const avg = this.averageColour(colourA, colourB, colourC);
 
-        // 254 software terrain often flashes "correct" before HD because the software
-        // floor renderer is mostly vertex-colour/overlay driven, while the HD path was
-        // forcing cache texture IDs onto terrain faces. Keep model/object textures, but
-        // for terrain faces only preserve real water/lava texture IDs. Everything else
-        // uses the original floor colours from the scene, which should match the flash.
-        const candidateMaterial = this.isValid254Texture(terrainTexture)
-            ? this.materialForTexture(terrainTexture, avg)
-            : HDMaterial.Default;
-        const keepTerrainTexture = candidateMaterial === HDMaterial.Water || candidateMaterial === HDMaterial.Lava;
-        let texture = keepTerrainTexture ? terrainTexture : -1;
-
-        const texturedOverlayFace = keepTerrainTexture;
+        const texturedOverlayFace = ground.faceTexture !== null && ground.faceTexture[faceIndex] >= 0;
         const isOverlayFace = texturedOverlayFace || this.isColourOverlayFace(tile, avg);
-        const material = keepTerrainTexture
-            ? candidateMaterial
+        const material = this.isValid254Texture(texture)
+            ? this.materialForTexture(texture, avg)
             : this.materialForFloor(tile, avg, isOverlayFace);
 
         if (material === HDMaterial.Water && texture === -1) {
@@ -4286,8 +4255,8 @@ private static showTextureAtlasPreview(): string | null {
         gl.uniform1f(u('u_hdExposure'), hdEnvExposure);
         gl.uniform1f(u('u_hdContrast'), hdEnvContrast);
 
-        const hdGroundTextureStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_TEXTURE_STRENGTH)) ? Number((globalThis as any).HD_GROUND_TEXTURE_STRENGTH) : 0.0;
-        const hdGroundNormalStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_NORMAL_STRENGTH)) ? Number((globalThis as any).HD_GROUND_NORMAL_STRENGTH) : 0.0;
+        const hdGroundTextureStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_TEXTURE_STRENGTH)) ? Number((globalThis as any).HD_GROUND_TEXTURE_STRENGTH) : 0.55;
+        const hdGroundNormalStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_NORMAL_STRENGTH)) ? Number((globalThis as any).HD_GROUND_NORMAL_STRENGTH) : 0.45;
         const hdGroundTextureScale = Number.isFinite(Number((globalThis as any).HD_GROUND_TEXTURE_SCALE)) ? Number((globalThis as any).HD_GROUND_TEXTURE_SCALE) : 384.0;
         const hdGroundMacroStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_MACRO_STRENGTH)) ? Number((globalThis as any).HD_GROUND_MACRO_STRENGTH) : 0.18;
         gl.uniform1f(u('u_hdGroundTextureStrength'), hdGroundTextureStrength);
