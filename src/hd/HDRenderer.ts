@@ -64,6 +64,9 @@ const ATLAS_COLS = 16;
 const ATLAS_ROWS = 8;
 const ATLAS_SIZE = ATLAS_COLS * ATLAS_ROWS;
 const CACHE_TEXTURE_COUNT = 50;
+const HD_ATLAS_TILE = 256;
+const HD_ATLAS_COLS = 16;
+const HD_ATLAS_ROWS = 4;
 const SHADOW_MAP_SIZE = 1024;
 const WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 const TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
@@ -221,6 +224,62 @@ const SERVER_TEXTURE_MATERIALS: readonly HDMaterial[] = [
 const SERVER_TRANSPARENT_TEXTURE_IDS = new Set([
     7, 8, 9, 12, 17, 19, 21, 26, 28, 29, 30, 33, 34, 40, 41, 42, 43
 ]);
+
+// RLHD high-res texture filename for each vanilla texture ID (null = no HD override).
+// Files are served from /hd/textures/rlhd/ and loaded asynchronously into the HD atlas.
+// Water/lava/unlit textures are left null — they're handled by procedural shading.
+const HD_TEXTURE_FOR_SLOT: readonly (string | null)[] = [
+    'wood_grain.jpg',           // 0  door
+    null,                       // 1  water (procedural)
+    'hd_brick.jpg',             // 2  wall
+    'hd_wood_planks_1.jpg',     // 3  planks
+    'wood_grain_2.jpg',         // 4  elfdoor
+    'wood_grain_3.jpg',         // 5  darkwood
+    'hd_roof_shingles_1.jpg',   // 6  roof
+    null,                       // 7  damage (transparent — vanilla alpha needed for silhouette)
+    'leaves_1.jpg',             // 8  leafytree
+    'bark.jpg',                 // 9  treestump
+    'leaves_1.jpg',             // 10 leafybase
+    'hd_concrete.jpg',          // 11 mossy
+    'metallic_1.jpg',           // 12 railings
+    null,                       // 13 painting1 (unlit)
+    null,                       // 14 painting2 (unlit)
+    'marble_4.jpg',             // 15 marble
+    'hd_simple_grain_wood.jpg', // 16 wood2
+    null,                       // 17 fountain (water)
+    'hd_hay.jpg',               // 18 thatched
+    null,                       // 19 cargonet (transparent net)
+    'wood_grain.jpg',           // 20 books
+    'hd_roof_brick_tile.jpg',   // 21 elfroof2
+    'hd_crate.jpg',             // 22 elfwood
+    'hd_brick_brown.jpg',       // 23 mossybricks
+    null,                       // 24 water_animated
+    null,                       // 25 gungywater
+    null,                       // 26 web (transparent)
+    'hd_roof_shingles_1.jpg',   // 27 elfroof
+    'grunge_1.jpg',             // 28 mossydamage
+    'leaves_1.jpg',             // 29 bamboo
+    'leaves_1.jpg',             // 30 willowtex3
+    null,                       // 31 lava (procedural)
+    'bark.jpg',                 // 32 bark
+    'leaves_1.jpg',             // 33 mapletree
+    'leaves_1.jpg',             // 34 yewtree
+    'hd_sand_brick.jpg',        // 35 elfbrick
+    'wood_grain_2.jpg',         // 36 elfwall
+    'metallic_1.jpg',           // 37 chainmail
+    'rock_2.jpg',               // 38 mummy
+    null,                       // 39 elfpainting (unlit)
+    'leaves_1.jpg',             // 40 jungleleaf4
+    'leaves_1.jpg',             // 41 plant
+    'leaves_1.jpg',             // 42 jungleleaf2
+    'tile_small_1.jpg',         // 43 plant2/clean_tile
+    'hd_roof_shingles_2.jpg',   // 44 roof2
+    'wood_grain.jpg',           // 45 door2
+    'gravel.jpg',               // 46 pebblefloor
+    'rock_1.jpg',               // 47 rockwall
+    'hd_stone_pattern.jpg',     // 48 glyphs
+    null                        // 49 canvas (unlit fabric)
+];
 
 // OSRS/RLHD names for the same numeric vanillaTextureIndex values.
 const OSRS_TEXTURE_NAMES: readonly string[] = [
@@ -480,6 +539,9 @@ uniform float u_hdGroundTextureScale;
 uniform float u_hdGroundMacroStrength;
 uniform sampler2D u_hdGroundAtlas;
 uniform float u_hdGroundMapsReady;
+uniform sampler2D u_hdTextureAtlas;
+uniform vec4 u_hdAtlasRects[50];
+uniform float u_hdAtlasReady;
 
 out vec4 outColour;
 
@@ -624,6 +686,10 @@ vec3 hdGroundAtlasAlbedo(float material, vec2 uv) {
     vec2 cell = vec2(mod(slot, grid.x), floor(slot / grid.x));
     // Slight per-material scale offsets reduce the obvious repeating pattern.
     vec2 localUv = fract(uv * (material == 13.0 ? 0.75 : (material == 9.0 ? 1.15 : 1.0)));
+    // Clamp half a texel away from cell edges to prevent linear sampler bleeding
+    // into adjacent atlas cells, which produces black/wrong-colour seam lines.
+    const float HALF_TEXEL = 0.5 / 128.0;
+    localUv = clamp(localUv, HALF_TEXEL, 1.0 - HALF_TEXEL);
     vec2 atlasUv = (cell + localUv) / grid;
     vec3 tex = texture(u_hdGroundAtlas, atlasUv).rgb;
 
@@ -631,7 +697,7 @@ vec3 hdGroundAtlasAlbedo(float material, vec2 uv) {
     // albedos.  Gently remap them toward the material colour so they blend with
     // 2004 floor vertex colours instead of looking pasted on top.
     vec3 target = hdMaterialBaseColour(material);
-    tex = mix(tex, target, material == 9.0 ? 0.36 : 0.24);
+    tex = mix(tex, target, material == 9.0 ? 0.18 : 0.10);
     return tex;
 }
 
@@ -821,6 +887,16 @@ void main() {
         }
         vec2 atlasUv = mix(rect.xy, rect.zw, fract(uv));
         vec4 texel = texture(u_textureAtlas, atlasUv);
+        // HD texture override: replace vanilla RGB with RLHD high-res art where available.
+        // Vanilla alpha is preserved so transparent textures (foliage etc.) keep their silhouette.
+        if (u_hdAtlasReady > 0.5 && atlasTexture < 50 && material != 1.0) {
+            vec4 hdRect = u_hdAtlasRects[atlasTexture];
+            vec2 hdAtlasUv = mix(hdRect.xy, hdRect.zw, fract(uv));
+            vec4 hdTexel = texture(u_hdTextureAtlas, hdAtlasUv);
+            if (hdTexel.a > 0.1) {
+                texel = vec4(hdTexel.rgb, texel.a);
+            }
+        }
         if (material == 1.0) {
             // Water never discards — atlas padding must not punch holes in the surface.
             if (texel.a >= 0.05) {
@@ -1278,6 +1354,13 @@ export default class HDRenderer {
     private static smoothNormalCache: Map<number, readonly [number, number, number]> = new Map();
     private static normalAtlas: WebGLTexture | null = null;
     private static normalAtlasPendingImages: { slot: number; data: Uint8ClampedArray }[] = [];
+    private static colorAtlasPendingImages: { slot: number; data: Uint8ClampedArray }[] = [];
+    private static hdTextureAtlas: WebGLTexture | null = null;
+    private static hdAtlasRects: TextureAtlasRect[] = [];
+    private static hdAtlasLoadingStarted: boolean = false;
+    private static hdAtlasPendingImages: { slot: number; data: Uint8ClampedArray }[] = [];
+    private static hdAtlasRectLocations: (WebGLUniformLocation | null)[] = [];
+    private static hdAtlasLoadedCount: number = 0;
     private static waterNormalMap: WebGLTexture | null = null;
     private static waterFlowMap: WebGLTexture | null = null;
     private static waterFoamMap: WebGLTexture | null = null;
@@ -1359,7 +1442,10 @@ export default class HDRenderer {
             return this.status();
         }
 
-        this.textureAtlasReady = false;
+        // Do NOT reset textureAtlasReady here. The vanilla atlas and HD atlas are built
+        // from static data (cache + RLHD files) that doesn't change between scenes.
+        // Resetting caused the atlas to be rebuilt from scratch on every mapBuild,
+        // creating a ~1-second flash back to vanilla textures on every map transition.
         this.sceneDirty = true;
         this.frameStarted = false;
         this.installTextureDebugHotkeys();
@@ -4034,7 +4120,8 @@ private static showTextureAtlasPreview(): string | null {
             'u_hdSkyStrength', 'u_hdExposure', 'u_hdContrast',
             'u_hdGroundTextureStrength', 'u_hdGroundNormalStrength',
             'u_hdGroundTextureScale', 'u_hdGroundMacroStrength',
-            'u_hdGroundAtlas', 'u_hdGroundMapsReady'
+            'u_hdGroundAtlas', 'u_hdGroundMapsReady',
+            'u_hdTextureAtlas', 'u_hdAtlasReady'
         ]) {
             this.uniformCache.set(name, gl.getUniformLocation(p, name));
         }
@@ -4042,6 +4129,11 @@ private static showTextureAtlasPreview(): string | null {
         this.atlasRectLocations = [];
         for (let i = 0; i < ATLAS_SIZE; i++) {
             this.atlasRectLocations[i] = gl.getUniformLocation(p, `u_atlasRects[${i}]`);
+        }
+
+        this.hdAtlasRectLocations = [];
+        for (let i = 0; i < CACHE_TEXTURE_COUNT; i++) {
+            this.hdAtlasRectLocations[i] = gl.getUniformLocation(p, `u_hdAtlasRects[${i}]`);
         }
     }
 
@@ -4642,6 +4734,14 @@ private static showTextureAtlasPreview(): string | null {
             return;
         }
 
+        // If the GL texture already exists from a previous call, mark ready and bail.
+        // This handles the case where Pix3D.textures wasn't populated on the first attempt.
+        if (this.textureAtlas) {
+            this.textureAtlasReady = true;
+            this.ensureHdTextureAtlas();
+            return;
+        }
+
         const gl = this.gl;
         const width = ATLAS_COLS * TEXTURE_SIZE;
         const height = ATLAS_ROWS * TEXTURE_SIZE;
@@ -4706,6 +4806,111 @@ private static showTextureAtlasPreview(): string | null {
             this.textureAtlasReady = true;
         }
         this.textureAtlasLoadedCount = loadedCount;
+
+        this.startColorAtlasLoads();
+        this.ensureHdTextureAtlas();
+    }
+
+    private static ensureHdTextureAtlas(): void {
+        if (!this.gl || this.hdTextureAtlas || this.hdAtlasLoadingStarted) {
+            return;
+        }
+
+        const gl = this.gl;
+        const width = HD_ATLAS_COLS * HD_ATLAS_TILE;
+        const height = HD_ATLAS_ROWS * HD_ATLAS_TILE;
+        const atlas = new Uint8Array(width * height * 4); // all zeros = alpha=0 (no HD data)
+
+        const texture = gl.createTexture();
+        if (!texture) {
+            return;
+        }
+
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        const anisotropicExt = gl.getExtension('EXT_texture_filter_anisotropic');
+        if (anisotropicExt) {
+            gl.texParameterf(gl.TEXTURE_2D, anisotropicExt.TEXTURE_MAX_ANISOTROPY_EXT, gl.getParameter(anisotropicExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT));
+        }
+        gl.bindTexture(gl.TEXTURE_2D, null);
+
+        this.hdTextureAtlas = texture;
+
+        for (let id = 0; id < CACHE_TEXTURE_COUNT; id++) {
+            const col = id % HD_ATLAS_COLS;
+            const row = (id / HD_ATLAS_COLS) | 0;
+            this.hdAtlasRects[id] = {
+                u0: (col * HD_ATLAS_TILE + 0.5) / width,
+                v0: (row * HD_ATLAS_TILE + 0.5) / height,
+                u1: ((col + 1) * HD_ATLAS_TILE - 0.5) / width,
+                v1: ((row + 1) * HD_ATLAS_TILE - 0.5) / height
+            };
+        }
+
+        this.hdAtlasLoadingStarted = true;
+        this.startHdAtlasLoads();
+    }
+
+    private static startHdAtlasLoads(): void {
+        for (let id = 0; id < CACHE_TEXTURE_COUNT; id++) {
+            const filename = HD_TEXTURE_FOR_SLOT[id];
+            if (!filename) {
+                continue;
+            }
+            const slot = id;
+            fetch(`/hd/textures/rlhd/${filename}`)
+                .then(r => r.ok ? r.blob() : Promise.reject())
+                .then(blob => createImageBitmap(blob))
+                .then(bitmap => {
+                    const tmp = new OffscreenCanvas(HD_ATLAS_TILE, HD_ATLAS_TILE);
+                    const ctx = tmp.getContext('2d')!;
+                    ctx.drawImage(bitmap, 0, 0, HD_ATLAS_TILE, HD_ATLAS_TILE);
+                    bitmap.close();
+                    const imageData = ctx.getImageData(0, 0, HD_ATLAS_TILE, HD_ATLAS_TILE);
+                    const d = imageData.data;
+                    // Mark all pixels as fully opaque (HD textures are JPEGs with no alpha key).
+                    // alpha=0 in the atlas means "no HD data for this slot" — so we must set 255.
+                    for (let i = 3; i < d.length; i += 4) {
+                        d[i] = 255;
+                    }
+                    this.hdAtlasPendingImages.push({ slot, data: d });
+                })
+                .catch(() => {});
+        }
+    }
+
+    private static startColorAtlasLoads(): void {
+        for (let id = 0; id < CACHE_TEXTURE_COUNT; id++) {
+            const slot = id;
+            const hasTransparency = SERVER_TRANSPARENT_TEXTURE_IDS.has(id);
+            fetch(`/hd/terrain/textures/${id}.png`)
+                .then(r => r.ok ? r.blob() : Promise.reject())
+                .then(blob => createImageBitmap(blob))
+                .then(bitmap => {
+                    const tmp = new OffscreenCanvas(TEXTURE_SIZE, TEXTURE_SIZE);
+                    const ctx = tmp.getContext('2d')!;
+                    ctx.drawImage(bitmap, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+                    bitmap.close();
+                    const imageData = ctx.getImageData(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+                    const d = imageData.data;
+                    // Source PNGs use magenta (0xFF00FF) as the transparency key.
+                    // Convert to alpha=0 so the atlas renders correctly.
+                    for (let i = 0; i < d.length; i += 4) {
+                        if (d[i] > 240 && d[i + 1] < 16 && d[i + 2] > 240) {
+                            d[i + 3] = 0;
+                        } else if (!hasTransparency) {
+                            d[i + 3] = 255;
+                        }
+                    }
+                    this.colorAtlasPendingImages.push({ slot, data: d });
+                })
+                .catch(() => {});
+        }
     }
 
     private static bindTextureAtlas(): void {
@@ -4729,6 +4934,24 @@ private static showTextureAtlasPreview(): string | null {
                 );
             }
             this.normalAtlasPendingImages.length = 0;
+            gl.bindTexture(gl.TEXTURE_2D, null);
+        }
+
+        // Upload any OSRS PNG texture overrides that finished loading since the last frame.
+        if (this.textureAtlas && this.colorAtlasPendingImages.length > 0) {
+            gl.bindTexture(gl.TEXTURE_2D, this.textureAtlas);
+            for (const { slot, data } of this.colorAtlasPendingImages) {
+                const col = slot % ATLAS_COLS;
+                const row = (slot / ATLAS_COLS) | 0;
+                gl.texSubImage2D(
+                    gl.TEXTURE_2D, 0,
+                    col * TEXTURE_SIZE, row * TEXTURE_SIZE,
+                    TEXTURE_SIZE, TEXTURE_SIZE,
+                    gl.RGBA, gl.UNSIGNED_BYTE, data
+                );
+            }
+            this.colorAtlasPendingImages.length = 0;
+            gl.generateMipmap(gl.TEXTURE_2D);
             gl.bindTexture(gl.TEXTURE_2D, null);
         }
 
@@ -4763,9 +4986,40 @@ private static showTextureAtlasPreview(): string | null {
             gl.uniform1i(this.uniformCache.get('u_hdGroundAtlas') ?? null, 7);
         }
 
+        // Upload any RLHD HD textures that finished loading since the last frame.
+        if (this.hdTextureAtlas && this.hdAtlasPendingImages.length > 0) {
+            gl.bindTexture(gl.TEXTURE_2D, this.hdTextureAtlas);
+            for (const { slot, data } of this.hdAtlasPendingImages) {
+                const col = slot % HD_ATLAS_COLS;
+                const row = (slot / HD_ATLAS_COLS) | 0;
+                gl.texSubImage2D(
+                    gl.TEXTURE_2D, 0,
+                    col * HD_ATLAS_TILE, row * HD_ATLAS_TILE,
+                    HD_ATLAS_TILE, HD_ATLAS_TILE,
+                    gl.RGBA, gl.UNSIGNED_BYTE, data
+                );
+                this.hdAtlasLoadedCount++;
+            }
+            this.hdAtlasPendingImages.length = 0;
+            gl.generateMipmap(gl.TEXTURE_2D);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+        }
+
+        if (this.hdTextureAtlas) {
+            gl.activeTexture(gl.TEXTURE8);
+            gl.bindTexture(gl.TEXTURE_2D, this.hdTextureAtlas);
+            gl.uniform1i(this.uniformCache.get('u_hdTextureAtlas') ?? null, 8);
+            gl.uniform1f(this.uniformCache.get('u_hdAtlasReady') ?? null, this.hdAtlasLoadedCount > 0 ? 1.0 : 0.0);
+        }
+
         for (let id = 0; id < ATLAS_SIZE; id++) {
             const rect = this.textureRects[id] ?? { u0: 0, v0: 0, u1: 1, v1: 1 };
             gl.uniform4f(this.atlasRectLocations[id] ?? null, rect.u0, rect.v0, rect.u1, rect.v1);
+        }
+
+        for (let id = 0; id < CACHE_TEXTURE_COUNT; id++) {
+            const rect = this.hdAtlasRects[id] ?? { u0: 0, v0: 0, u1: 0, v1: 0 };
+            gl.uniform4f(this.hdAtlasRectLocations[id] ?? null, rect.u0, rect.v0, rect.u1, rect.v1);
         }
     }
 

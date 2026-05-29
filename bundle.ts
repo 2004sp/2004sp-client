@@ -17,10 +17,10 @@ const hdRuntimeDefaults = `(() => {
     const g = globalThis;
 	
 	// HD ground material tuning
-g.HD_GROUND_TEXTURE_STRENGTH ??= 0.32;
-g.HD_GROUND_NORMAL_STRENGTH ??= 0.18;
-g.HD_GROUND_TEXTURE_SCALE ??= 768.0;
-g.HD_GROUND_MACRO_STRENGTH ??= 0.04;
+g.HD_GROUND_TEXTURE_STRENGTH ??= 0.65;
+g.HD_GROUND_NORMAL_STRENGTH ??= 0.35;
+g.HD_GROUND_TEXTURE_SCALE ??= 256.0;
+g.HD_GROUND_MACRO_STRENGTH ??= 0.08;
 
 // HD water tuning
 g.HD_WATER_TEXTURE_DIFFUSE ??= 0.10;
@@ -191,8 +191,15 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
                     'HD_MODEL_BUDGET',
                     'HD_MODEL_VERTEX_BUDGET',
                     'HD_FAR_TIME_BUDGET_MS',
+                    'HD_GROUND_TEXTURE_STRENGTH',
+                    'HD_GROUND_NORMAL_STRENGTH',
+                    'HD_GROUND_TEXTURE_SCALE',
+                    'HD_GROUND_MACRO_STRENGTH',
                     'CLIENT_LOW_MEMORY',
                     'CLIENT_HD_MODE',
+                    'HD_RENDERER_STATUS',
+                    'setClientHdMode',
+                    'setClientLowMemoryMode',
 
                     // stdlib
                     'willReadFrequently',

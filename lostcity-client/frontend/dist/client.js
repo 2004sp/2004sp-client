@@ -2,10 +2,10 @@
     const g = globalThis;
 	
 	// HD ground material tuning
-g.HD_GROUND_TEXTURE_STRENGTH ??= 0.32;
-g.HD_GROUND_NORMAL_STRENGTH ??= 0.18;
-g.HD_GROUND_TEXTURE_SCALE ??= 768.0;
-g.HD_GROUND_MACRO_STRENGTH ??= 0.04;
+g.HD_GROUND_TEXTURE_STRENGTH ??= 0.65;
+g.HD_GROUND_NORMAL_STRENGTH ??= 0.35;
+g.HD_GROUND_TEXTURE_SCALE ??= 256.0;
+g.HD_GROUND_MACRO_STRENGTH ??= 0.08;
 
 // HD water tuning
 g.HD_WATER_TEXTURE_DIFFUSE ??= 0.10;
@@ -6488,11 +6488,14 @@ var ATLAS_COLS = 16;
 var ATLAS_ROWS = 8;
 var ATLAS_SIZE = ATLAS_COLS * ATLAS_ROWS;
 var CACHE_TEXTURE_COUNT = 50;
+var HD_ATLAS_TILE = 256;
+var HD_ATLAS_COLS = 16;
+var HD_ATLAS_ROWS = 4;
 var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-29T18:02:00.968Z";
+var HD_RENDERER_BUILD = "2026-05-29T20:18:22.922Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -6719,6 +6722,58 @@ var SERVER_TRANSPARENT_TEXTURE_IDS = new Set([
   42,
   43
 ]);
+var HD_TEXTURE_FOR_SLOT = [
+  "wood_grain.jpg",
+  null,
+  "hd_brick.jpg",
+  "hd_wood_planks_1.jpg",
+  "wood_grain_2.jpg",
+  "wood_grain_3.jpg",
+  "hd_roof_shingles_1.jpg",
+  null,
+  "leaves_1.jpg",
+  "bark.jpg",
+  "leaves_1.jpg",
+  "hd_concrete.jpg",
+  "metallic_1.jpg",
+  null,
+  null,
+  "marble_4.jpg",
+  "hd_simple_grain_wood.jpg",
+  null,
+  "hd_hay.jpg",
+  null,
+  "wood_grain.jpg",
+  "hd_roof_brick_tile.jpg",
+  "hd_crate.jpg",
+  "hd_brick_brown.jpg",
+  null,
+  null,
+  null,
+  "hd_roof_shingles_1.jpg",
+  "grunge_1.jpg",
+  "leaves_1.jpg",
+  "leaves_1.jpg",
+  null,
+  "bark.jpg",
+  "leaves_1.jpg",
+  "leaves_1.jpg",
+  "hd_sand_brick.jpg",
+  "wood_grain_2.jpg",
+  "metallic_1.jpg",
+  "rock_2.jpg",
+  null,
+  "leaves_1.jpg",
+  "leaves_1.jpg",
+  "leaves_1.jpg",
+  "tile_small_1.jpg",
+  "hd_roof_shingles_2.jpg",
+  "wood_grain.jpg",
+  "gravel.jpg",
+  "rock_1.jpg",
+  "hd_stone_pattern.jpg",
+  null
+];
 var OSRS_TEXTURE_NAMES = [
   "WOODEN_DOOR_HANDLE",
   "WATER_FLAT",
@@ -6958,6 +7013,9 @@ uniform float u_hdGroundTextureScale;
 uniform float u_hdGroundMacroStrength;
 uniform sampler2D u_hdGroundAtlas;
 uniform float u_hdGroundMapsReady;
+uniform sampler2D u_hdTextureAtlas;
+uniform vec4 u_hdAtlasRects[50];
+uniform float u_hdAtlasReady;
 
 out vec4 outColour;
 
@@ -7102,6 +7160,10 @@ vec3 hdGroundAtlasAlbedo(float material, vec2 uv) {
     vec2 cell = vec2(mod(slot, grid.x), floor(slot / grid.x));
     // Slight per-material scale offsets reduce the obvious repeating pattern.
     vec2 localUv = fract(uv * (material == 13.0 ? 0.75 : (material == 9.0 ? 1.15 : 1.0)));
+    // Clamp half a texel away from cell edges to prevent linear sampler bleeding
+    // into adjacent atlas cells, which produces black/wrong-colour seam lines.
+    const float HALF_TEXEL = 0.5 / 128.0;
+    localUv = clamp(localUv, HALF_TEXEL, 1.0 - HALF_TEXEL);
     vec2 atlasUv = (cell + localUv) / grid;
     vec3 tex = texture(u_hdGroundAtlas, atlasUv).rgb;
 
@@ -7109,7 +7171,7 @@ vec3 hdGroundAtlasAlbedo(float material, vec2 uv) {
     // albedos.  Gently remap them toward the material colour so they blend with
     // 2004 floor vertex colours instead of looking pasted on top.
     vec3 target = hdMaterialBaseColour(material);
-    tex = mix(tex, target, material == 9.0 ? 0.36 : 0.24);
+    tex = mix(tex, target, material == 9.0 ? 0.18 : 0.10);
     return tex;
 }
 
@@ -7299,6 +7361,16 @@ void main() {
         }
         vec2 atlasUv = mix(rect.xy, rect.zw, fract(uv));
         vec4 texel = texture(u_textureAtlas, atlasUv);
+        // HD texture override: replace vanilla RGB with RLHD high-res art where available.
+        // Vanilla alpha is preserved so transparent textures (foliage etc.) keep their silhouette.
+        if (u_hdAtlasReady > 0.5 && atlasTexture < 50 && material != 1.0) {
+            vec4 hdRect = u_hdAtlasRects[atlasTexture];
+            vec2 hdAtlasUv = mix(hdRect.xy, hdRect.zw, fract(uv));
+            vec4 hdTexel = texture(u_hdTextureAtlas, hdAtlasUv);
+            if (hdTexel.a > 0.1) {
+                texel = vec4(hdTexel.rgb, texel.a);
+            }
+        }
         if (material == 1.0) {
             // Water never discards — atlas padding must not punch holes in the surface.
             if (texel.a >= 0.05) {
@@ -7644,6 +7716,13 @@ class HDRenderer {
   static smoothNormalCache = new Map;
   static normalAtlas = null;
   static normalAtlasPendingImages = [];
+  static colorAtlasPendingImages = [];
+  static hdTextureAtlas = null;
+  static hdAtlasRects = [];
+  static hdAtlasLoadingStarted = false;
+  static hdAtlasPendingImages = [];
+  static hdAtlasRectLocations = [];
+  static hdAtlasLoadedCount = 0;
   static waterNormalMap = null;
   static waterFlowMap = null;
   static waterFoamMap = null;
@@ -7710,7 +7789,6 @@ class HDRenderer {
       this.frameStarted = false;
       return this.status();
     }
-    this.textureAtlasReady = false;
     this.sceneDirty = true;
     this.frameStarted = false;
     this.installTextureDebugHotkeys();
@@ -9904,13 +9982,19 @@ class HDRenderer {
       "u_hdGroundTextureScale",
       "u_hdGroundMacroStrength",
       "u_hdGroundAtlas",
-      "u_hdGroundMapsReady"
+      "u_hdGroundMapsReady",
+      "u_hdTextureAtlas",
+      "u_hdAtlasReady"
     ]) {
       this.uniformCache.set(name, gl.getUniformLocation(p, name));
     }
     this.atlasRectLocations = [];
     for (let i = 0;i < ATLAS_SIZE; i++) {
       this.atlasRectLocations[i] = gl.getUniformLocation(p, `u_atlasRects[${i}]`);
+    }
+    this.hdAtlasRectLocations = [];
+    for (let i = 0;i < CACHE_TEXTURE_COUNT; i++) {
+      this.hdAtlasRectLocations[i] = gl.getUniformLocation(p, `u_hdAtlasRects[${i}]`);
     }
   }
   static setSoftwareCanvasHidden(_hidden) {
@@ -10414,6 +10498,11 @@ class HDRenderer {
     if (!this.gl || this.textureAtlasReady) {
       return;
     }
+    if (this.textureAtlas) {
+      this.textureAtlasReady = true;
+      this.ensureHdTextureAtlas();
+      return;
+    }
     const gl = this.gl;
     const width = ATLAS_COLS * TEXTURE_SIZE;
     const height = ATLAS_ROWS * TEXTURE_SIZE;
@@ -10471,6 +10560,89 @@ class HDRenderer {
       this.textureAtlasReady = true;
     }
     this.textureAtlasLoadedCount = loadedCount;
+    this.startColorAtlasLoads();
+    this.ensureHdTextureAtlas();
+  }
+  static ensureHdTextureAtlas() {
+    if (!this.gl || this.hdTextureAtlas || this.hdAtlasLoadingStarted) {
+      return;
+    }
+    const gl = this.gl;
+    const width = HD_ATLAS_COLS * HD_ATLAS_TILE;
+    const height = HD_ATLAS_ROWS * HD_ATLAS_TILE;
+    const atlas = new Uint8Array(width * height * 4);
+    const texture = gl.createTexture();
+    if (!texture) {
+      return;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const anisotropicExt = gl.getExtension("EXT_texture_filter_anisotropic");
+    if (anisotropicExt) {
+      gl.texParameterf(gl.TEXTURE_2D, anisotropicExt.TEXTURE_MAX_ANISOTROPY_EXT, gl.getParameter(anisotropicExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT));
+    }
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    this.hdTextureAtlas = texture;
+    for (let id = 0;id < CACHE_TEXTURE_COUNT; id++) {
+      const col = id % HD_ATLAS_COLS;
+      const row = id / HD_ATLAS_COLS | 0;
+      this.hdAtlasRects[id] = {
+        u0: (col * HD_ATLAS_TILE + 0.5) / width,
+        v0: (row * HD_ATLAS_TILE + 0.5) / height,
+        u1: ((col + 1) * HD_ATLAS_TILE - 0.5) / width,
+        v1: ((row + 1) * HD_ATLAS_TILE - 0.5) / height
+      };
+    }
+    this.hdAtlasLoadingStarted = true;
+    this.startHdAtlasLoads();
+  }
+  static startHdAtlasLoads() {
+    for (let id = 0;id < CACHE_TEXTURE_COUNT; id++) {
+      const filename = HD_TEXTURE_FOR_SLOT[id];
+      if (!filename) {
+        continue;
+      }
+      const slot = id;
+      fetch(`/hd/textures/rlhd/${filename}`).then((r) => r.ok ? r.blob() : Promise.reject()).then((blob) => createImageBitmap(blob)).then((bitmap) => {
+        const tmp = new OffscreenCanvas(HD_ATLAS_TILE, HD_ATLAS_TILE);
+        const ctx = tmp.getContext("2d");
+        ctx.drawImage(bitmap, 0, 0, HD_ATLAS_TILE, HD_ATLAS_TILE);
+        bitmap.close();
+        const imageData = ctx.getImageData(0, 0, HD_ATLAS_TILE, HD_ATLAS_TILE);
+        const d = imageData.data;
+        for (let i = 3;i < d.length; i += 4) {
+          d[i] = 255;
+        }
+        this.hdAtlasPendingImages.push({ slot, data: d });
+      }).catch(() => {});
+    }
+  }
+  static startColorAtlasLoads() {
+    for (let id = 0;id < CACHE_TEXTURE_COUNT; id++) {
+      const slot = id;
+      const hasTransparency = SERVER_TRANSPARENT_TEXTURE_IDS.has(id);
+      fetch(`/hd/terrain/textures/${id}.png`).then((r) => r.ok ? r.blob() : Promise.reject()).then((blob) => createImageBitmap(blob)).then((bitmap) => {
+        const tmp = new OffscreenCanvas(TEXTURE_SIZE, TEXTURE_SIZE);
+        const ctx = tmp.getContext("2d");
+        ctx.drawImage(bitmap, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+        bitmap.close();
+        const imageData = ctx.getImageData(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+        const d = imageData.data;
+        for (let i = 0;i < d.length; i += 4) {
+          if (d[i] > 240 && d[i + 1] < 16 && d[i + 2] > 240) {
+            d[i + 3] = 0;
+          } else if (!hasTransparency) {
+            d[i + 3] = 255;
+          }
+        }
+        this.colorAtlasPendingImages.push({ slot, data: d });
+      }).catch(() => {});
+    }
   }
   static bindTextureAtlas() {
     if (!this.gl || !this.textureAtlas) {
@@ -10485,6 +10657,17 @@ class HDRenderer {
         gl.texSubImage2D(gl.TEXTURE_2D, 0, col * TEXTURE_SIZE, row * TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE, gl.RGBA, gl.UNSIGNED_BYTE, data);
       }
       this.normalAtlasPendingImages.length = 0;
+      gl.bindTexture(gl.TEXTURE_2D, null);
+    }
+    if (this.textureAtlas && this.colorAtlasPendingImages.length > 0) {
+      gl.bindTexture(gl.TEXTURE_2D, this.textureAtlas);
+      for (const { slot, data } of this.colorAtlasPendingImages) {
+        const col = slot % ATLAS_COLS;
+        const row = slot / ATLAS_COLS | 0;
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, col * TEXTURE_SIZE, row * TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE, gl.RGBA, gl.UNSIGNED_BYTE, data);
+      }
+      this.colorAtlasPendingImages.length = 0;
+      gl.generateMipmap(gl.TEXTURE_2D);
       gl.bindTexture(gl.TEXTURE_2D, null);
     }
     gl.activeTexture(gl.TEXTURE0);
@@ -10515,9 +10698,31 @@ class HDRenderer {
       gl.bindTexture(gl.TEXTURE_2D, this.hdGroundAtlas);
       gl.uniform1i(this.uniformCache.get("u_hdGroundAtlas") ?? null, 7);
     }
+    if (this.hdTextureAtlas && this.hdAtlasPendingImages.length > 0) {
+      gl.bindTexture(gl.TEXTURE_2D, this.hdTextureAtlas);
+      for (const { slot, data } of this.hdAtlasPendingImages) {
+        const col = slot % HD_ATLAS_COLS;
+        const row = slot / HD_ATLAS_COLS | 0;
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, col * HD_ATLAS_TILE, row * HD_ATLAS_TILE, HD_ATLAS_TILE, HD_ATLAS_TILE, gl.RGBA, gl.UNSIGNED_BYTE, data);
+        this.hdAtlasLoadedCount++;
+      }
+      this.hdAtlasPendingImages.length = 0;
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+    }
+    if (this.hdTextureAtlas) {
+      gl.activeTexture(gl.TEXTURE8);
+      gl.bindTexture(gl.TEXTURE_2D, this.hdTextureAtlas);
+      gl.uniform1i(this.uniformCache.get("u_hdTextureAtlas") ?? null, 8);
+      gl.uniform1f(this.uniformCache.get("u_hdAtlasReady") ?? null, this.hdAtlasLoadedCount > 0 ? 1 : 0);
+    }
     for (let id = 0;id < ATLAS_SIZE; id++) {
       const rect = this.textureRects[id] ?? { u0: 0, v0: 0, u1: 1, v1: 1 };
       gl.uniform4f(this.atlasRectLocations[id] ?? null, rect.u0, rect.v0, rect.u1, rect.v1);
+    }
+    for (let id = 0;id < CACHE_TEXTURE_COUNT; id++) {
+      const rect = this.hdAtlasRects[id] ?? { u0: 0, v0: 0, u1: 0, v1: 0 };
+      gl.uniform4f(this.hdAtlasRectLocations[id] ?? null, rect.u0, rect.v0, rect.u1, rect.v1);
     }
   }
   static ensureUiRenderer() {
@@ -34777,4 +34982,4 @@ export {
   Client
 };
 
-//# debugId=DBFFE82E7772A91964756E2164756E21
+//# debugId=F33F10C5A5AF1ACA64756E2164756E21
