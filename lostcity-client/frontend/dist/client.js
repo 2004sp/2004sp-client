@@ -1,28 +1,34 @@
 (() => {
     const g = globalThis;
+	
+	// HD ground material tuning
+g.HD_GROUND_TEXTURE_STRENGTH ??= 0.32;
+g.HD_GROUND_NORMAL_STRENGTH ??= 0.18;
+g.HD_GROUND_TEXTURE_SCALE ??= 768.0;
+g.HD_GROUND_MACRO_STRENGTH ??= 0.04;
 
-    // HD water tuning
-    g.HD_WATER_TEXTURE_DIFFUSE ??= 0.10;
-    g.HD_WATER_FRESNEL_STRENGTH ??= 0.95;
-    g.HD_WATER_SPECULAR_STRENGTH ??= 0.65;
-    g.HD_WATER_FOAM_STRENGTH ??= 0.25;
+// HD water tuning
+g.HD_WATER_TEXTURE_DIFFUSE ??= 0.10;
+g.HD_WATER_FRESNEL_STRENGTH ??= 0.95;
+g.HD_WATER_SPECULAR_STRENGTH ??= 0.65;
+g.HD_WATER_FOAM_STRENGTH ??= 0.25;
 
-    // HD environment lighting
-    g.HD_ENV_AMBIENT_R ??= 0.72;
-    g.HD_ENV_AMBIENT_G ??= 0.76;
-    g.HD_ENV_AMBIENT_B ??= 0.82;
+// HD environment lighting
+g.HD_ENV_AMBIENT_R ??= 0.82;
+g.HD_ENV_AMBIENT_G ??= 0.84;
+g.HD_ENV_AMBIENT_B ??= 0.88;
 
-    g.HD_ENV_SUN_R ??= 1.00;
-    g.HD_ENV_SUN_G ??= 0.92;
-    g.HD_ENV_SUN_B ??= 0.78;
+g.HD_ENV_SUN_R ??= 1.08;
+g.HD_ENV_SUN_G ??= 1.00;
+g.HD_ENV_SUN_B ??= 0.86;
 
-    g.HD_ENV_FOG_R ??= 0.46;
-    g.HD_ENV_FOG_G ??= 0.56;
-    g.HD_ENV_FOG_B ??= 0.66;
+g.HD_ENV_FOG_R ??= 0.54;
+g.HD_ENV_FOG_G ??= 0.62;
+g.HD_ENV_FOG_B ??= 0.70;
 
-    g.HD_ENV_SKY_STRENGTH ??= 0.22;
-    g.HD_ENV_EXPOSURE ??= 0.92;
-    g.HD_ENV_CONTRAST ??= 1.08;
+g.HD_ENV_SKY_STRENGTH ??= 0.16;
+g.HD_ENV_EXPOSURE ??= 1.04;
+g.HD_ENV_CONTRAST ??= 1.03;
 
     g.HD_FAR_TILE_BUDGET ??= 2601;
     g.HD_FAR_MODEL_CANDIDATES ??= 50000;
@@ -6486,7 +6492,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-29T17:18:35.078Z";
+var HD_RENDERER_BUILD = "2026-05-29T18:02:00.968Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -6946,6 +6952,12 @@ uniform vec3 u_hdFogColour;
 uniform float u_hdSkyStrength;
 uniform float u_hdExposure;
 uniform float u_hdContrast;
+uniform float u_hdGroundTextureStrength;
+uniform float u_hdGroundNormalStrength;
+uniform float u_hdGroundTextureScale;
+uniform float u_hdGroundMacroStrength;
+uniform sampler2D u_hdGroundAtlas;
+uniform float u_hdGroundMapsReady;
 
 out vec4 outColour;
 
@@ -7053,6 +7065,171 @@ vec3 untexturedTerrainDetail(vec3 colour, float material) {
     return colour;
 }
 
+
+bool hdGroundMaterial(float material, bool validCacheTexture) {
+    // Terrain-focused material replacement.  Foliage is only treated as grass
+    // when it is untextured terrain; textured foliage models keep their cache texture.
+    return material == 4.0 || material == 7.0 || material == 8.0 ||
+           material == 13.0 || material == 14.0 ||
+           (material == 9.0 && !validCacheTexture);
+}
+
+vec3 hdMaterialBaseColour(float material) {
+    if (material == 9.0)  { return vec3(0.25, 0.48, 0.16); } // grass
+    if (material == 7.0)  { return vec3(0.22, 0.36, 0.15); } // moss
+    if (material == 13.0) { return vec3(0.42, 0.35, 0.25); } // dirt/path
+    if (material == 14.0) { return vec3(0.42, 0.38, 0.26); } // silt/sand
+    if (material == 8.0)  { return vec3(0.39, 0.38, 0.34); } // gravel
+    if (material == 4.0)  { return vec3(0.45, 0.44, 0.40); } // stone
+    return vec3(0.38, 0.36, 0.32);
+}
+
+
+
+float hdGroundAtlasSlot(float material) {
+    if (material == 9.0)  { return 0.0; } // grass / foliage terrain
+    if (material == 7.0)  { return 1.0; } // moss
+    if (material == 13.0) { return 2.0; } // dirt / path
+    if (material == 14.0) { return 3.0; } // sand / seabed
+    if (material == 8.0)  { return 4.0; } // gravel / pebbles
+    if (material == 4.0)  { return 5.0; } // stone
+    return 6.0;
+}
+
+vec3 hdGroundAtlasAlbedo(float material, vec2 uv) {
+    float slot = hdGroundAtlasSlot(material);
+    vec2 grid = vec2(4.0, 2.0);
+    vec2 cell = vec2(mod(slot, grid.x), floor(slot / grid.x));
+    // Slight per-material scale offsets reduce the obvious repeating pattern.
+    vec2 localUv = fract(uv * (material == 13.0 ? 0.75 : (material == 9.0 ? 1.15 : 1.0)));
+    vec2 atlasUv = (cell + localUv) / grid;
+    vec3 tex = texture(u_hdGroundAtlas, atlasUv).rgb;
+
+    // The OSRS cache textures are object/material textures, not perfect 117HD floor
+    // albedos.  Gently remap them toward the material colour so they blend with
+    // 2004 floor vertex colours instead of looking pasted on top.
+    vec3 target = hdMaterialBaseColour(material);
+    tex = mix(tex, target, material == 9.0 ? 0.36 : 0.24);
+    return tex;
+}
+
+float hdGroundHeight(float material, vec2 uv) {
+    if (u_hdGroundMapsReady > 0.5) {
+        vec3 tex = hdGroundAtlasAlbedo(material, uv);
+        float luma = dot(tex, vec3(0.299, 0.587, 0.114));
+        float fine = noise2(uv * 9.0);
+        return mix(luma, fine, 0.18);
+    }
+
+    float broad = noise2(uv * 1.35);
+    float fine = noise2(uv * 7.0);
+    float grit = hash21(floor(uv * 22.0));
+
+    if (material == 9.0 || material == 7.0) {
+        float blades = noise2(vec2(uv.x * 16.0, uv.y * 34.0));
+        return broad * 0.32 + fine * 0.28 + blades * 0.40;
+    }
+
+    if (material == 13.0 || material == 14.0) {
+        float speckles = smoothstep(0.70, 1.0, grit);
+        return broad * 0.46 + fine * 0.34 + speckles * 0.20;
+    }
+
+    if (material == 4.0 || material == 8.0) {
+        float chips = smoothstep(0.64, 1.0, grit);
+        float cracks = smoothstep(0.78, 0.98, noise2(uv * 4.5));
+        return broad * 0.28 + fine * 0.30 + chips * 0.28 - cracks * 0.22;
+    }
+
+    return broad * 0.5 + fine * 0.5;
+}
+
+vec3 hdGroundAlbedo(float material, vec2 uv) {
+    if (u_hdGroundMapsReady > 0.5) {
+        return hdGroundAtlasAlbedo(material, uv);
+    }
+
+    vec3 base = hdMaterialBaseColour(material);
+    float broad = noise2(uv * 1.45);
+    float fine = noise2(uv * 8.5);
+    float grit = hash21(floor(uv * 26.0));
+
+    if (material == 9.0) {
+        vec3 darkGrass = vec3(0.15, 0.32, 0.09);
+        vec3 midGrass  = vec3(0.30, 0.52, 0.14);
+        vec3 lightGrass = vec3(0.44, 0.62, 0.22);
+        vec3 grass = mix(darkGrass, lightGrass, broad * 0.68 + fine * 0.32);
+        grass = mix(grass, midGrass, 0.25);
+        return grass * (0.86 + fine * 0.24);
+    }
+
+    if (material == 7.0) {
+        vec3 mossDark = vec3(0.12, 0.24, 0.09);
+        vec3 mossLight = vec3(0.34, 0.44, 0.17);
+        return mix(mossDark, mossLight, broad * 0.70 + fine * 0.30) * (0.88 + fine * 0.20);
+    }
+
+    if (material == 13.0) {
+        vec3 dirtDark = vec3(0.27, 0.23, 0.17);
+        vec3 dirtLight = vec3(0.55, 0.49, 0.38);
+        vec3 dirt = mix(dirtDark, dirtLight, broad * 0.55 + fine * 0.45);
+        dirt += (grit > 0.84 ? vec3(0.10, 0.09, 0.07) : vec3(0.0));
+        return dirt;
+    }
+
+    if (material == 14.0) {
+        vec3 sandDark = vec3(0.25, 0.22, 0.15);
+        vec3 sandLight = vec3(0.55, 0.50, 0.34);
+        return mix(sandDark, sandLight, broad * 0.64 + fine * 0.36);
+    }
+
+    if (material == 4.0 || material == 8.0) {
+        vec3 stoneDark = material == 8.0 ? vec3(0.25, 0.25, 0.23) : vec3(0.30, 0.30, 0.28);
+        vec3 stoneLight = material == 8.0 ? vec3(0.56, 0.54, 0.48) : vec3(0.62, 0.61, 0.56);
+        vec3 stone = mix(stoneDark, stoneLight, broad * 0.56 + fine * 0.44);
+        float crack = smoothstep(0.78, 0.98, noise2(uv * 4.4));
+        stone = mix(stone, vec3(0.10), crack * 0.24);
+        stone += (grit > 0.88 ? vec3(0.07) : vec3(0.0));
+        return stone;
+    }
+
+    return base * (0.80 + fine * 0.35);
+}
+
+vec3 applyHdGroundMaterial(vec3 colour, float material, bool validCacheTexture) {
+    if (!hdGroundMaterial(material, validCacheTexture)) {
+        return colour;
+    }
+
+    vec2 uv = v_worldPos.xz / max(u_hdGroundTextureScale, 32.0);
+    vec3 hd = hdGroundAlbedo(material, uv);
+
+    // Macro variation breaks up large repeating areas and mimics RLHD-style material
+    // variation without requiring OSRS scene/underlay metadata.
+    float macro = noise2(v_worldPos.xz / 1024.0);
+    hd *= 1.0 + (macro - 0.5) * u_hdGroundMacroStrength;
+
+    // Keep original 2004 hue/shading, but replace the blurry enlarged cache detail.
+    vec3 sourceTint = mix(vec3(1.0), max(colour, vec3(0.035)) / max(vec3(dot(colour, vec3(0.333))), vec3(0.08)), 0.35);
+    vec3 hdTinted = hd * sourceTint;
+    return mix(colour, hdTinted, clamp(u_hdGroundTextureStrength, 0.0, 1.0));
+}
+
+vec3 applyHdGroundNormal(vec3 normal, float material, bool validCacheTexture) {
+    if (!hdGroundMaterial(material, validCacheTexture) || u_hdGroundNormalStrength <= 0.0) {
+        return normal;
+    }
+
+    vec2 uv = v_worldPos.xz / max(u_hdGroundTextureScale, 32.0);
+    float e = 1.0 / max(u_hdGroundTextureScale, 32.0);
+    float hL = hdGroundHeight(material, uv - vec2(e, 0.0));
+    float hR = hdGroundHeight(material, uv + vec2(e, 0.0));
+    float hD = hdGroundHeight(material, uv - vec2(0.0, e));
+    float hU = hdGroundHeight(material, uv + vec2(0.0, e));
+    vec3 bump = vec3((hL - hR), 0.0, (hD - hU)) * clamp(u_hdGroundNormalStrength, 0.0, 2.0) * 0.55;
+    return normalize(normal + bump);
+}
+
 void main() {
     vec3 normal = normalize(v_normal);
     vec3 viewDir = normalize(u_cameraPosition - v_worldPos);
@@ -7142,6 +7319,10 @@ void main() {
         baseColour = untexturedTerrainDetail(baseColour, material);
     }
 
+    if (u_textureDebugMode == 0) {
+        baseColour = applyHdGroundMaterial(baseColour, material, validCacheTexture);
+    }
+
     // Texture-space normal mapping.
     // Textured surfaces (validCacheTexture) use the per-texture atlas slot with the same
     // UV as the colour sample.  Untextured terrain uses a per-material slot (50+material)
@@ -7173,6 +7354,12 @@ void main() {
             diffuse = max(dot(normal, sunDir), 0.0);
             light = u_ambient * (1.0 - shadowFactor * 0.55) + diffuse * u_diffuseStrength * (1.0 - shadowFactor);
         }
+    }
+
+    if (u_textureDebugMode == 0) {
+        normal = applyHdGroundNormal(normal, material, validCacheTexture);
+        diffuse = max(dot(normal, sunDir), 0.0);
+        light = u_ambient * (1.0 - shadowFactor * 0.55) + diffuse * u_diffuseStrength * (1.0 - shadowFactor);
     }
 
     float alpha = v_alpha;
@@ -7461,6 +7648,8 @@ class HDRenderer {
   static waterFlowMap = null;
   static waterFoamMap = null;
   static waterMapsReady = false;
+  static hdGroundAtlas = null;
+  static hdGroundMapsReady = false;
   static shadowProgram = null;
   static shadowFbo = null;
   static shadowDepthTexture = null;
@@ -9455,6 +9644,82 @@ class HDRenderer {
     });
     this.waterMapsReady = false;
   }
+  static initHdGroundAtlas(gl) {
+    if (this.hdGroundAtlas) {
+      return;
+    }
+    const makeFallback = () => {
+      const size = 128;
+      const cols = 4;
+      const rows = 2;
+      const data = new Uint8Array(size * size * cols * rows * 4);
+      const palette = [
+        [58, 112, 34],
+        [52, 82, 36],
+        [124, 105, 78],
+        [142, 128, 84],
+        [104, 103, 94],
+        [122, 121, 112],
+        [102, 84, 64],
+        [118, 116, 110]
+      ];
+      const width = size * cols;
+      const height = size * rows;
+      for (let slot = 0;slot < cols * rows; slot++) {
+        const [r, g, b] = palette[slot];
+        const ox = slot % cols * size;
+        const oy = (slot / cols | 0) * size;
+        for (let y = 0;y < size; y++) {
+          for (let x = 0;x < size; x++) {
+            const n = (Math.sin((x + slot * 17) * 0.17) + Math.sin((y - slot * 11) * 0.13)) * 0.5 + Math.sin((x + y) * 0.043) * 0.5;
+            const v = Math.max(-0.22, Math.min(0.22, n * 0.1));
+            const i = (ox + x + (oy + y) * width) * 4;
+            data[i + 0] = Math.max(0, Math.min(255, Math.round(r * (1 + v))));
+            data[i + 1] = Math.max(0, Math.min(255, Math.round(g * (1 + v))));
+            data[i + 2] = Math.max(0, Math.min(255, Math.round(b * (1 + v))));
+            data[i + 3] = 255;
+          }
+        }
+      }
+      const tex = gl.createTexture();
+      if (!tex) {
+        return null;
+      }
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      return tex;
+    };
+    this.hdGroundAtlas = makeFallback();
+    this.hdGroundMapsReady = false;
+    fetch("/hd/terrain/osrs_ground_atlas.png").then((r) => r.ok ? r.blob() : Promise.reject("/hd/terrain/osrs_ground_atlas.png")).then((blob) => createImageBitmap(blob)).then((bitmap) => {
+      const tex = gl.createTexture();
+      if (!tex) {
+        bitmap.close();
+        return;
+      }
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
+      bitmap.close();
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+      const anisotropicExt = gl.getExtension("EXT_texture_filter_anisotropic");
+      if (anisotropicExt) {
+        gl.texParameterf(gl.TEXTURE_2D, anisotropicExt.TEXTURE_MAX_ANISOTROPY_EXT, gl.getParameter(anisotropicExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT));
+      }
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      this.hdGroundAtlas = tex;
+      this.hdGroundMapsReady = true;
+    }).catch(() => {});
+  }
   static renderShadowPass() {
     const gl = this.gl;
     if (!gl || !this.shadowProgram || !this.shadowFbo || this.terrainVertexCount === 0 || !this.terrainVao) {
@@ -9587,6 +9852,7 @@ class HDRenderer {
     this.initShadowMap();
     this.initNormalAtlas(gl);
     this.initWaterMaps(gl);
+    this.initHdGroundAtlas(gl);
     this.reason = "ready";
   }
   static cacheUniforms() {
@@ -9632,7 +9898,13 @@ class HDRenderer {
       "u_hdFogColour",
       "u_hdSkyStrength",
       "u_hdExposure",
-      "u_hdContrast"
+      "u_hdContrast",
+      "u_hdGroundTextureStrength",
+      "u_hdGroundNormalStrength",
+      "u_hdGroundTextureScale",
+      "u_hdGroundMacroStrength",
+      "u_hdGroundAtlas",
+      "u_hdGroundMapsReady"
     ]) {
       this.uniformCache.set(name, gl.getUniformLocation(p, name));
     }
@@ -9723,6 +9995,15 @@ class HDRenderer {
     gl.uniform1f(u("u_hdSkyStrength"), hdEnvSkyStrength);
     gl.uniform1f(u("u_hdExposure"), hdEnvExposure);
     gl.uniform1f(u("u_hdContrast"), hdEnvContrast);
+    const hdGroundTextureStrength = Number.isFinite(Number(globalThis.HD_GROUND_TEXTURE_STRENGTH)) ? Number(globalThis.HD_GROUND_TEXTURE_STRENGTH) : 0.55;
+    const hdGroundNormalStrength = Number.isFinite(Number(globalThis.HD_GROUND_NORMAL_STRENGTH)) ? Number(globalThis.HD_GROUND_NORMAL_STRENGTH) : 0.45;
+    const hdGroundTextureScale = Number.isFinite(Number(globalThis.HD_GROUND_TEXTURE_SCALE)) ? Number(globalThis.HD_GROUND_TEXTURE_SCALE) : 384;
+    const hdGroundMacroStrength = Number.isFinite(Number(globalThis.HD_GROUND_MACRO_STRENGTH)) ? Number(globalThis.HD_GROUND_MACRO_STRENGTH) : 0.18;
+    gl.uniform1f(u("u_hdGroundTextureStrength"), hdGroundTextureStrength);
+    gl.uniform1f(u("u_hdGroundNormalStrength"), hdGroundNormalStrength);
+    gl.uniform1f(u("u_hdGroundTextureScale"), hdGroundTextureScale);
+    gl.uniform1f(u("u_hdGroundMacroStrength"), hdGroundMacroStrength);
+    gl.uniform1f(u("u_hdGroundMapsReady"), this.hdGroundMapsReady ? 1 : 0);
     const hdAmbient = Number.isFinite(Number(globalThis.HD_AMBIENT)) ? Number(globalThis.HD_AMBIENT) : 0.78;
     const hdDiffuse = Number.isFinite(Number(globalThis.HD_DIFFUSE)) ? Number(globalThis.HD_DIFFUSE) : 0.48;
     const hdFogStart = Number.isFinite(Number(globalThis.HD_FOG_START)) ? Number(globalThis.HD_FOG_START) : HD_FOG_START;
@@ -10228,6 +10509,11 @@ class HDRenderer {
       gl.activeTexture(gl.TEXTURE6);
       gl.bindTexture(gl.TEXTURE_2D, this.waterFoamMap);
       gl.uniform1i(this.uniformCache.get("u_waterFoamMap") ?? null, 6);
+    }
+    if (this.hdGroundAtlas) {
+      gl.activeTexture(gl.TEXTURE7);
+      gl.bindTexture(gl.TEXTURE_2D, this.hdGroundAtlas);
+      gl.uniform1i(this.uniformCache.get("u_hdGroundAtlas") ?? null, 7);
     }
     for (let id = 0;id < ATLAS_SIZE; id++) {
       const rect = this.textureRects[id] ?? { u0: 0, v0: 0, u1: 1, v1: 1 };
@@ -34491,4 +34777,4 @@ export {
   Client
 };
 
-//# debugId=0CB3F11DE56EEF5464756E2164756E21
+//# debugId=DBFFE82E7772A91964756E2164756E21

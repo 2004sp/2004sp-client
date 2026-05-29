@@ -15,29 +15,35 @@ const define = {
 
 const hdRuntimeDefaults = `(() => {
     const g = globalThis;
+	
+	// HD ground material tuning
+g.HD_GROUND_TEXTURE_STRENGTH ??= 0.32;
+g.HD_GROUND_NORMAL_STRENGTH ??= 0.18;
+g.HD_GROUND_TEXTURE_SCALE ??= 768.0;
+g.HD_GROUND_MACRO_STRENGTH ??= 0.04;
 
-    // HD water tuning
-    g.HD_WATER_TEXTURE_DIFFUSE ??= 0.10;
-    g.HD_WATER_FRESNEL_STRENGTH ??= 0.95;
-    g.HD_WATER_SPECULAR_STRENGTH ??= 0.65;
-    g.HD_WATER_FOAM_STRENGTH ??= 0.25;
+// HD water tuning
+g.HD_WATER_TEXTURE_DIFFUSE ??= 0.10;
+g.HD_WATER_FRESNEL_STRENGTH ??= 0.95;
+g.HD_WATER_SPECULAR_STRENGTH ??= 0.65;
+g.HD_WATER_FOAM_STRENGTH ??= 0.25;
 
-    // HD environment lighting
-    g.HD_ENV_AMBIENT_R ??= 0.72;
-    g.HD_ENV_AMBIENT_G ??= 0.76;
-    g.HD_ENV_AMBIENT_B ??= 0.82;
+// HD environment lighting
+g.HD_ENV_AMBIENT_R ??= 0.82;
+g.HD_ENV_AMBIENT_G ??= 0.84;
+g.HD_ENV_AMBIENT_B ??= 0.88;
 
-    g.HD_ENV_SUN_R ??= 1.00;
-    g.HD_ENV_SUN_G ??= 0.92;
-    g.HD_ENV_SUN_B ??= 0.78;
+g.HD_ENV_SUN_R ??= 1.08;
+g.HD_ENV_SUN_G ??= 1.00;
+g.HD_ENV_SUN_B ??= 0.86;
 
-    g.HD_ENV_FOG_R ??= 0.46;
-    g.HD_ENV_FOG_G ??= 0.56;
-    g.HD_ENV_FOG_B ??= 0.66;
+g.HD_ENV_FOG_R ??= 0.54;
+g.HD_ENV_FOG_G ??= 0.62;
+g.HD_ENV_FOG_B ??= 0.70;
 
-    g.HD_ENV_SKY_STRENGTH ??= 0.22;
-    g.HD_ENV_EXPOSURE ??= 0.92;
-    g.HD_ENV_CONTRAST ??= 1.08;
+g.HD_ENV_SKY_STRENGTH ??= 0.16;
+g.HD_ENV_EXPOSURE ??= 1.04;
+g.HD_ENV_CONTRAST ??= 1.03;
 
     g.HD_FAR_TILE_BUDGET ??= 2601;
     g.HD_FAR_MODEL_CANDIDATES ??= 50000;
