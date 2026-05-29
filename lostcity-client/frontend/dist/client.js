@@ -6495,7 +6495,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-29T20:53:01.218Z";
+var HD_RENDERER_BUILD = "2026-05-29T21:02:54.558Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -7310,6 +7310,10 @@ void main() {
 
     bool hasTextureId = v_texture >= 0;
     bool validCacheTexture = hasTextureId && v_texture < u_cacheTextureCount;
+    // True when this fragment sampled a real 254/cache texture.
+    // In normal mode we keep these textures raw so the HD shader cannot tint
+    // them into the wrong-looking colours after the software view flashes.
+    bool sampledCacheTexture = false;
 
     if (u_textureDebugMode == 9) {
         // Shader/uniform proof mode. If F8 works, the whole HD scene turns bright pink.
@@ -7381,9 +7385,13 @@ void main() {
                 baseColour = mix(baseColour, texel.rgb, u_waterTextureDiffuse);
             }
         } else if (texel.a >= 0.05) {
-            baseColour = mix(baseColour, texel.rgb, 0.9);
+            // Use the exact cache texture colour. The old mix with vertex colour
+            // plus later material lighting/tinting is what made correct textures
+            // appear for a moment, then look wrong once HD took over.
+            baseColour = texel.rgb;
+            sampledCacheTexture = true;
             if (u_textureDebugMode == 5) {
-                outColour = vec4(texel.rgb, 1.0);
+                outColour = vec4(texel.rgb, texel.a);
                 return;
             }
         } else {
@@ -7403,7 +7411,7 @@ void main() {
     // Textured surfaces (validCacheTexture) use the per-texture atlas slot with the same
     // UV as the colour sample.  Untextured terrain uses a per-material slot (50+material)
     // sampled with world-space planar UVs so the detail tiles independently of tile size.
-    if (u_textureDebugMode == 0 && material != 1.0 && material != 2.0 && material != 12.0 && material != 14.0) {
+    if (u_textureDebugMode == 0 && !sampledCacheTexture && material != 1.0 && material != 2.0 && material != 12.0 && material != 14.0) {
         int normalSlot;
         vec2 normalUv;
         if (validCacheTexture) {
@@ -7439,6 +7447,15 @@ void main() {
     }
 
     float alpha = v_alpha;
+
+    if (sampledCacheTexture && u_textureDebugMode == 0) {
+        // Final fix for Wails/no-console testing: keep real 254/cache textures
+        // unmodified in normal HD mode. Untextured terrain still uses the HD
+        // material path, but textured floors/walls/models no longer get the
+        // extra material tint, normal map, fog, exposure or contrast pass.
+        outColour = vec4(baseColour, alpha);
+        return;
+    }
 
     if (material == 12.0) {
         light = 1.0;
@@ -34989,4 +35006,4 @@ export {
   Client
 };
 
-//# debugId=1F9BBECE7EB9E75F64756E2164756E21
+//# debugId=F6C27BFB389AD19364756E2164756E21
