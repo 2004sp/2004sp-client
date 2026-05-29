@@ -869,6 +869,33 @@ void main() {
         return;
     }
 
+    if (u_textureDebugMode == 7) {
+        // RLHD-only proof mode. Textured faces show only the 117/RLHD atlas.
+        // Untextured ground shows only the HD material atlas/procedural material path.
+        // Red means the face has a cache texture ID but no loaded RLHD override for that slot.
+        if (validCacheTexture && material != 1.0) {
+            int atlasTexture = v_texture;
+            vec4 hdRect = u_hdAtlasRects[atlasTexture];
+            vec2 hdAtlasUv = mix(hdRect.xy, hdRect.zw, fract(v_uv));
+            vec4 hdTexel = texture(u_hdTextureAtlas, hdAtlasUv);
+            if (u_hdAtlasReady > 0.5 && hdTexel.a > 0.1) {
+                outColour = vec4(hdTexel.rgb, 1.0);
+            } else {
+                outColour = vec4(1.0, 0.0, 0.0, 1.0);
+            }
+            return;
+        }
+
+        if (!validCacheTexture && hdGroundMaterial(material, validCacheTexture)) {
+            vec2 groundUv = v_worldPos.xz / max(u_hdGroundTextureScale, 32.0);
+            outColour = vec4(hdGroundAlbedo(material, groundUv), 1.0);
+            return;
+        }
+
+        outColour = vec4(baseColour, 1.0);
+        return;
+    }
+
     if (u_textureDebugMode == 2 && hasTextureId) {
         // ID-colour mode: every texture ID gets a unique flat colour.
         // Magenta means the client tried to use a texture outside the 254 cache range.
@@ -890,8 +917,9 @@ void main() {
             float dv = noise2(wuvTex * 3.5 + vec2(0.0, u_time * 0.04)) - 0.5;
             uv = wuvTex + vec2(du * 0.018, dv * 0.015);
         }
-        vec2 atlasUv = mix(rect.xy, rect.zw, fract(uv));
-        vec4 texel = texture(u_textureAtlas, atlasUv);
+vec2 atlasUv = mix(rect.xy, rect.zw, fract(uv));
+vec4 texel = texture(u_textureAtlas, atlasUv);
+float textureBlend = 0.9;
         // HD texture override: replace vanilla RGB with RLHD high-res art where available.
         // Vanilla alpha is preserved so transparent textures (foliage etc.) keep their silhouette.
         if (u_hdAtlasReady > 0.5 && atlasTexture < 50 && material != 1.0) {
@@ -899,7 +927,8 @@ void main() {
             vec2 hdAtlasUv = mix(hdRect.xy, hdRect.zw, fract(uv));
             vec4 hdTexel = texture(u_hdTextureAtlas, hdAtlasUv);
             if (hdTexel.a > 0.1) {
-                texel = vec4(hdTexel.rgb, texel.a);
+                texel = vec4(hdTexel.rgb, max(texel.a, hdTexel.a));
+textureBlend = 1.0;
             }
         }
         if (material == 1.0) {
@@ -908,7 +937,7 @@ void main() {
                 baseColour = mix(baseColour, texel.rgb, u_waterTextureDiffuse);
             }
         } else if (texel.a >= 0.05) {
-            baseColour = mix(baseColour, texel.rgb, 0.9);
+            baseColour = mix(baseColour, texel.rgb, textureBlend);
             if (u_textureDebugMode == 5) {
                 outColour = vec4(texel.rgb, 1.0);
                 return;
@@ -1231,6 +1260,13 @@ type HDTextureDiagnostics = {
     mode: string;
     atlasReady: boolean;
     atlasLoadedCount: number;
+    hdAtlasExpectedCount: number;
+    hdAtlasLoadedCount: number;
+    hdAtlasFailedCount: number;
+    hdAtlasPendingCount: number;
+    hdAtlasLoadResults: string[];
+    hdGroundMapsReady: boolean;
+    waterMapsReady: boolean;
     untexturedTriangleCount: number;
     invalidTextureCount: number;
     textureIdMap: HDTextureIdMapEntry[];
@@ -1369,6 +1405,8 @@ export default class HDRenderer {
     private static hdAtlasPendingImages: { slot: number; data: Uint8ClampedArray }[] = [];
     private static hdAtlasRectLocations: (WebGLUniformLocation | null)[] = [];
     private static hdAtlasLoadedCount: number = 0;
+    private static hdAtlasFailedCount: number = 0;
+    private static hdAtlasLoadResults: string[] = [];
     private static waterNormalMap: WebGLTexture | null = null;
     private static waterFlowMap: WebGLTexture | null = null;
     private static waterFoamMap: WebGLTexture | null = null;
@@ -3192,6 +3230,12 @@ static queueGroundTile(level: number, x: number, z: number): void {
             case 'water-sources':
             case 'water-debug':
                 return 6;
+            case 'rlhd':
+            case 'rlhd-only':
+            case '117':
+            case '117-only':
+            case 'hd-atlas':
+                return 7;
             case 'shader-test':
             case 'pink':
             case 'magenta':
@@ -3251,7 +3295,7 @@ static queueGroundTile(level: number, x: number, z: number): void {
         }
         this.debugHotkeysInstalled = true;
 
-        const modes = ['normal', 'flat', 'id-colours', 'single-texture', 'uv', 'texture-only', 'water-source'];
+        const modes = ['normal', 'flat', 'id-colours', 'single-texture', 'uv', 'texture-only', 'rlhd-only', 'water-source'];
         window.addEventListener('keydown', (event: KeyboardEvent) => {
             const key = event.key.toLowerCase();
             if (event.ctrlKey && event.shiftKey && key === 'd') {
@@ -3316,7 +3360,7 @@ static queueGroundTile(level: number, x: number, z: number): void {
             document.body.appendChild(overlay);
             this.debugOverlay = overlay;
         }
-        this.debugOverlay.textContent = `HD ${HD_RENDERER_BUILD} | texture debug: DIAG-BUILD-2026-05-29 | ${mode}  |  F6 cycle, Shift+F6 back, F7 normal, F8 pink, F9 flat, F10/Ctrl+Shift+D diag, F11/Ctrl+Shift+A atlas | water: blue plain, yellow shaped, magenta model, cyan/orange inferred`;
+        this.debugOverlay.textContent = `HD ${HD_RENDERER_BUILD} | texture debug: DIAG-BUILD-2026-05-29 | ${mode}  |  F6 cycle, Shift+F6 back, F7 normal, F8 pink, F9 flat, F10/Ctrl+Shift+D diag, F11/Ctrl+Shift+A atlas, mode: rlhd-only | water: blue plain, yellow shaped, magenta model, cyan/orange inferred`;
         this.debugOverlay.style.display = this.enabled ? 'block' : 'none';
     }
 
@@ -3558,6 +3602,13 @@ static queueGroundTile(level: number, x: number, z: number): void {
             mode: this.textureDebugModeName(),
             atlasReady: this.textureAtlasReady,
             atlasLoadedCount: this.textureAtlasLoadedCount,
+            hdAtlasExpectedCount: HD_TEXTURE_FOR_SLOT.filter(filename => filename !== null).length,
+            hdAtlasLoadedCount: this.hdAtlasLoadedCount,
+            hdAtlasFailedCount: this.hdAtlasFailedCount,
+            hdAtlasPendingCount: this.hdAtlasPendingImages.length,
+            hdAtlasLoadResults: this.hdAtlasLoadResults.slice(-50),
+            hdGroundMapsReady: this.hdGroundMapsReady,
+            waterMapsReady: this.waterMapsReady,
             untexturedTriangleCount: this.untexturedTriangleCount,
             invalidTextureCount: this.invalidTextureCount,
             textureIdMap,
@@ -4879,14 +4930,24 @@ private static showTextureAtlasPreview(): string | null {
     }
 
     private static startHdAtlasLoads(): void {
+        this.hdAtlasFailedCount = 0;
+        this.hdAtlasLoadResults.length = 0;
+
         for (let id = 0; id < CACHE_TEXTURE_COUNT; id++) {
             const filename = HD_TEXTURE_FOR_SLOT[id];
             if (!filename) {
                 continue;
             }
+
             const slot = id;
-            fetch(`/hd/textures/rlhd/${filename}`)
-                .then(r => r.ok ? r.blob() : Promise.reject())
+            const url = `/hd/textures/rlhd/${filename}`;
+            fetch(url)
+                .then(r => {
+                    if (!r.ok) {
+                        return Promise.reject(new Error(`HTTP ${r.status}`));
+                    }
+                    return r.blob();
+                })
                 .then(blob => createImageBitmap(blob))
                 .then(bitmap => {
                     const tmp = new OffscreenCanvas(HD_ATLAS_TILE, HD_ATLAS_TILE);
@@ -4901,8 +4962,13 @@ private static showTextureAtlasPreview(): string | null {
                         d[i] = 255;
                     }
                     this.hdAtlasPendingImages.push({ slot, data: d });
+                    this.hdAtlasLoadResults.push(`OK ${slot}: ${url}`);
                 })
-                .catch(() => {});
+                .catch(error => {
+                    this.hdAtlasFailedCount++;
+                    const message = error instanceof Error ? error.message : String(error);
+                    this.hdAtlasLoadResults.push(`FAIL ${slot}: ${url} (${message})`);
+                });
         }
     }
 

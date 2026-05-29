@@ -6501,7 +6501,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-29T22:15:38.097Z";
+var HD_RENDERER_BUILD = "2026-05-29T22:39:34.033Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -7349,6 +7349,33 @@ void main() {
         return;
     }
 
+    if (u_textureDebugMode == 7) {
+        // RLHD-only proof mode. Textured faces show only the 117/RLHD atlas.
+        // Untextured ground shows only the HD material atlas/procedural material path.
+        // Red means the face has a cache texture ID but no loaded RLHD override for that slot.
+        if (validCacheTexture && material != 1.0) {
+            int atlasTexture = v_texture;
+            vec4 hdRect = u_hdAtlasRects[atlasTexture];
+            vec2 hdAtlasUv = mix(hdRect.xy, hdRect.zw, fract(v_uv));
+            vec4 hdTexel = texture(u_hdTextureAtlas, hdAtlasUv);
+            if (u_hdAtlasReady > 0.5 && hdTexel.a > 0.1) {
+                outColour = vec4(hdTexel.rgb, 1.0);
+            } else {
+                outColour = vec4(1.0, 0.0, 0.0, 1.0);
+            }
+            return;
+        }
+
+        if (!validCacheTexture && hdGroundMaterial(material, validCacheTexture)) {
+            vec2 groundUv = v_worldPos.xz / max(u_hdGroundTextureScale, 32.0);
+            outColour = vec4(hdGroundAlbedo(material, groundUv), 1.0);
+            return;
+        }
+
+        outColour = vec4(baseColour, 1.0);
+        return;
+    }
+
     if (u_textureDebugMode == 2 && hasTextureId) {
         // ID-colour mode: every texture ID gets a unique flat colour.
         // Magenta means the client tried to use a texture outside the 254 cache range.
@@ -7370,8 +7397,9 @@ void main() {
             float dv = noise2(wuvTex * 3.5 + vec2(0.0, u_time * 0.04)) - 0.5;
             uv = wuvTex + vec2(du * 0.018, dv * 0.015);
         }
-        vec2 atlasUv = mix(rect.xy, rect.zw, fract(uv));
-        vec4 texel = texture(u_textureAtlas, atlasUv);
+vec2 atlasUv = mix(rect.xy, rect.zw, fract(uv));
+vec4 texel = texture(u_textureAtlas, atlasUv);
+float textureBlend = 0.9;
         // HD texture override: replace vanilla RGB with RLHD high-res art where available.
         // Vanilla alpha is preserved so transparent textures (foliage etc.) keep their silhouette.
         if (u_hdAtlasReady > 0.5 && atlasTexture < 50 && material != 1.0) {
@@ -7379,7 +7407,8 @@ void main() {
             vec2 hdAtlasUv = mix(hdRect.xy, hdRect.zw, fract(uv));
             vec4 hdTexel = texture(u_hdTextureAtlas, hdAtlasUv);
             if (hdTexel.a > 0.1) {
-                texel = vec4(hdTexel.rgb, texel.a);
+                texel = vec4(hdTexel.rgb, max(texel.a, hdTexel.a));
+textureBlend = 1.0;
             }
         }
         if (material == 1.0) {
@@ -7388,7 +7417,7 @@ void main() {
                 baseColour = mix(baseColour, texel.rgb, u_waterTextureDiffuse);
             }
         } else if (texel.a >= 0.05) {
-            baseColour = mix(baseColour, texel.rgb, 0.9);
+            baseColour = mix(baseColour, texel.rgb, textureBlend);
             if (u_textureDebugMode == 5) {
                 outColour = vec4(texel.rgb, 1.0);
                 return;
@@ -7737,6 +7766,8 @@ class HDRenderer {
   static hdAtlasPendingImages = [];
   static hdAtlasRectLocations = [];
   static hdAtlasLoadedCount = 0;
+  static hdAtlasFailedCount = 0;
+  static hdAtlasLoadResults = [];
   static waterNormalMap = null;
   static waterFlowMap = null;
   static waterFoamMap = null;
@@ -9151,6 +9182,12 @@ class HDRenderer {
       case "water-sources":
       case "water-debug":
         return 6;
+      case "rlhd":
+      case "rlhd-only":
+      case "117":
+      case "117-only":
+      case "hd-atlas":
+        return 7;
       case "shader-test":
       case "pink":
       case "magenta":
@@ -9205,7 +9242,7 @@ class HDRenderer {
       return;
     }
     this.debugHotkeysInstalled = true;
-    const modes = ["normal", "flat", "id-colours", "single-texture", "uv", "texture-only", "water-source"];
+    const modes = ["normal", "flat", "id-colours", "single-texture", "uv", "texture-only", "rlhd-only", "water-source"];
     window.addEventListener("keydown", (event) => {
       const key = event.key.toLowerCase();
       if (event.ctrlKey && event.shiftKey && key === "d") {
@@ -9268,7 +9305,7 @@ class HDRenderer {
       document.body.appendChild(overlay);
       this.debugOverlay = overlay;
     }
-    this.debugOverlay.textContent = `HD ${HD_RENDERER_BUILD} | texture debug: DIAG-BUILD-2026-05-29 | ${mode}  |  F6 cycle, Shift+F6 back, F7 normal, F8 pink, F9 flat, F10/Ctrl+Shift+D diag, F11/Ctrl+Shift+A atlas | water: blue plain, yellow shaped, magenta model, cyan/orange inferred`;
+    this.debugOverlay.textContent = `HD ${HD_RENDERER_BUILD} | texture debug: DIAG-BUILD-2026-05-29 | ${mode}  |  F6 cycle, Shift+F6 back, F7 normal, F8 pink, F9 flat, F10/Ctrl+Shift+D diag, F11/Ctrl+Shift+A atlas, mode: rlhd-only | water: blue plain, yellow shaped, magenta model, cyan/orange inferred`;
     this.debugOverlay.style.display = this.enabled ? "block" : "none";
   }
   static isValid254Texture(texture) {
@@ -9460,6 +9497,13 @@ class HDRenderer {
       mode: this.textureDebugModeName(),
       atlasReady: this.textureAtlasReady,
       atlasLoadedCount: this.textureAtlasLoadedCount,
+      hdAtlasExpectedCount: HD_TEXTURE_FOR_SLOT.filter((filename) => filename !== null).length,
+      hdAtlasLoadedCount: this.hdAtlasLoadedCount,
+      hdAtlasFailedCount: this.hdAtlasFailedCount,
+      hdAtlasPendingCount: this.hdAtlasPendingImages.length,
+      hdAtlasLoadResults: this.hdAtlasLoadResults.slice(-50),
+      hdGroundMapsReady: this.hdGroundMapsReady,
+      waterMapsReady: this.waterMapsReady,
       untexturedTriangleCount: this.untexturedTriangleCount,
       invalidTextureCount: this.invalidTextureCount,
       textureIdMap,
@@ -10619,13 +10663,21 @@ class HDRenderer {
     this.startHdAtlasLoads();
   }
   static startHdAtlasLoads() {
+    this.hdAtlasFailedCount = 0;
+    this.hdAtlasLoadResults.length = 0;
     for (let id = 0;id < CACHE_TEXTURE_COUNT; id++) {
       const filename = HD_TEXTURE_FOR_SLOT[id];
       if (!filename) {
         continue;
       }
       const slot = id;
-      fetch(`/hd/textures/rlhd/${filename}`).then((r) => r.ok ? r.blob() : Promise.reject()).then((blob) => createImageBitmap(blob)).then((bitmap) => {
+      const url = `/hd/textures/rlhd/${filename}`;
+      fetch(url).then((r) => {
+        if (!r.ok) {
+          return Promise.reject(new Error(`HTTP ${r.status}`));
+        }
+        return r.blob();
+      }).then((blob) => createImageBitmap(blob)).then((bitmap) => {
         const tmp = new OffscreenCanvas(HD_ATLAS_TILE, HD_ATLAS_TILE);
         const ctx = tmp.getContext("2d");
         ctx.drawImage(bitmap, 0, 0, HD_ATLAS_TILE, HD_ATLAS_TILE);
@@ -10636,7 +10688,12 @@ class HDRenderer {
           d[i] = 255;
         }
         this.hdAtlasPendingImages.push({ slot, data: d });
-      }).catch(() => {});
+        this.hdAtlasLoadResults.push(`OK ${slot}: ${url}`);
+      }).catch((error) => {
+        this.hdAtlasFailedCount++;
+        const message = error instanceof Error ? error.message : String(error);
+        this.hdAtlasLoadResults.push(`FAIL ${slot}: ${url} (${message})`);
+      });
     }
   }
   static startColorAtlasLoads() {
@@ -34999,4 +35056,4 @@ export {
   Client
 };
 
-//# debugId=26F023A936DE056C64756E2164756E21
+//# debugId=F6266E0D4136AAB164756E2164756E21
