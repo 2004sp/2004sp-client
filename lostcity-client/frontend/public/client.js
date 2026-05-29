@@ -6466,7 +6466,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-29T01:29:35.991Z";
+var HD_RENDERER_BUILD = "2026-05-29T16:13:16.965Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -6811,7 +6811,8 @@ var NORMAL_MAP_FOR_MATERIAL = [
   "metallic_1_n.png",
   "hd_roof_shingles_n.png",
   null,
-  "dirt_1_n.png"
+  "dirt_1_n.png",
+  null
 ];
 var NORMAL_ATLAS_MATERIAL_SLOT_OFFSET = 50;
 var terrainShader = {
@@ -6911,6 +6912,7 @@ uniform int u_cacheTextureCount;
 uniform sampler2D u_shadowMap;
 uniform float u_shadowStrength;
 uniform sampler2D u_normalAtlas;
+uniform float u_waterTextureDiffuse;
 
 out vec4 outColour;
 
@@ -6988,6 +6990,15 @@ vec3 untexturedTerrainDetail(vec3 colour, float material) {
         return mix(colour, stone, material == 0.0 ? 0.24 : 0.42) * (0.9 + fine * 0.18);
     }
 
+    if (material == 14.0) {
+        // Seabed: sandy silt with occasional pebble grit.
+        vec3 sandDark  = vec3(0.20, 0.18, 0.12);
+        vec3 sandLight = vec3(0.40, 0.36, 0.24);
+        vec3 sand = mix(sandDark, sandLight, broad * 0.68 + fine * 0.32);
+        sand += (grit > 0.86 ? vec3(0.07, 0.06, 0.04) : vec3(0.0));
+        return mix(colour, sand, 0.60) * (0.88 + fine * 0.20);
+    }
+
     return colour;
 }
 
@@ -7052,15 +7063,20 @@ void main() {
         vec4 rect = u_atlasRects[atlasTexture];
         vec2 uv = fract(v_uv);
         if (material == 1.0) {
-            // Smooth noise distortion in world space — no sin/cos banding on the texture
+            // World-space base UV — seamless across tile boundaries, no grid lines.
             vec2 wuvTex = v_worldPos.xz / 640.0;
             float du = noise2(wuvTex * 3.5 + vec2(u_time * 0.05, 0.0)) - 0.5;
             float dv = noise2(wuvTex * 3.5 + vec2(0.0, u_time * 0.04)) - 0.5;
-            uv += vec2(du * 0.018, dv * 0.015);
+            uv = wuvTex + vec2(du * 0.018, dv * 0.015);
         }
         vec2 atlasUv = mix(rect.xy, rect.zw, fract(uv));
         vec4 texel = texture(u_textureAtlas, atlasUv);
-        if (texel.a >= 0.05) {
+        if (material == 1.0) {
+            // Water never discards — atlas padding must not punch holes in the surface.
+            if (texel.a >= 0.05) {
+                baseColour = mix(baseColour, texel.rgb, u_waterTextureDiffuse);
+            }
+        } else if (texel.a >= 0.05) {
             baseColour = mix(baseColour, texel.rgb, 0.9);
             if (u_textureDebugMode == 5) {
                 outColour = vec4(texel.rgb, 1.0);
@@ -7079,7 +7095,7 @@ void main() {
     // Textured surfaces (validCacheTexture) use the per-texture atlas slot with the same
     // UV as the colour sample.  Untextured terrain uses a per-material slot (50+material)
     // sampled with world-space planar UVs so the detail tiles independently of tile size.
-    if (u_textureDebugMode == 0 && material != 1.0 && material != 2.0 && material != 12.0) {
+    if (u_textureDebugMode == 0 && material != 1.0 && material != 2.0 && material != 12.0 && material != 14.0) {
         int normalSlot;
         vec2 normalUv;
         if (validCacheTexture) {
@@ -7113,64 +7129,106 @@ void main() {
     if (material == 12.0) {
         light = 1.0;
     } else if (material == 1.0) {
-        // Water: approximate 117HD's default WATER type in this single-pass terrain shader.
-        // Alpha stays 1.0 because the 2D composite step cannot safely blend terrain.
+        // Water: ported from RLHD (117HD RuneLite plugin) water.glsl
+        // https://github.com/117HD/RLHD — © 117, BSD 2-Clause
+        // Adapted for WebGL2: noise replaces normal-map texture samples;
+        // uniforms mapped to u_ambient/u_diffuseStrength/u_skyColour.
         float t = u_time;
 
-        vec2 wuv = v_worldPos.xz / 640.0;
+        // World-space UVs — mirrors RLHD worldUvs(scale) = -pos.xz / (128 * scale)
+        vec2 wuv3  = -v_worldPos.xz / (128.0 * 3.0);
+        vec2 wuv15 = -v_worldPos.xz / (128.0 * 15.0);
+
+        // Procedural flow field (RLHD samples a flow-map texture at worldUvs(15))
+        vec2 flowOff = vec2(
+            noise2(wuv15 * 4.0 + vec2(t * 0.0020,  0.0)),
+            noise2(wuv15 * 4.0 + vec2(0.0, -t * 0.0015))
+        ) * 0.025;
+
+        // Two counter-scrolling UV layers (RLHD uv1 = wuv3.yx - frame, uv2 = wuv3 + frame)
+        vec2 uv1 = wuv3.yx - vec2(t * 0.020, 0.0) + flowOff;
+        vec2 uv2 = wuv3    + vec2(0.0, t * 0.017)  + flowOff;
+
+        // Normal perturbation via noise gradients (RLHD samples waterType.normalMap twice)
+        // RLHD WaterType.normalStrength = 0.9
         const float E = 0.04;
-
-        // Two counter-moving layers mirror 117HD's paired normal-map scrolls.
-        vec2 flow = vec2(
-            noise2(wuv * 15.0 + vec2(t * 0.050, -t * 0.050)),
-            noise2(wuv.yx * 15.0 + vec2(-t * 0.050, t * 0.050))
-        ) - 0.5;
-        vec2 uv1 = wuv.yx * 3.0 - vec2(t / 28.0) + flow * 0.025;
-        vec2 uv2 = wuv * 3.0 + vec2(t / 24.0) + flow * 0.025;
-
-        float n1c  = noise2(uv1);
-        float n1dx = noise2(uv1 + vec2(E, 0.0)) - noise2(uv1 - vec2(E, 0.0));
-        float n1dz = noise2(uv1 + vec2(0.0, E)) - noise2(uv1 - vec2(0.0, E));
-        float n2dx = noise2(uv2 + vec2(E, 0.0)) - noise2(uv2 - vec2(E, 0.0));
-        float n2dz = noise2(uv2 + vec2(0.0, E)) - noise2(uv2 - vec2(0.0, E));
+        float n1c  = noise2(uv1 * 8.0);
+        float n1dx = noise2(uv1 * 8.0 + vec2(E, 0.0)) - noise2(uv1 * 8.0 - vec2(E, 0.0));
+        float n1dz = noise2(uv1 * 8.0 + vec2(0.0, E)) - noise2(uv1 * 8.0 - vec2(0.0, E));
+        float n2dx = noise2(uv2 * 8.0 + vec2(E, 0.0)) - noise2(uv2 * 8.0 - vec2(E, 0.0));
+        float n2dz = noise2(uv2 * 8.0 + vec2(0.0, E)) - noise2(uv2 * 8.0 - vec2(0.0, E));
 
         vec3 waterNormal = normalize(normal + vec3(
-            (n1dx + n2dx) * 0.09,
+            (n1dx + n2dx) * 0.9 * 0.10,
             0.0,
-            (n1dz + n2dz) * 0.09
+            (n1dz + n2dz) * 0.9 * 0.10
         ));
 
-        float vDotN = clamp(dot(viewDir, waterNormal), 0.0, 1.0);
-        float fresnel = clamp(1.0 - vDotN, 0.0, 1.0);
-        float finalFresnel = clamp(mix(0.4, 1.0, fresnel * 1.2), 0.0, 1.0);
+        float lightDotN = max(dot(waterNormal, sunDir), 0.0);
+        float viewDotN  = clamp(dot(viewDir, waterNormal), 0.0, 1.0);
 
-        // 117HD-style water: dark surface base with Fresnel sky lift and tight specular.
-        vec3 waterColorLight = vec3(0.38, 0.56, 0.72);
-        vec3 waterColorMid   = vec3(0.13, 0.26, 0.34);
-        vec3 waterColorDark  = vec3(0.018, 0.045, 0.060);
-        vec3 surfaceColor = finalFresnel < 0.5
-            ? mix(waterColorDark, waterColorMid, finalFresnel * 2.0)
-            : mix(waterColorMid, waterColorLight, (finalFresnel - 0.5) * 2.0);
+        // RLHD Fresnel — baseOpacity = 0.4 (WaterType.baseOpacity)
+        float baseOpacity  = 0.4;
+        float fresnel      = 1.0 - viewDotN;
+        float finalFresnel = clamp(mix(baseOpacity, 1.0, fresnel * 1.2), 0.0, 1.0);
 
-        vec3 waterSurface = vec3(0.18, 0.31, 0.40);
-        vec3 baseWater = waterSurface * (u_ambient * 0.95 + diffuse * u_diffuseStrength * 0.38);
-        surfaceColor = mix(baseWater, surfaceColor, 0.78);
+        // Fresnel colour gradient (RLHD waterColorDark / Mid / Light environment uniforms)
+        // Overworld defaults; tune live with window.HD_WATER_COLOR_*
+        vec3 waterColorDark  = vec3(0.05, 0.13, 0.30);
+        vec3 waterColorMid   = vec3(0.18, 0.40, 0.65);
+        vec3 waterColorLight = vec3(0.48, 0.70, 0.85);
 
-        // Very subtle procedural foam; 117HD's real foam is shoreline-texture based.
-        float foam = pow(max(n1c - 0.74, 0.0) / 0.26, 3.0);
-        surfaceColor = mix(surfaceColor, vec3(0.68, 0.78, 0.84), foam * 0.08);
+        vec3 surfaceColor;
+        if (finalFresnel < 0.5) {
+            surfaceColor = mix(waterColorDark, waterColorMid, finalFresnel * 2.0);
+        } else {
+            surfaceColor = mix(waterColorMid, waterColorLight, (finalFresnel - 0.5) * 2.0);
+        }
 
-        diffuse = max(dot(waterNormal, sunDir), 0.0);
+        // RLHD lighting — mapped to our uniform names
+        // specularStrength = 0.8, specularGloss = 420  (from WaterType.CAVE_WATER reference)
+        float specularStrength = 0.8;
+        float specularGloss    = 420.0;
 
-        // 117HD default WATER uses specularStrength .5 and a tight gloss of 500.
-        vec3 halfVec = normalize(viewDir + sunDir);
-        float spec = pow(max(dot(waterNormal, halfVec), 0.0), 500.0);
-        surfaceColor += vec3(0.88, 0.95, 1.00) * spec * 0.50;
+        vec3 ambientLightOut = u_skyColour * u_ambient;                        // RLHD: ambientColor * ambientStrength
+        vec3 dirLight        = vec3(u_diffuseStrength);                        // RLHD: lightColor * lightStrength
+        vec3 lightOut        = lightDotN * dirLight;
+        vec3 halfVec         = normalize(viewDir + sunDir);
+        float spec           = pow(max(dot(waterNormal, halfVec), 0.0), specularGloss);
+        vec3 lightSpecOut    = dirLight * spec * specularStrength;             // RLHD: lightSpecularOut
+        vec3 skyLightOut     = max(-waterNormal.y, 0.0) * u_skyColour * 0.5;  // RLHD: fogColor * 0.5
 
-        light = 1.0;
-        baseColour = surfaceColor;
-        alpha = v_alpha;
-        normal = waterNormal;
+        vec3 surfaceColorOut = surfaceColor * max(specularStrength, 0.2);
+        vec3 compositeLight  = ambientLightOut + lightOut + lightSpecOut + skyLightOut + surfaceColorOut;
+
+        // RLHD: baseColor = waterType.surfaceColor * compositeLight
+        //       mixed with Fresnel gradient at fresnelAmount
+        // WATER_FLAT: surfaceColor = #69809C = (0.412, 0.502, 0.612), fresnelAmount = 0.85
+        vec3 waterSurfaceColor = vec3(0.412, 0.502, 0.612);
+        vec3 baseColor         = waterSurfaceColor * compositeLight;
+        baseColor              = mix(baseColor, surfaceColor, 0.85);
+
+        // Foam — RLHD uses a foam mask texture + shore blend weight.
+        // We generate it procedurally from the same UV layers.
+        float foamMask   = noise2(uv1 * 12.0 + uv2 * 8.0 + vec2(t * 0.008, 0.0));
+        float foamAmount = clamp(pow(max(foamMask - 0.72, 0.0) / 0.28, 3.0), 0.0, 0.8);
+        vec3  foamColor  = vec3(0.95, 0.97, 1.00) * compositeLight;
+        foamAmount      *= foamMask;
+        baseColor        = mix(baseColor, foamColor, foamAmount);
+
+        // RLHD: baseColor += pointLightsSpecularOut + lightSpecularOut / 3
+        baseColor += lightSpecOut / 3.0;
+
+        // RS water texture blend (window.HD_WATER_TEXTURE_DIFFUSE, default 0.25)
+        if (validCacheTexture) {
+            baseColor = mix(baseColor, baseColour, u_waterTextureDiffuse);
+        }
+
+        // RLHD alpha: max(baseOpacity, max(foamAmount, max(finalFresnel, length(specular/3))))
+        alpha      = max(baseOpacity, max(foamAmount, max(finalFresnel, length(lightSpecOut / 3.0))));
+        light      = 1.0;
+        baseColour = baseColor;
+        normal     = waterNormal;
 
     } else if (material == 2.0) {
         // Lava: RLHD-inspired dual-layer flow and crack animation
@@ -7214,6 +7272,16 @@ void main() {
         vec3 halfVec = normalize(viewDir + sunDir);
         float spec = pow(max(dot(normal, halfVec), 0.0), 32.0);
         baseColour += vec3(0.75, 0.72, 0.68) * spec * 0.42;
+    } else if (material == 14.0) {
+        // Seabed: terrain rendered below the water surface.
+        // v_alpha is repurposed as normalised water depth [0 = surface, 1 = max depth].
+        float depth = v_alpha;
+        // Tint toward deep-water blue and darken with depth.
+        vec3 depthColor = vec3(0.04, 0.10, 0.22);
+        baseColour = mix(baseColour, depthColor, depth * 0.65);
+        light *= (1.0 - depth * 0.45);
+        // Seabed is always opaque — the water surface above provides the transparency.
+        alpha = 1.0;
     }
 
     // Sky ambient: RLHD-inspired sky light contribution on upward-facing surfaces.
@@ -7289,6 +7357,9 @@ class HDRenderer {
   static visibleGroundKeys = new Set;
   static sceneDirty = false;
   static terrainVertexCount = 0;
+  static waterBuffer = null;
+  static waterVao = null;
+  static waterVertexCount = 0;
   static modelBatches = new Map;
   static transparentBatches = [];
   static dynamicModelBatches = new Map;
@@ -8071,6 +8142,15 @@ class HDRenderer {
       this.drawStaticFarModels();
       this.uploadAndDrawModels();
       this.uploadAndDrawDynamicModels();
+      if (this.waterVertexCount > 0 && this.waterVao) {
+        gl.enable(gl.POLYGON_OFFSET_FILL);
+        gl.polygonOffset(-1, -1);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        this.drawBuffer(this.waterVao, this.waterVertexCount);
+        gl.disable(gl.BLEND);
+        gl.disable(gl.POLYGON_OFFSET_FILL);
+      }
       gl.flush();
       this.compositeViewportToGameCanvas(viewport);
       gl.disable(gl.SCISSOR_TEST);
@@ -8165,6 +8245,7 @@ class HDRenderer {
     this.sceneDirty = true;
     this.lastCameraRange = null;
     this.terrainVertexCount = 0;
+    this.waterVertexCount = 0;
     fetch("/debug-log", { method: "POST", body: "[hd-render] software brightness changed; rebuilding HD terrain buffer" }).catch(() => {});
   }
   static syncTerrain(camera) {
@@ -8180,8 +8261,9 @@ class HDRenderer {
       this.buildSmoothNormals(camera);
       this.sceneDirty = false;
     }
-    const vertices = this.buildTerrainVertices(camera);
-    this.terrainVertexCount = vertices.length / VERTEX_FLOATS;
+    const { land, water } = this.buildTerrainVertices(camera);
+    this.terrainVertexCount = land.length / VERTEX_FLOATS;
+    this.waterVertexCount = water.length / VERTEX_FLOATS;
     if (!this.terrainBuffer) {
       this.terrainBuffer = this.gl.createBuffer();
     }
@@ -8190,10 +8272,21 @@ class HDRenderer {
       return;
     }
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.terrainBuffer);
-    this.gl.bufferData(this.gl.ARRAY_BUFFER, vertices, this.gl.STATIC_DRAW);
+    this.gl.bufferData(this.gl.ARRAY_BUFFER, land, this.gl.STATIC_DRAW);
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
     if (!this.terrainVao) {
       this.terrainVao = this.setupVao(this.terrainBuffer);
+    }
+    if (!this.waterBuffer) {
+      this.waterBuffer = this.gl.createBuffer();
+    }
+    if (this.waterBuffer) {
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.waterBuffer);
+      this.gl.bufferData(this.gl.ARRAY_BUFFER, water, this.gl.STATIC_DRAW);
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+      if (!this.waterVao) {
+        this.waterVao = this.setupVao(this.waterBuffer);
+      }
     }
     if (camera) {
       this.lastCameraRange = {
@@ -8206,20 +8299,21 @@ class HDRenderer {
     }
   }
   static buildTerrainVertices(camera) {
-    const floats = [];
+    const landFloats = [];
+    const waterFloats = [];
     const tiles = this.groundTiles;
     for (const tile of tiles) {
       if (camera && !this.tileVisibleForCamera(tile, camera)) {
         continue;
       }
-      this.pushGroundTile(floats, tile);
+      this.pushGroundTile(landFloats, waterFloats, tile);
     }
-    return new Float32Array(floats);
+    return { land: new Float32Array(landFloats), water: new Float32Array(waterFloats) };
   }
   static tileVisibleForCamera(tile, camera) {
     return tile.level <= camera.maxLevel && tile.x >= camera.minTileX && tile.z >= camera.minTileZ && tile.x < camera.maxTileX && tile.z < camera.maxTileZ;
   }
-  static pushGroundTile(floats, tile) {
+  static pushGroundTile(landFloats, waterFloats, tile) {
     const ground = this.getGround(tile);
     for (let i = 0;i < ground.faceVertexA.length; i++) {
       const face = this.groundFace(tile, ground, i);
@@ -8236,7 +8330,24 @@ class HDRenderer {
       const normalA = material === 1 /* Water */ ? faceNormal : this.smoothNormalCache.get(this.normalKey(tile.level, pa[0], pa[2])) ?? faceNormal;
       const normalB = material === 1 /* Water */ ? faceNormal : this.smoothNormalCache.get(this.normalKey(tile.level, pb[0], pb[2])) ?? faceNormal;
       const normalC = material === 1 /* Water */ ? faceNormal : this.smoothNormalCache.get(this.normalKey(tile.level, pc[0], pc[2])) ?? faceNormal;
-      this.pushTriangle(floats, pa, pb, pc, colourA, colourB, colourC, material, texture, this.tileUv(pa, tile.x, tile.z), this.tileUv(pb, tile.x, tile.z), this.tileUv(pc, tile.x, tile.z), 1, normalA, normalB, normalC, waterSource);
+      if (material === 1 /* Water */) {
+        this.pushTriangle(waterFloats, pa, pb, pc, colourA, colourB, colourC, material, texture, this.tileUv(pa, tile.x, tile.z), this.tileUv(pb, tile.x, tile.z), this.tileUv(pc, tile.x, tile.z), 1, normalA, normalB, normalC, waterSource);
+        const { seabedYa, seabedYb, seabedYc, waterSurfaceY } = face;
+        const sbPa = [pa[0], seabedYa, pa[2]];
+        const sbPb = [pb[0], seabedYb, pb[2]];
+        const sbPc = [pc[0], seabedYc, pc[2]];
+        const sbNormal = this.triangleNormal(sbPa, sbPb, sbPc);
+        if (sbNormal[1] <= -0.15) {
+          const depthA = Math.min(1, Math.max(0, waterSurfaceY - seabedYa) / WATER_SURFACE_MAX_HEIGHT_DELTA);
+          const depthB = Math.min(1, Math.max(0, waterSurfaceY - seabedYb) / WATER_SURFACE_MAX_HEIGHT_DELTA);
+          const depthC = Math.min(1, Math.max(0, waterSurfaceY - seabedYc) / WATER_SURFACE_MAX_HEIGHT_DELTA);
+          const avgDepth = (depthA + depthB + depthC) / 3;
+          this.countMaterial(14 /* Seabed */);
+          this.pushTriangle(landFloats, sbPa, sbPb, sbPc, colourA, colourB, colourC, 14 /* Seabed */, -1, this.tileUv(sbPa, tile.x, tile.z), this.tileUv(sbPb, tile.x, tile.z), this.tileUv(sbPc, tile.x, tile.z), avgDepth, sbNormal, sbNormal, sbNormal, 0 /* None */);
+        }
+      } else {
+        this.pushTriangle(landFloats, pa, pb, pc, colourA, colourB, colourC, material, texture, this.tileUv(pa, tile.x, tile.z), this.tileUv(pb, tile.x, tile.z), this.tileUv(pc, tile.x, tile.z), 1, normalA, normalB, normalC, waterSource);
+      }
     }
   }
   static groundFace(tile, ground, faceIndex) {
@@ -8259,18 +8370,22 @@ class HDRenderer {
       texture = 1;
     }
     let skip = false;
+    let seabedYa = pa[1];
+    let seabedYb = pb[1];
+    let seabedYc = pc[1];
+    let waterSurfaceY = pa[1];
     if (material === 1 /* Water */) {
       if (this.faceHeightDelta(pa, pb, pc) > WATER_SURFACE_MAX_HEIGHT_DELTA) {
         skip = true;
       } else {
-        const waterY = this.waterPlaneY(tile);
-        pa[1] = waterY;
-        pb[1] = waterY;
-        pc[1] = waterY;
+        seabedYa = pa[1];
+        seabedYb = pb[1];
+        seabedYc = pc[1];
+        waterSurfaceY = Math.max(pa[1], pb[1], pc[1]);
       }
     }
     const waterSource = material === 1 /* Water */ ? this.waterSourceForTerrainFace(tile, textureCandidate) : 0 /* None */;
-    return { pa, pb, pc, colourA, colourB, colourC, material, texture, waterSource, skip };
+    return { pa, pb, pc, colourA, colourB, colourC, material, texture, waterSource, skip, seabedYa, seabedYb, seabedYc, waterSurfaceY };
   }
   static waterSourceForTerrainFace(tile, textureCandidate) {
     const textured = this.isValid254Texture(textureCandidate);
@@ -9372,7 +9487,8 @@ class HDRenderer {
       "u_lightSpaceMatrix",
       "u_shadowMap",
       "u_shadowStrength",
-      "u_normalAtlas"
+      "u_normalAtlas",
+      "u_waterTextureDiffuse"
     ]) {
       this.uniformCache.set(name, gl.getUniformLocation(p, name));
     }
@@ -9454,6 +9570,8 @@ class HDRenderer {
     gl.uniform1f(u("u_fogStart"), hdFogStart);
     gl.uniform1f(u("u_fogDistance"), hdFogEnd);
     gl.uniform1f(u("u_time"), performance.now() / 1000);
+    const hdWaterTextureDiffuse = Number.isFinite(Number(globalThis.HD_WATER_TEXTURE_DIFFUSE)) ? Number(globalThis.HD_WATER_TEXTURE_DIFFUSE) : 0.25;
+    gl.uniform1f(u("u_waterTextureDiffuse"), hdWaterTextureDiffuse);
     gl.uniform1i(u("u_textureDebugMode"), this.textureDebugMode());
     gl.uniform1i(u("u_cacheTextureCount"), CACHE_TEXTURE_COUNT);
     gl.uniformMatrix4fv(u("u_lightSpaceMatrix"), false, this.lightSpaceMatrix);
@@ -9889,10 +10007,15 @@ class HDRenderer {
     }
     gl.bindTexture(gl.TEXTURE_2D, this.textureAtlas);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const anisotropicExt = gl.getExtension("EXT_texture_filter_anisotropic");
+    if (anisotropicExt) {
+      gl.texParameterf(gl.TEXTURE_2D, anisotropicExt.TEXTURE_MAX_ANISOTROPY_EXT, gl.getParameter(anisotropicExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT));
+    }
     gl.bindTexture(gl.TEXTURE_2D, null);
     if (loadedCount > 0) {
       this.textureAtlasReady = true;
@@ -9967,6 +10090,33 @@ class HDRenderer {
     this.uiUniformCanvasSize = gl.getUniformLocation(program, "u_canvasSize");
     this.uiUniformTexture = gl.getUniformLocation(program, "u_uiTexture");
     this.uiUniformKeyed = gl.getUniformLocation(program, "u_keyed");
+  }
+  static HD_ALWAYS_VISIBLE_TERRAIN_TILES = new Set([
+    "0:3240:3226",
+    "0:3241:3226",
+    "0:3242:3226",
+    "0:3243:3226",
+    "0:3244:3226",
+    "0:3245:3226",
+    "0:3246:3226",
+    "0:3247:3226",
+    "0:3248:3226",
+    "0:3249:3226",
+    "0:3250:3226",
+    "0:3240:3225",
+    "0:3241:3225",
+    "0:3242:3225",
+    "0:3243:3225",
+    "0:3244:3225",
+    "0:3245:3225",
+    "0:3246:3225",
+    "0:3247:3225",
+    "0:3248:3225",
+    "0:3249:3225",
+    "0:3250:3225"
+  ]);
+  static isAlwaysVisibleTerrainTile(level, x, z) {
+    return this.HD_ALWAYS_VISIBLE_TERRAIN_TILES.has(`${level}:${x}:${z}`);
   }
   static fixedSin(angle) {
     return Math.round(Math.sin((angle & 2047) * Math.PI / 1024) * 65536);
@@ -16000,6 +16150,9 @@ class World {
             tile.drawBack = false;
             tile.cornerSides = 0;
           }
+          if (HDRenderer.isEnabled() && HDRenderer.isAlwaysVisibleTerrainTile(level, x, z)) {
+            HDRenderer.queueGroundTile(level, x, z);
+          }
         }
       }
     }
@@ -16118,7 +16271,7 @@ class World {
       }
       for (let level = this.minLevel;level < this.maxTileLevel; level++) {
         const tile = this.levelTiles[level][x][z];
-        if (!tile || tile.drawLevel > maxLevel) {
+        if (!tile || tile.drawLevel > maxLevel && !HDRenderer.isAlwaysVisibleTerrainTile(level, x, z)) {
           continue;
         }
         const softwareVisibleRegion = x >= World.minX && x < World.maxX && z >= World.minZ && z < World.maxZ;
@@ -16241,7 +16394,7 @@ class World {
     }
     return queued;
   }
-  shouldLeaveHdLocToSoftwareVisibility(locId, typecode, typecode2, _softwareVisibleRegion) {
+  shouldLeaveHdLocToSoftwareVisibility(typecode, typecode2, _softwareVisibleRegion) {
     if (typecode <= 0) {
       return false;
     }
@@ -16249,16 +16402,12 @@ class World {
     if (shape < 12 /* ROOF_STRAIGHT */ || shape > 21 /* ROOFEDGE_SQUARE_CORNER */) {
       return false;
     }
+    const locId = typecode >>> 14 & 32767;
+    if (World.HD_ALWAYS_VISIBLE_ROOF_SHAPED_LOCS.has(locId)) {
+      return false;
+    }
     const loc = LocType.get(locId);
     const name = (loc?.name ?? "").toLowerCase();
-    if (shape >= 12 /* ROOF_STRAIGHT */ && shape <= 21 /* ROOFEDGE_SQUARE_CORNER */) {
-      console.log("[HD roof-shaped loc]", {
-        locIdlocId,
-        shape,
-        typecode,
-        typecode2
-      });
-    }
     if (name.includes("bridge") || name.includes("walkway") || name.includes("platform") || name.includes("floor") || name.includes("deck")) {
       return false;
     }
@@ -34158,4 +34307,4 @@ export {
   Client
 };
 
-//# debugId=5EAE3995AB7108B864756E2164756E21
+//# debugId=D953C9C78656428164756E2164756E21

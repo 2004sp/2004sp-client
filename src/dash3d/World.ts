@@ -1187,7 +1187,13 @@ export default class World {
                         continue;
                     }
 
-                    if (tile.drawLevel <= maxLevel && (World.visibilityMap[x + 25 - World.gx][z + 25 - World.gz] || this.groundh[level][x][z] - eyeY >= 2000)) {
+                    if (
+                        tile.drawLevel <= maxLevel &&
+                        (
+                            World.visibilityMap[x + 25 - World.gx][z + 25 - World.gz] ||
+                            this.groundh[level][x][z] - eyeY >= 2000
+                        )
+                    ) {
                         tile.drawFront = true;
                         tile.drawBack = true;
                         tile.drawSprites = tile.spriteCount > 0;
@@ -1196,6 +1202,12 @@ export default class World {
                         tile.drawFront = false;
                         tile.drawBack = false;
                         tile.cornerSides = 0;
+                    }
+
+                    // Keep Lumbridge bridge floor terrain queued for HD only.
+                    // Do not force drawFront here, otherwise the software scene shows it through buildings.
+                    if (HDRenderer.isEnabled() && HDRenderer.isAlwaysVisibleTerrainTile(level, x, z)) {
+                        HDRenderer.queueGroundTile(level, x, z);
                     }
                 }
             }
@@ -1344,7 +1356,7 @@ export default class World {
 
             for (let level: number = this.minLevel; level < this.maxTileLevel; level++) {
                 const tile: Square | null = this.levelTiles[level][x][z];
-                if (!tile || tile.drawLevel > maxLevel) {
+                if (!tile || (tile.drawLevel > maxLevel && !HDRenderer.isAlwaysVisibleTerrainTile(level, x, z))) {
                     continue;
                 }
 
@@ -1488,46 +1500,39 @@ export default class World {
         return queued;
     }
 
-private shouldLeaveHdLocToSoftwareVisibility(
-    locId: number,
-    typecode: number,
-    typecode2: number,
-    _softwareVisibleRegion: boolean
-): boolean {
-    if (typecode <= 0) {
-        return false;
+private shouldLeaveHdLocToSoftwareVisibility(typecode: number, typecode2: number, _softwareVisibleRegion: boolean): boolean {
+        if (typecode <= 0) {
+            return false;
+        }
+
+        const shape = typecode2 & 0x3f;
+        if (shape < LocShape.ROOF_STRAIGHT || shape > LocShape.ROOFEDGE_SQUARE_CORNER) {
+            return false;
+        }
+
+        const locId = (typecode >>> 14) & 0x7fff;
+
+        if (World.HD_ALWAYS_VISIBLE_ROOF_SHAPED_LOCS.has(locId)) {
+            return false;
+        }
+
+        const loc = LocType.get(locId);
+        const name = (loc?.name ?? '').toLowerCase();
+
+        // Bridges/platforms/floors must stay visible even if they use roof-shaped locs.
+        if (
+            name.includes('bridge') ||
+            name.includes('walkway') ||
+            name.includes('platform') ||
+            name.includes('floor') ||
+            name.includes('deck')
+        ) {
+            return false;
+        }
+
+        // Only real roof-shaped building pieces should use indoor software visibility.
+        return true;
     }
-
-    const shape = typecode2 & 0x3f;
-
-    if (shape < LocShape.ROOF_STRAIGHT || shape > LocShape.ROOFEDGE_SQUARE_CORNER) {
-        return false;
-    }
-
-    const loc = LocType.get(locId);
-    const name = (loc?.name ?? '').toLowerCase();
-if (shape >= LocShape.ROOF_STRAIGHT && shape <= LocShape.ROOFEDGE_SQUARE_CORNER) {
-    console.log('[HD roof-shaped loc]', {
-        locIdlocId,
-        shape,
-        typecode,
-        typecode2
-    });
-}
-    // Bridges/platforms/floors must stay visible even if they use roof-shaped locs.
-    if (
-        name.includes('bridge') ||
-        name.includes('walkway') ||
-        name.includes('platform') ||
-        name.includes('floor') ||
-        name.includes('deck')
-    ) {
-        return false;
-    }
-
-    // Only real roof-shaped building pieces should use indoor software visibility.
-    return true;
-}
 
     private setSprite(
         x: number,

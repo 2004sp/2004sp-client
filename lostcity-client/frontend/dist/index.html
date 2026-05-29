@@ -9,10 +9,12 @@
 
             html, body {
                 background: #000;
-                overflow: hidden;
+                /* Use auto so a scrollbar appears instead of silently clipping content
+                   when the window is smaller than the minimum game + toolbar size. */
+                overflow: auto;
                 font-family: Arial, sans-serif;
-                height: 100vh;
-                width: 100vw;
+                height: 100%;
+                width: 100%;
             }
 
             /* Root flex row: canvas | hiscores panel | xp tracker panel | toolbar */
@@ -20,6 +22,11 @@
                 display: flex;
                 width: 100vw;
                 height: 100vh;
+                /* Prevent the layout from shrinking below the natural game size.
+                   765px = game canvas width, 44px = toolbar. 503px = game canvas height.
+                   Below this size a browser scrollbar appears rather than clipping. */
+                min-width: 809px;
+                min-height: 503px;
             }
 
             /* Canvas grows to fill all remaining space, letterboxes to preserve 765:503 */
@@ -40,7 +47,9 @@
                 width: 100%;
                 height: 100%;
                 max-width: calc(100vh * 765 / 503);
-                max-height: calc(100vw * 503 / 765);
+                /* Subtract the toolbar (44px) so the canvas never grows wider than
+                   canvas-wrap and bleeds over the toolbar column. */
+                max-height: calc((100vw - 44px) * 503 / 765);
                 image-rendering: pixelated;
                 outline: none;
                 box-shadow: none;
@@ -62,6 +71,48 @@
             #layout.app-fullscreen-fill #canvas-wrap,
             #layout.app-fullscreen-half #canvas-wrap {
                 overflow: hidden;
+            }
+
+            #layout.app-stretch-aspect #canvas-wrap,
+            #layout.app-stretch-fill #canvas-wrap {
+                overflow: hidden;
+            }
+
+            /* Stretch modes fill whatever window size the user gives — don't force the
+               809 × 503 minimum that windowed letterbox mode needs. */
+            #layout.app-stretch-aspect,
+            #layout.app-stretch-fill {
+                min-width: 0;
+                min-height: 0;
+            }
+
+            /* Fullscreen modes cover the full screen — min-size constraints don't apply. */
+            #layout.app-fullscreen-bars,
+            #layout.app-fullscreen-half,
+            #layout.app-fullscreen-fill {
+                min-width: 0;
+                min-height: 0;
+            }
+
+            #layout.app-stretch-aspect #canvas {
+                /* Contain: scale to fill whichever axis is the binding constraint,
+                   black bars on the other axis.  Neither width nor height drives
+                   alone — both are computed with min() so resizing in any direction
+                   never distorts the 765:503 ratio.
+                     width  = min(canvas-wrap-width,  canvas-wrap-height × 765/503)
+                     height = min(canvas-wrap-height, canvas-wrap-width  × 503/765)
+                   canvas-wrap is (100vw − 44px toolbar) × 100vh. */
+                width:  min(calc(100vw - 44px), calc(100vh * 765 / 503)) !important;
+                height: min(100vh, calc((100vw - 44px) * 503 / 765))     !important;
+                max-width:  100% !important;
+                max-height: 100% !important;
+            }
+
+            #layout.app-stretch-fill #canvas {
+                width: 100% !important;
+                height: 100% !important;
+                max-width: none !important;
+                max-height: none !important;
             }
 
             #layout.app-fullscreen-fill #canvas {
@@ -113,7 +164,12 @@
                 flex-direction: column;
                 align-items: center;
                 padding-top: 8px;
+                padding-bottom: 8px;
                 gap: 4px;
+            }
+
+            #btn-settings {
+                margin-top: auto;
             }
 
             .tool-btn {
@@ -726,6 +782,14 @@
                         </div>
                         <label class="st-check-row"><input type="checkbox" id="low-memory-mode"> Low Memory Mode</label>
                         <label class="st-check-row"><input type="checkbox" id="hd-mode"> HD Mode</label>
+                        <div class="st-field">
+                            <label class="st-field-label" for="stretch-mode-select">Stretch Mode</label>
+                            <select id="stretch-mode-select" class="st-select">
+                                <option value="none">None</option>
+                                <option value="aspect">Aspect Ratio</option>
+                                <option value="fill">Fill Window</option>
+                            </select>
+                        </div>
                         <button type="button" id="fullscreen-bars" class="st-action-btn">Fullscreen (Bars)</button>
                         <button type="button" id="fullscreen-half" class="st-action-btn">Fullscreen (Half-Fill)</button>
                         <button type="button" id="fullscreen-fill" class="st-action-btn">Fullscreen (Fill)</button>
@@ -748,8 +812,9 @@
                 <div class="tool-btn" id="btn-xpdrops" title="XP Drops">XP</div>
                 <div class="tool-btn" id="btn-xptracker" title="XP Tracker">&#128200;</div>
                 <div class="tool-btn" id="btn-worldmap" title="World Map">&#128506;</div>
-                <div class="tool-btn" id="btn-settings" title="Settings">&#9881;</div>
                 <div class="tool-btn" id="btn-losthq" title="LostHQ Wiki">&#128212;</div>
+                <div class="tool-btn" id="btn-settings" title="Settings">&#9881;</div>
+                
             </div>
         </div>
 
@@ -951,6 +1016,7 @@
                 var fullscreenBarsBtn = document.getElementById('fullscreen-bars');
                 var fullscreenHalfBtn = document.getElementById('fullscreen-half');
                 var fullscreenFillBtn = document.getElementById('fullscreen-fill');
+                var stretchModeSel = document.getElementById('stretch-mode-select');
                 var canvas = document.getElementById('canvas');
                 var isOpen = false;
 
@@ -988,6 +1054,7 @@
                     applyCanvasFilter(localStorage.getItem('filtering') === 'false' ? 'auto' : (localStorage.getItem('canvasFilter') || 'pixelated'));
                     applyLowMemoryMode(localStorage.getItem('clientLowMemoryMode') === 'true');
                     applyHdMode(localStorage.getItem('clientHdMode') === 'true');
+                    applyStretchMode(localStorage.getItem('stretchMode') || 'none');
                 }
 
                 function applyShiftPrefs(prefs) {
@@ -1027,6 +1094,20 @@
                     if (filterSel) filterSel.value = filter;
                     localStorage.setItem('canvasFilter', filter);
                     localStorage.setItem('filtering', filter === 'pixelated' ? 'true' : 'false');
+                }
+
+                function applyStretchMode(mode) {
+                    var layout = document.getElementById('layout');
+                    if (!layout) return;
+                    layout.classList.remove('app-stretch-aspect', 'app-stretch-fill');
+                    if (mode === 'aspect') {
+                        layout.classList.add('app-stretch-aspect');
+                    } else if (mode === 'fill') {
+                        layout.classList.add('app-stretch-fill');
+                    }
+                    if (stretchModeSel) stretchModeSel.value = mode || 'none';
+                    localStorage.setItem('stretchMode', mode || 'none');
+                    if (sizeSel) sizeSel.disabled = (mode !== 'none');
                 }
 
                 function applyLowMemoryMode(enabled) {
@@ -1242,6 +1323,12 @@
                 if (sizeSel) {
                     sizeSel.addEventListener('change', function () {
                         applyCanvasSize(sizeSel.value);
+                    });
+                }
+
+                if (stretchModeSel) {
+                    stretchModeSel.addEventListener('change', function () {
+                        applyStretchMode(stretchModeSel.value);
                     });
                 }
 
