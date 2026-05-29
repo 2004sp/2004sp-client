@@ -6495,7 +6495,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-29T21:02:54.558Z";
+var HD_RENDERER_BUILD = "2026-05-29T21:09:42.220Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -7399,7 +7399,10 @@ void main() {
         }
     }
 
-    if (!validCacheTexture && u_textureDebugMode == 0) {
+    // Disabled by default: this was changing untextured 254 terrain after the
+    // software/correct view flashed for a moment. Keep original vertex colours
+    // unless HD_UNTEXTURED_TERRAIN_DETAIL is deliberately re-enabled in code.
+    if (false && !validCacheTexture && u_textureDebugMode == 0) {
         baseColour = untexturedTerrainDetail(baseColour, material);
     }
 
@@ -8705,14 +8708,17 @@ class HDRenderer {
     const pb = [ground.vertexX[b], ground.vertexY[b], ground.vertexZ[b]];
     const pc = [ground.vertexX[c], ground.vertexY[c], ground.vertexZ[c]];
     const textureCandidate = ground.faceTexture && ground.faceTexture[faceIndex] >= 0 ? ground.faceTexture[faceIndex] : -1;
-    let texture = this.isValid254Texture(textureCandidate) ? textureCandidate : -1;
+    const terrainTexture = this.isValid254Texture(textureCandidate) ? textureCandidate : -1;
     const colourA = this.colourIndexToRgb(ground.faceColourA[faceIndex]);
     const colourB = this.colourIndexToRgb(ground.faceColourB[faceIndex]);
     const colourC = this.colourIndexToRgb(ground.faceColourC[faceIndex]);
     const avg = this.averageColour(colourA, colourB, colourC);
-    const texturedOverlayFace = ground.faceTexture !== null && ground.faceTexture[faceIndex] >= 0;
+    const candidateMaterial = this.isValid254Texture(terrainTexture) ? this.materialForTexture(terrainTexture, avg) : 0 /* Default */;
+    const keepTerrainTexture = candidateMaterial === 1 /* Water */ || candidateMaterial === 2 /* Lava */;
+    let texture = keepTerrainTexture ? terrainTexture : -1;
+    const texturedOverlayFace = keepTerrainTexture;
     const isOverlayFace = texturedOverlayFace || this.isColourOverlayFace(tile, avg);
-    const material = this.isValid254Texture(texture) ? this.materialForTexture(texture, avg) : this.materialForFloor(tile, avg, isOverlayFace);
+    const material = keepTerrainTexture ? candidateMaterial : this.materialForFloor(tile, avg, isOverlayFace);
     if (material === 1 /* Water */ && texture === -1) {
       texture = 1;
     }
@@ -10105,8 +10111,8 @@ class HDRenderer {
     gl.uniform1f(u("u_hdSkyStrength"), hdEnvSkyStrength);
     gl.uniform1f(u("u_hdExposure"), hdEnvExposure);
     gl.uniform1f(u("u_hdContrast"), hdEnvContrast);
-    const hdGroundTextureStrength = Number.isFinite(Number(globalThis.HD_GROUND_TEXTURE_STRENGTH)) ? Number(globalThis.HD_GROUND_TEXTURE_STRENGTH) : 0.55;
-    const hdGroundNormalStrength = Number.isFinite(Number(globalThis.HD_GROUND_NORMAL_STRENGTH)) ? Number(globalThis.HD_GROUND_NORMAL_STRENGTH) : 0.45;
+    const hdGroundTextureStrength = Number.isFinite(Number(globalThis.HD_GROUND_TEXTURE_STRENGTH)) ? Number(globalThis.HD_GROUND_TEXTURE_STRENGTH) : 0;
+    const hdGroundNormalStrength = Number.isFinite(Number(globalThis.HD_GROUND_NORMAL_STRENGTH)) ? Number(globalThis.HD_GROUND_NORMAL_STRENGTH) : 0;
     const hdGroundTextureScale = Number.isFinite(Number(globalThis.HD_GROUND_TEXTURE_SCALE)) ? Number(globalThis.HD_GROUND_TEXTURE_SCALE) : 384;
     const hdGroundMacroStrength = Number.isFinite(Number(globalThis.HD_GROUND_MACRO_STRENGTH)) ? Number(globalThis.HD_GROUND_MACRO_STRENGTH) : 0.18;
     gl.uniform1f(u("u_hdGroundTextureStrength"), hdGroundTextureStrength);
@@ -35006,4 +35012,4 @@ export {
   Client
 };
 
-//# debugId=F6C27BFB389AD19364756E2164756E21
+//# debugId=5B9076269F46C81B64756E2164756E21

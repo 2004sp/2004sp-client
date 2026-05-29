@@ -925,7 +925,10 @@ void main() {
         }
     }
 
-    if (!validCacheTexture && u_textureDebugMode == 0) {
+    // Disabled by default: this was changing untextured 254 terrain after the
+    // software/correct view flashed for a moment. Keep original vertex colours
+    // unless HD_UNTEXTURED_TERRAIN_DETAIL is deliberately re-enabled in code.
+    if (false && !validCacheTexture && u_textureDebugMode == 0) {
         baseColour = untexturedTerrainDetail(baseColour, material);
     }
 
@@ -2587,16 +2590,27 @@ static queueGroundTile(level: number, x: number, z: number): void {
         const pb: [number, number, number] = [ground.vertexX[b], ground.vertexY[b], ground.vertexZ[b]];
         const pc: [number, number, number] = [ground.vertexX[c], ground.vertexY[c], ground.vertexZ[c]];
         const textureCandidate = ground.faceTexture && ground.faceTexture[faceIndex] >= 0 ? ground.faceTexture[faceIndex] : -1;
-        let texture = this.isValid254Texture(textureCandidate) ? textureCandidate : -1;
+        const terrainTexture = this.isValid254Texture(textureCandidate) ? textureCandidate : -1;
         const colourA = this.colourIndexToRgb(ground.faceColourA[faceIndex]);
         const colourB = this.colourIndexToRgb(ground.faceColourB[faceIndex]);
         const colourC = this.colourIndexToRgb(ground.faceColourC[faceIndex]);
         const avg = this.averageColour(colourA, colourB, colourC);
 
-        const texturedOverlayFace = ground.faceTexture !== null && ground.faceTexture[faceIndex] >= 0;
+        // 254 software terrain often flashes "correct" before HD because the software
+        // floor renderer is mostly vertex-colour/overlay driven, while the HD path was
+        // forcing cache texture IDs onto terrain faces. Keep model/object textures, but
+        // for terrain faces only preserve real water/lava texture IDs. Everything else
+        // uses the original floor colours from the scene, which should match the flash.
+        const candidateMaterial = this.isValid254Texture(terrainTexture)
+            ? this.materialForTexture(terrainTexture, avg)
+            : HDMaterial.Default;
+        const keepTerrainTexture = candidateMaterial === HDMaterial.Water || candidateMaterial === HDMaterial.Lava;
+        let texture = keepTerrainTexture ? terrainTexture : -1;
+
+        const texturedOverlayFace = keepTerrainTexture;
         const isOverlayFace = texturedOverlayFace || this.isColourOverlayFace(tile, avg);
-        const material = this.isValid254Texture(texture)
-            ? this.materialForTexture(texture, avg)
+        const material = keepTerrainTexture
+            ? candidateMaterial
             : this.materialForFloor(tile, avg, isOverlayFace);
 
         if (material === HDMaterial.Water && texture === -1) {
@@ -4272,8 +4286,8 @@ private static showTextureAtlasPreview(): string | null {
         gl.uniform1f(u('u_hdExposure'), hdEnvExposure);
         gl.uniform1f(u('u_hdContrast'), hdEnvContrast);
 
-        const hdGroundTextureStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_TEXTURE_STRENGTH)) ? Number((globalThis as any).HD_GROUND_TEXTURE_STRENGTH) : 0.55;
-        const hdGroundNormalStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_NORMAL_STRENGTH)) ? Number((globalThis as any).HD_GROUND_NORMAL_STRENGTH) : 0.45;
+        const hdGroundTextureStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_TEXTURE_STRENGTH)) ? Number((globalThis as any).HD_GROUND_TEXTURE_STRENGTH) : 0.0;
+        const hdGroundNormalStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_NORMAL_STRENGTH)) ? Number((globalThis as any).HD_GROUND_NORMAL_STRENGTH) : 0.0;
         const hdGroundTextureScale = Number.isFinite(Number((globalThis as any).HD_GROUND_TEXTURE_SCALE)) ? Number((globalThis as any).HD_GROUND_TEXTURE_SCALE) : 384.0;
         const hdGroundMacroStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_MACRO_STRENGTH)) ? Number((globalThis as any).HD_GROUND_MACRO_STRENGTH) : 0.18;
         gl.uniform1f(u('u_hdGroundTextureStrength'), hdGroundTextureStrength);
