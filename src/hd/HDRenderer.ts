@@ -2160,6 +2160,18 @@ static queueGroundTile(level: number, x: number, z: number): void {
 
             const gl = this.gl;
             const viewport = this.viewportRect(canvas);
+
+            // Do not draw the HD viewport until the 254/cache texture atlas is complete.
+            // Otherwise HD can appear one frame with the software/correct cache textures,
+            // then switch to a partially-built WebGL atlas and look like the textures
+            // reverted or flashed. Leaving the software canvas alone here keeps the
+            // correct view visible while cache textures finish loading.
+            this.ensureTextureAtlas();
+            if (!this.textureAtlasReady) {
+                this.frameStarted = false;
+                return;
+            }
+
             (globalThis as any)._hdPhase = 'renderFrame-syncTerrain';
             this.refreshBrightnessPaletteState();
             const syncStart = performance.now();
@@ -4738,14 +4750,6 @@ private static showTextureAtlasPreview(): string | null {
             return;
         }
 
-        // If the GL texture already exists from a previous call, mark ready and bail.
-        // This handles the case where Pix3D.textures wasn't populated on the first attempt.
-        if (this.textureAtlas) {
-            this.textureAtlasReady = true;
-            this.ensureHdTextureAtlas();
-            return;
-        }
-
         const gl = this.gl;
         const width = ATLAS_COLS * TEXTURE_SIZE;
         const height = ATLAS_ROWS * TEXTURE_SIZE;
@@ -4787,6 +4791,15 @@ private static showTextureAtlasPreview(): string | null {
             }
         }
 
+        this.textureAtlasLoadedCount = loadedCount;
+
+        // Wait for the full 254/cache texture set before creating the WebGL atlas.
+        // A partial atlas is the classic cause of "correct for one second, then bad"
+        // because early frames can bake blank/wrong slots and then never rebuild them.
+        if (loadedCount < CACHE_TEXTURE_COUNT) {
+            return;
+        }
+
         this.textureAtlas = gl.createTexture();
         if (!this.textureAtlas) {
             return;
@@ -4805,11 +4818,7 @@ private static showTextureAtlasPreview(): string | null {
         }
         gl.bindTexture(gl.TEXTURE_2D, null);
 
-        // Don't mark ready if no textures were loaded — retry next frame when they arrive
-        if (loadedCount > 0) {
-            this.textureAtlasReady = true;
-        }
-        this.textureAtlasLoadedCount = loadedCount;
+        this.textureAtlasReady = true;
 
         // Disabled by default: these async PNG overrides were replacing the correct
         // 254/cache texture atlas after login, causing textures to flash correct

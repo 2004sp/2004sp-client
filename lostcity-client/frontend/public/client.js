@@ -6495,7 +6495,7 @@ var SHADOW_MAP_SIZE = 1024;
 var WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 var TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 var PLAIN_TERRAIN_SHAPE = 0;
-var HD_RENDERER_BUILD = "2026-05-29T20:43:23.991Z";
+var HD_RENDERER_BUILD = "2026-05-29T20:53:01.218Z";
 var HD_SKY_COLOUR = [0.24, 0.28, 0.31];
 var HD_FOG_START = 2600;
 var HD_FOG_END = 5200;
@@ -8425,6 +8425,11 @@ class HDRenderer {
       }
       const gl = this.gl;
       const viewport = this.viewportRect(canvas2);
+      this.ensureTextureAtlas();
+      if (!this.textureAtlasReady) {
+        this.frameStarted = false;
+        return;
+      }
       globalThis._hdPhase = "renderFrame-syncTerrain";
       this.refreshBrightnessPaletteState();
       const syncStart = performance.now();
@@ -10502,11 +10507,6 @@ class HDRenderer {
     if (!this.gl || this.textureAtlasReady) {
       return;
     }
-    if (this.textureAtlas) {
-      this.textureAtlasReady = true;
-      this.ensureHdTextureAtlas();
-      return;
-    }
     const gl = this.gl;
     const width = ATLAS_COLS * TEXTURE_SIZE;
     const height = ATLAS_ROWS * TEXTURE_SIZE;
@@ -10544,6 +10544,10 @@ class HDRenderer {
         }
       }
     }
+    this.textureAtlasLoadedCount = loadedCount;
+    if (loadedCount < CACHE_TEXTURE_COUNT) {
+      return;
+    }
     this.textureAtlas = gl.createTexture();
     if (!this.textureAtlas) {
       return;
@@ -10560,10 +10564,7 @@ class HDRenderer {
       gl.texParameterf(gl.TEXTURE_2D, anisotropicExt.TEXTURE_MAX_ANISOTROPY_EXT, gl.getParameter(anisotropicExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT));
     }
     gl.bindTexture(gl.TEXTURE_2D, null);
-    if (loadedCount > 0) {
-      this.textureAtlasReady = true;
-    }
-    this.textureAtlasLoadedCount = loadedCount;
+    this.textureAtlasReady = true;
     if (globalThis.ENABLE_HD_COLOR_TEXTURE_OVERRIDES === true) {
       this.startColorAtlasLoads();
     }
@@ -34988,4 +34989,4 @@ export {
   Client
 };
 
-//# debugId=91007BE3D7C57F7864756E2164756E21
+//# debugId=1F9BBECE7EB9E75F64756E2164756E21
