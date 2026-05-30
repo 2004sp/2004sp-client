@@ -47,6 +47,63 @@ const SERVER_TEXTURE_MATERIALS: readonly number[] = [
     HDMaterial.Stone, HDMaterial.Unlit
 ];
 
+
+const HD_ATLAS_TILE = 256;
+const HD_ATLAS_COLS = 8;
+const HD_ATLAS_ROWS = 7;
+
+// RLHD high-res texture filename for each vanilla texture ID (null = no HD override).
+// Files are served from /hd/textures/rlhd/ unless an absolute /hd path is supplied.
+const HD_TEXTURE_FOR_SLOT: readonly (string | null)[] = [
+    '/hd/terrain/textures/0.png', // 0  door
+    null,                         // 1  water (procedural)
+    'hd_brick.jpg',               // 2  wall
+    'hd_wood_planks_1.jpg',       // 3  planks
+    '/hd/terrain/textures/0.png', // 4  elfdoor
+    'wood_grain_3.jpg',           // 5  darkwood
+    'hd_roof_shingles_1.jpg',     // 6  roof
+    null,                         // 7  damage
+    '/hd/terrain/source_moss_455_0.png', // 8  leafytree
+    'bark.jpg',                   // 9  treestump
+    '/hd/terrain/source_moss_455_0.png', // 10 leafybase
+    'hd_concrete.jpg',            // 11 mossy
+    'metallic_1.jpg',             // 12 railings
+    null, null,                   // 13-14 paintings
+    'marble_4.jpg',               // 15 marble
+    'hd_simple_grain_wood.jpg',   // 16 wood2
+    null,                         // 17 fountain
+    'hd_hay.jpg',                 // 18 thatched
+    null,                         // 19 cargonet
+    'wood_grain.jpg',             // 20 books
+    'hd_roof_brick_tile.jpg',     // 21 elfroof2
+    'hd_crate.jpg',               // 22 elfwood
+    'hd_brick_brown.jpg',         // 23 mossybricks
+    null, null, null,             // 24-26 water/web
+    'hd_roof_shingles_1.jpg',     // 27 elfroof
+    'grunge_1.jpg',               // 28 mossydamage
+    '/hd/terrain/source_grass_486_0.png', // 29 bamboo
+    '/hd/terrain/source_moss_455_0.png',  // 30 willowtex3
+    null,                         // 31 lava
+    'bark.jpg',                   // 32 bark
+    '/hd/terrain/source_moss_455_0.png',  // 33 mapletree
+    '/hd/terrain/source_moss_455_0.png',  // 34 yewtree
+    'hd_sand_brick.jpg',          // 35 elfbrick
+    '/hd/terrain/textures/0.png', // 36 elfwall/door
+    'metallic_1.jpg',             // 37 chainmail
+    'rock_2.jpg',                 // 38 mummy
+    null,                         // 39 elfpainting
+    '/hd/terrain/source_grass_486_0.png', // 40 jungleleaf4
+    '/hd/terrain/source_grass_486_0.png', // 41 plant
+    '/hd/terrain/source_grass_486_0.png', // 42 jungleleaf2
+    'tile_small_1.jpg',           // 43 plant2/clean_tile
+    'hd_roof_shingles_2.jpg',     // 44 roof2
+    '/hd/terrain/textures/0.png', // 45 door2
+    '/hd/terrain/textures/46.png',// 46 pebblefloor/cobblestone
+    'rock_1.jpg',                 // 47 rockwall
+    'hd_stone_pattern.jpg',       // 48 glyphs
+    null                          // 49 canvas
+];
+
 // ---------------------------------------------------------------------------
 // Skybox shaders — ported from HDRenderer.skyboxShader verbatim.
 // RawShaderMaterial + glslVersion:THREE.GLSL3 means Three.js prepends
@@ -277,6 +334,17 @@ void main() {
         } else {
             discard;
         }
+
+        // RLHD overlay: replace the cache texture with the high-res 117/RLHD art
+        // when a loaded atlas slot exists. Water/lava/procedural materials stay procedural.
+        if (u_hdAtlasReady > 0.5 && material != 1.0 && material != 2.0) {
+            vec4 hdRect = u_hdAtlasRects[v_texture];
+            vec2 hdUv = mix(hdRect.xy, hdRect.zw, fract(v_uv));
+            vec4 hdTexel = texture(u_hdTextureAtlas, hdUv);
+            if (hdTexel.a > 0.1) {
+                baseColour = mix(baseColour, hdTexel.rgb, 0.92);
+            }
+        }
     }
 
     if (material == 12.0) {
@@ -489,6 +557,10 @@ export default class ThreeRenderer {
     private static terrainVertexCount: number = 0;
     private static textureAtlasReady: boolean = false;
     private static textureAtlasLoadedCount: number = 0;
+    private static hdTextureAtlas: THREE.DataTexture | null = null;
+    private static hdAtlasPixels: Uint8Array | null = null;
+    private static hdAtlasLoadingStarted: boolean = false;
+    private static hdAtlasLoadedCount: number = 0;
 
     // ── Shadow pass ───────────────────────────────────────────────────────────
     private static shadowTarget: THREE.WebGLRenderTarget | null = null;
@@ -1234,6 +1306,84 @@ void main() { fragColor = vec4(0.0); }
         }
 
         this.textureAtlasReady = true;
+        this.ensureHdTextureAtlas();
+    }
+
+    private static ensureHdTextureAtlas(): void {
+        if (!this.terrainMat || this.hdAtlasLoadingStarted) {
+            return;
+        }
+
+        const width = HD_ATLAS_COLS * HD_ATLAS_TILE;
+        const height = HD_ATLAS_ROWS * HD_ATLAS_TILE;
+        const pixels = new Uint8Array(width * height * 4); // alpha=0 means no HD override for that slot
+        const scratch = document.createElement('canvas');
+        scratch.width = HD_ATLAS_TILE;
+        scratch.height = HD_ATLAS_TILE;
+        const ctx = scratch.getContext('2d');
+        if (!ctx) {
+            return;
+        }
+
+        const tex = new THREE.DataTexture(pixels, width, height, THREE.RGBAFormat, THREE.UnsignedByteType);
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.wrapS = THREE.ClampToEdgeWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.generateMipmaps = true;
+        tex.needsUpdate = true;
+
+        const rects: THREE.Vector4[] = [];
+        for (let id = 0; id < CACHE_TEXTURE_COUNT; id++) {
+            const col = id % HD_ATLAS_COLS;
+            const row = (id / HD_ATLAS_COLS) | 0;
+            rects[id] = new THREE.Vector4(
+                (col * HD_ATLAS_TILE + 0.5) / width,
+                (row * HD_ATLAS_TILE + 0.5) / height,
+                ((col + 1) * HD_ATLAS_TILE - 0.5) / width,
+                ((row + 1) * HD_ATLAS_TILE - 0.5) / height
+            );
+        }
+
+        this.hdTextureAtlas = tex;
+        this.hdAtlasPixels = pixels;
+        this.hdAtlasLoadingStarted = true;
+
+        for (const mat of [this.terrainMat, this.waterMesh?.material] as (THREE.RawShaderMaterial | undefined | null)[]) {
+            if (!mat || !(mat instanceof THREE.RawShaderMaterial)) continue;
+            mat.uniforms.u_hdTextureAtlas.value = tex;
+            mat.uniforms.u_hdAtlasRects.value = rects;
+            mat.uniforms.u_hdAtlasReady.value = 1.0;
+        }
+
+        for (let id = 0; id < CACHE_TEXTURE_COUNT; id++) {
+            const filename = HD_TEXTURE_FOR_SLOT[id];
+            if (!filename) continue;
+
+            const image = new Image();
+            image.decoding = 'async';
+            image.onload = () => {
+                const col = id % HD_ATLAS_COLS;
+                const row = (id / HD_ATLAS_COLS) | 0;
+                ctx.clearRect(0, 0, HD_ATLAS_TILE, HD_ATLAS_TILE);
+                ctx.drawImage(image, 0, 0, HD_ATLAS_TILE, HD_ATLAS_TILE);
+                const imageData = ctx.getImageData(0, 0, HD_ATLAS_TILE, HD_ATLAS_TILE).data;
+                for (let y = 0; y < HD_ATLAS_TILE; y++) {
+                    const dst = ((row * HD_ATLAS_TILE + y) * width + col * HD_ATLAS_TILE) * 4;
+                    const src = y * HD_ATLAS_TILE * 4;
+                    pixels.set(imageData.subarray(src, src + HD_ATLAS_TILE * 4), dst);
+                }
+                for (let a = 3; a < pixels.length; a += 4) {
+                    // keep empty slots transparent; loaded JPEG/PNG slots should be opaque
+                }
+                this.hdAtlasLoadedCount++;
+                tex.needsUpdate = true;
+            };
+            image.onerror = () => {
+                fetch('/debug-log', { method: 'POST', body: `[rlhd-atlas] failed ${id}: ${image.src}` }).catch(() => {});
+            };
+            image.src = filename.startsWith('/') ? filename : `/hd/textures/rlhd/${filename}`;
+        }
     }
 
     // ── CPU-side terrain helpers (ported verbatim from HDRenderer) ────────────
