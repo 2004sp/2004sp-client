@@ -2,7 +2,7 @@ import AnimBase, { AnimTransform } from '#/dash3d/AnimBase.js';
 import AnimFrame from '#/dash3d/AnimFrame.js';
 import Pix2D from '#/dash3d/graphics/Pix2D.js';
 import Pix3D from '#/dash3d/Pix3D.js';
-import HDRenderer from '#/hd/HDRenderer.js';
+import HDRenderer from '#/hd/ThreeRenderer.js';
 
 import Packet from '#/io/Packet.js';
 
