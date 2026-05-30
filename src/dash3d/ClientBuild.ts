@@ -11,7 +11,7 @@ import type ModelSource from '#/dash3d/ModelSource.js';
 import { TerrainOverlayShape } from '#/dash3d/TerrainOverlayShape.js';
 import World from '#/dash3d/World.js';
 
-import { Colour } from '#/graphics/Colour.js';
+import { Colour } from '#/dash3d/graphics/Colour.js';
 import Pix3D from '#/dash3d/Pix3D.js';
 
 import type OnDemand from '#/io/OnDemand.js';
@@ -271,7 +271,9 @@ export default class ClientBuild {
                                         Colour.BLACK,
                                         Colour.BLACK,
                                         underlay,
-                                        Colour.BLACK
+                                        Colour.BLACK,
+                                        t1 > 0 ? t1 - 1 : -1,
+                                        -1
                                     );
                                 } else {
                                     const shape: number = this.floors[level][x0][z0] + 1;
@@ -313,7 +315,9 @@ export default class ClientBuild {
                                         ClientBuild.getOCol(t2Colour, lightNE),
                                         ClientBuild.getOCol(t2Colour, lightNW),
                                         underlay,
-                                        overlay
+                                        overlay,
+                                        t1 > 0 ? t1 - 1 : -1,
+                                        t2 - 1
                                     );
                                 }
                             }

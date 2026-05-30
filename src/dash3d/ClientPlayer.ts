@@ -399,22 +399,28 @@ export default class ClientPlayer extends ClientEntity {
     getTempModel2(): Model | null {
         if (this.transmog != null) {
             let transformId = -1;
+            let nextTransformId = -1;
+            let tween = 0;
             if (this.primaryAnim >= 0 && this.primaryAnimDelay === 0) {
-                const frames = SeqType.list[this.primaryAnim].frames;
-                if (frames) {
-                    transformId = frames[this.primaryAnimFrame];
-                }
+                const seq = SeqType.list[this.primaryAnim];
+                const frame = this.getTweenFrame(seq, this.primaryAnimFrame, this.primaryAnimCycle);
+                transformId = frame.current;
+                nextTransformId = frame.next;
+                tween = frame.alpha;
             } else if (this.secondaryAnim >= 0) {
-                const frames = SeqType.list[this.secondaryAnim].frames;
-                if (frames) {
-                    transformId = frames[this.secondaryAnimFrame];
-                }
+                const seq = SeqType.list[this.secondaryAnim];
+                const frame = this.getTweenFrame(seq, this.secondaryAnimFrame, this.secondaryAnimCycle);
+                transformId = frame.current;
+                nextTransformId = frame.next;
+                tween = frame.alpha;
             }
-            return this.transmog.getTempModel(transformId, -1, null);
+            return this.transmog.getTempModel(transformId, -1, null, nextTransformId, tween);
         }
 
         let hash: bigint = this.baseId;
         let primaryTransformId: number = -1;
+        let primaryNextTransformId: number = -1;
+        let primaryTween: number = 0;
         let secondaryTransformId: number = -1;
         let leftHandValue: number = -1;
         let rightHandValue: number = -1;
@@ -422,9 +428,10 @@ export default class ClientPlayer extends ClientEntity {
         if (this.primaryAnim >= 0 && this.primaryAnimDelay === 0) {
             const seq: SeqType = SeqType.list[this.primaryAnim];
 
-            if (seq.frames) {
-                primaryTransformId = seq.frames[this.primaryAnimFrame];
-            }
+            const primaryTweenFrame = this.getTweenFrame(seq, this.primaryAnimFrame, this.primaryAnimCycle);
+            primaryTransformId = primaryTweenFrame.current;
+            primaryNextTransformId = primaryTweenFrame.next;
+            primaryTween = primaryTweenFrame.alpha;
 
             if (this.secondaryAnim >= 0 && this.secondaryAnim !== this.readyanim) {
                 const secondFrames: Int16Array | null = SeqType.list[this.secondaryAnim].frames;
@@ -443,10 +450,11 @@ export default class ClientPlayer extends ClientEntity {
                 hash += BigInt(rightHandValue - this.appearance[3]) << 48n;
             }
         } else if (this.secondaryAnim >= 0) {
-            const secondFrames: Int16Array | null = SeqType.list[this.secondaryAnim].frames;
-            if (secondFrames) {
-                primaryTransformId = secondFrames[this.secondaryAnimFrame];
-            }
+            const secondSeq: SeqType = SeqType.list[this.secondaryAnim];
+            const secondaryTweenFrame = this.getTweenFrame(secondSeq, this.secondaryAnimFrame, this.secondaryAnimCycle);
+            primaryTransformId = secondaryTweenFrame.current;
+            primaryNextTransformId = secondaryTweenFrame.next;
+            primaryTween = secondaryTweenFrame.alpha;
         }
 
         let model = ClientPlayer.modelCache.find(hash);
@@ -544,7 +552,7 @@ export default class ClientPlayer extends ClientEntity {
         if (primaryTransformId !== -1 && secondaryTransformId !== -1) {
             tmp.maskAnimate(primaryTransformId, secondaryTransformId, SeqType.list[this.primaryAnim].walkmerge);
         } else if (primaryTransformId !== -1) {
-            tmp.animate(primaryTransformId);
+            tmp.animateTween(primaryTransformId, primaryNextTransformId, primaryTween);
         }
 
         tmp.calcBoundingCylinder();

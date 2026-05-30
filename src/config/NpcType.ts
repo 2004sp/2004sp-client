@@ -164,7 +164,13 @@ export default class NpcType {
         }
     }
 
-    getTempModel(primaryTransformId: number, secondaryTransformId: number, seqMask: Int32Array | null): Model | null {
+    getTempModel(
+        primaryTransformId: number,
+        secondaryTransformId: number,
+        seqMask: Int32Array | null,
+        primaryNextTransformId: number = -1,
+        primaryTween: number = 0
+    ): Model | null {
         let model = NpcType.modelCache.find(BigInt(this.id));
 
         if (!model && this.model) {
@@ -212,7 +218,7 @@ export default class NpcType {
         if (primaryTransformId !== -1 && secondaryTransformId !== -1) {
             tmp.maskAnimate(primaryTransformId, secondaryTransformId, seqMask);
         } else if (primaryTransformId !== -1) {
-            tmp.animate(primaryTransformId);
+            tmp.animateTween(primaryTransformId, primaryNextTransformId, primaryTween);
         }
 
         if (this.resizeh !== 128 || this.resizev !== 128) {

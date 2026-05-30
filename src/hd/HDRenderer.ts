@@ -1,0 +1,5595 @@
+import Pix3D from '#/dash3d/Pix3D.js';
+import Ground from '#/dash3d/Ground.js';
+
+type ShaderSource = {
+    vertex: string;
+    fragment: string;
+};
+
+type TextureAtlasRect = {
+    u0: number;
+    v0: number;
+    u1: number;
+    v1: number;
+};
+
+type TransparentBatch = {
+    depth: number;
+    priority: number;
+    texture: number;
+    vertices: number[];
+};
+
+type HDClipVertex = {
+    position: [number, number, number];
+    colour: [number, number, number];
+    uv: [number, number];
+    depth: number;
+};
+
+const enum HDMaterial {
+    Default = 0,
+    Water = 1,
+    Lava = 2,
+    Model = 3,
+    Stone = 4,
+    Wood = 5,
+    Marble = 6,
+    Moss = 7,
+    Pebble = 8,
+    Foliage = 9,
+    Metal = 10,
+    Roof = 11,
+    Unlit = 12,
+    Earth = 13,
+    Seabed = 14
+}
+
+const enum HDWaterSource {
+    None = 0,
+    PlainTerrain = 1,
+    ShapedTerrain = 2,
+    Model = 3,
+    PlainTerrainColour = 4,
+    ShapedTerrainColour = 5
+}
+
+const VERTEX_FLOATS = 15;
+const VIEWPORT_WIDTH = 512;
+const VIEWPORT_HEIGHT = 334;
+const VIEWPORT_X = 4;
+const VIEWPORT_Y = 4;
+const TEXTURE_SIZE = 128;
+const ATLAS_COLS = 16;
+const ATLAS_ROWS = 8;
+const ATLAS_SIZE = ATLAS_COLS * ATLAS_ROWS;
+const CACHE_TEXTURE_COUNT = 50;
+const HD_ATLAS_TILE = 256;
+const HD_ATLAS_COLS = 16;
+const HD_ATLAS_ROWS = 4;
+const SHADOW_MAP_SIZE = 2048;
+const WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
+const TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
+const PLAIN_TERRAIN_SHAPE = 0;
+const HD_RENDERER_BUILD = process.env.BUILD_TIME;
+const HD_SKY_COLOUR = [0.47, 0.65, 0.85] as const;
+const HD_FOG_START = 2600;
+const HD_FOG_END = 5200;
+const HD_FAR_PLANE = 9000;
+
+const shadowShader: ShaderSource = {
+    vertex: `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 a_position;
+uniform mat4 u_lightSpaceMatrix;
+void main() {
+    gl_Position = u_lightSpaceMatrix * vec4(a_position, 1.0);
+}
+`,
+    fragment: `#version 300 es
+precision highp float;
+void main() {}
+`
+};
+
+// Full-screen skybox: gradient sky + sun disk, rendered at depth 0.9999 so terrain overwrites it.
+// The sky gradient is derived from the world-space elevation of each fragment's view ray.
+// The 2004 client uses a custom camera rotation (yaw then pitch) instead of a standard matrix,
+// so we reconstruct the world-space view direction manually using the camera rotation uniforms.
+const skyboxShader: ShaderSource = {
+    vertex: `#version 300 es
+precision highp float;
+layout(location = 0) in vec2 a_ndc;
+out vec2 v_ndc;
+void main() {
+    v_ndc = a_ndc;
+    gl_Position = vec4(a_ndc, 0.9999, 1.0);
+}
+`,
+    fragment: `#version 300 es
+precision highp float;
+
+in vec2 v_ndc;
+
+uniform float u_sinEyePitch;
+uniform float u_cosEyePitch;
+uniform float u_sinEyeYaw;
+uniform float u_cosEyeYaw;
+uniform vec2 u_projectionScale;
+uniform vec3 u_skyZenith;
+uniform vec3 u_skyHorizon;
+uniform vec3 u_sunDirection;
+
+out vec4 outColour;
+
+void main() {
+    // Reconstruct view-space ray from NDC + projection scale, then convert to world space.
+    // The 2004 client view transform (from scene_vert):
+    //   viewX = cosYaw*relX + sinYaw*relZ
+    //   viewY = sinYaw*sinPitch*relX + cosPitch*relY - cosYaw*sinPitch*relZ
+    //   viewZ = -sinYaw*cosPitch*relX + sinPitch*relY + cosYaw*cosPitch*relZ
+    // Inverse (rotation transpose):
+    //   worldY = cosPitch*viewY + sinPitch*viewZ
+    vec3 viewRay = normalize(vec3(v_ndc.x / u_projectionScale.x, -v_ndc.y / u_projectionScale.y, 1.0));
+    float sp = u_sinEyePitch, cp = u_cosEyePitch;
+    float sy = u_sinEyeYaw,   cy = u_cosEyeYaw;
+
+    // Only worldY is needed for elevation. In OSRS +Y is down, so up = (0,-1,0).
+    float worldY = cp * viewRay.y + sp * viewRay.z;
+
+    // elevation > 0 means looking upward (worldY < 0 in OSRS Y convention).
+    float elevation = atan(-worldY, sqrt(max(0.0, 1.0 - worldY * worldY)));
+    float t = clamp(elevation / 1.5708, 0.0, 1.0);
+    vec3 sky = mix(u_skyHorizon, u_skyZenith, t * t);
+
+    // Atmospheric haze: blend toward horizon colour near the horizon line.
+    float haze = clamp(1.0 - abs(elevation) / 0.35, 0.0, 1.0);
+    sky = mix(sky, u_skyHorizon * 1.08, haze * haze * 0.35);
+
+    // Sun disk: project the sun world direction through the camera rotation.
+    // u_sunDirection is sun→scene; toward sun = -u_sunDirection.
+    vec3 sunToward = normalize(-u_sunDirection);
+    float szPrime = cy * sunToward.z - sy * sunToward.x;
+    float svx     = sy * sunToward.z + cy * sunToward.x;
+    float svy     = cp * sunToward.y - sp * szPrime;
+    float svz     = sp * sunToward.y + cp * szPrime;
+
+    if (svz > 0.01) {
+        vec2 sunScreen = vec2(svx / svz * u_projectionScale.x, -svy / svz * u_projectionScale.y);
+        float dist = length(v_ndc - sunScreen);
+        // Soft solar glow halo
+        float halo = smoothstep(0.60, 0.0, dist) * 0.32;
+        sky = mix(sky, sky + vec3(1.0, 0.82, 0.42) * halo, 1.0);
+        // Hard sun disk
+        float disk = smoothstep(0.060, 0.022, dist);
+        sky = mix(sky, vec3(1.0, 0.97, 0.82), disk);
+    }
+
+    // Subtle darkening below the visual horizon so the skybox doesn't bleed into terrain gaps.
+    if (elevation < -0.05) {
+        float below = clamp((-elevation - 0.05) * 5.0, 0.0, 1.0);
+        sky = mix(sky, vec3(0.18, 0.22, 0.28), below * 0.70);
+    }
+
+    outColour = vec4(sky, 1.0);
+}
+`
+};
+
+const GRASS_FLOOR_IDS = new Set([
+    28, 47, 50, 92, 95, 98, 99
+]);
+
+const EARTH_FLOOR_IDS = new Set([
+    9, 13, 14, 15, 16, 20, 21, 22, 33, 35, 43, 48, 49, 51, 52, 53,
+    60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 75, 76, 78, 79, 80,
+    82, 84, 87, 88, 89, 90, 91, 93, 96, 97, 100
+]);
+
+const STONE_FLOOR_IDS = new Set([
+    0, 1, 2, 3, 7, 10, 24, 25, 29, 30, 32, 54, 55, 56, 57, 58, 59,
+    71, 72, 74, 81, 86, 94
+]);
+
+const TERRAIN_ONLY_MODEL_TEXTURE_IDS = new Set([
+    1, 24, 25, 31
+]);
+
+// Source filenames from LostCityRS-Progressive/Server/content/pack/texture.pack.
+// These are packed into the client cache as numeric archives 0.dat..49.dat.
+const SERVER_TEXTURE_NAMES: readonly string[] = [
+    'door',
+    'water',
+    'wall',
+    'planks',
+    'elfdoor',
+    'darkwood',
+    'roof',
+    'damage',
+    'leafytree',
+    'treestump',
+    'leafybase',
+    'mossy',
+    'railings',
+    'painting1',
+    'painting2',
+    'marble',
+    'wood2',
+    'fountain',
+    'thatched',
+    'cargonet',
+    'books',
+    'elfroof2',
+    'elfwood',
+    'mossybricks',
+    'water_animated',
+    'gungywater',
+    'web',
+    'elfroof',
+    'mossydamage',
+    'bamboo',
+    'willowtex3',
+    'lava',
+    'bark',
+    'mapletree',
+    'yewtree',
+    'elfbrick',
+    'elfwall',
+    'chainmail',
+    'mummy',
+    'elfpainting',
+    'jungleleaf4',
+    'plant',
+    'jungleleaf2',
+    'plant2',
+    'roof2',
+    'door2',
+    'pebblefloor',
+    'rockwall',
+    'glyphs',
+    'canvas'
+];
+
+// Materials are based on the 2004 source texture at each ID, not just the newer
+// RLHD display name. Some OSRS labels describe later reuse of the same vanilla ID.
+const SERVER_TEXTURE_MATERIALS: readonly HDMaterial[] = [
+    HDMaterial.Wood,    // 0  door
+    HDMaterial.Water,   // 1  water
+    HDMaterial.Stone,   // 2  wall
+    HDMaterial.Wood,    // 3  planks
+    HDMaterial.Wood,    // 4  elfdoor
+    HDMaterial.Wood,    // 5  darkwood
+    HDMaterial.Roof,    // 6  roof
+    HDMaterial.Wood,    // 7  damage
+    HDMaterial.Foliage, // 8  leafytree
+    HDMaterial.Wood,    // 9  treestump
+    HDMaterial.Moss,    // 10 leafybase
+    HDMaterial.Stone,   // 11 mossy
+    HDMaterial.Metal,   // 12 railings
+    HDMaterial.Unlit,   // 13 painting1
+    HDMaterial.Unlit,   // 14 painting2
+    HDMaterial.Marble,  // 15 marble
+    HDMaterial.Wood,    // 16 wood2
+    HDMaterial.Water,   // 17 fountain
+    HDMaterial.Wood,    // 18 thatched
+    HDMaterial.Unlit,   // 19 cargonet
+    HDMaterial.Wood,    // 20 books
+    HDMaterial.Roof,    // 21 elfroof2
+    HDMaterial.Wood,    // 22 elfwood
+    HDMaterial.Stone,   // 23 mossybricks
+    HDMaterial.Water,   // 24 water_animated
+    HDMaterial.Water,   // 25 gungywater
+    HDMaterial.Unlit,   // 26 web
+    HDMaterial.Roof,    // 27 elfroof
+    HDMaterial.Moss,    // 28 mossydamage
+    HDMaterial.Foliage, // 29 bamboo
+    HDMaterial.Foliage, // 30 willowtex3
+    HDMaterial.Lava,    // 31 lava
+    HDMaterial.Wood,    // 32 bark
+    HDMaterial.Foliage, // 33 mapletree
+    HDMaterial.Foliage, // 34 yewtree
+    HDMaterial.Stone,   // 35 elfbrick
+    HDMaterial.Wood,    // 36 elfwall
+    HDMaterial.Metal,   // 37 chainmail
+    HDMaterial.Default, // 38 mummy
+    HDMaterial.Unlit,   // 39 elfpainting
+    HDMaterial.Foliage, // 40 jungleleaf4
+    HDMaterial.Foliage, // 41 plant
+    HDMaterial.Foliage, // 42 jungleleaf2
+    HDMaterial.Foliage, // 43 plant2
+    HDMaterial.Roof,    // 44 roof2
+    HDMaterial.Wood,    // 45 door2
+    HDMaterial.Pebble,  // 46 pebblefloor
+    HDMaterial.Stone,   // 47 rockwall
+    HDMaterial.Stone,   // 48 glyphs
+    HDMaterial.Unlit    // 49 canvas
+];
+
+const SERVER_TRANSPARENT_TEXTURE_IDS = new Set([
+    7, 8, 9, 12, 17, 19, 21, 26, 28, 29, 30, 33, 34, 40, 41, 42, 43
+]);
+
+// RLHD high-res texture filename for each vanilla texture ID (null = no HD override).
+// Files are served from /hd/textures/rlhd/ and loaded asynchronously into the HD atlas.
+// Water/lava/unlit textures are left null — they're handled by procedural shading.
+const HD_TEXTURE_FOR_SLOT: readonly (string | null)[] = [
+    '/hd/terrain/textures/0.png', // 0  door - wooden door texture, not pale marble grain
+    null,                       // 1  water (procedural)
+    'hd_brick.jpg',             // 2  wall
+    'hd_wood_planks_1.jpg',     // 3  planks
+    '/hd/terrain/textures/0.png', // 4  elfdoor - wooden door texture
+    'wood_grain_3.jpg',         // 5  darkwood
+    'hd_roof_shingles_1.jpg',   // 6  roof
+    null,                       // 7  damage (transparent — vanilla alpha needed for silhouette)
+    '/hd/terrain/source_moss_455_0.png', // 8  leafytree
+    'bark.jpg',                 // 9  treestump
+    '/hd/terrain/source_moss_455_0.png', // 10 leafybase
+    'hd_concrete.jpg',          // 11 mossy
+    'metallic_1.jpg',           // 12 railings
+    null,                       // 13 painting1 (unlit)
+    null,                       // 14 painting2 (unlit)
+    'marble_4.jpg',             // 15 marble
+    'hd_simple_grain_wood.jpg', // 16 wood2
+    null,                       // 17 fountain (water)
+    'hd_hay.jpg',               // 18 thatched
+    null,                       // 19 cargonet (transparent net)
+    'wood_grain.jpg',           // 20 books
+    'hd_roof_brick_tile.jpg',   // 21 elfroof2
+    'hd_crate.jpg',             // 22 elfwood
+    'hd_brick_brown.jpg',       // 23 mossybricks
+    null,                       // 24 water_animated
+    null,                       // 25 gungywater
+    null,                       // 26 web (transparent)
+    'hd_roof_shingles_1.jpg',   // 27 elfroof
+    'grunge_1.jpg',             // 28 mossydamage
+    '/hd/terrain/source_grass_486_0.png', // 29 bamboo
+    '/hd/terrain/source_moss_455_0.png', // 30 willowtex3
+    null,                       // 31 lava (procedural)
+    'bark.jpg',                 // 32 bark
+    '/hd/terrain/source_moss_455_0.png', // 33 mapletree
+    '/hd/terrain/source_moss_455_0.png', // 34 yewtree
+    'hd_sand_brick.jpg',        // 35 elfbrick
+    '/hd/terrain/textures/0.png', // 36 elfwall/door texture - wooden door texture
+    'metallic_1.jpg',           // 37 chainmail
+    'rock_2.jpg',               // 38 mummy
+    null,                       // 39 elfpainting (unlit)
+    '/hd/terrain/source_grass_486_0.png', // 40 jungleleaf4
+    '/hd/terrain/source_grass_486_0.png', // 41 plant
+    '/hd/terrain/source_grass_486_0.png', // 42 jungleleaf2
+    'tile_small_1.jpg',         // 43 plant2/clean_tile
+    'hd_roof_shingles_2.jpg',   // 44 roof2
+    '/hd/terrain/textures/0.png', // 45 door2 - wooden door texture
+    '/hd/terrain/textures/46.png', // 46 pebblefloor/cobblestone
+    'rock_1.jpg',               // 47 rockwall
+    'hd_stone_pattern.jpg',     // 48 glyphs
+    null                        // 49 canvas (unlit fabric)
+];
+
+// OSRS/RLHD names for the same numeric vanillaTextureIndex values.
+const OSRS_TEXTURE_NAMES: readonly string[] = [
+    'WOODEN_DOOR_HANDLE',
+    'WATER_FLAT',
+    'BRICK',
+    'WOOD_PLANKS_1',
+    'LARGE_DOOR',
+    'DARK_WOOD',
+    'ROOF_SHINGLES_1',
+    'WOODEN_SCREEN',
+    'LEAVES_SIDE',
+    'TREE_RINGS',
+    'MOSS_BRANCH',
+    'CONCRETE',
+    'IRON_BARS',
+    'PAINTING_LANDSCAPE',
+    'PAINTING_KING',
+    'MARBLE_DARK',
+    'SIMPLE_GRAIN_WOOD',
+    'WATER_DROPLETS',
+    'HAY',
+    'NET',
+    'BOOKCASE',
+    'ROOF_WOODEN_SLATE',
+    'CRATE',
+    'BRICK_BROWN',
+    'WATER_FLAT_2',
+    'SWAMP_WATER_FLAT',
+    'WEB',
+    'ROOF_SLATE',
+    'MOSS',
+    'TROPICAL_LEAF',
+    'WILLOW_LEAVES',
+    'LAVA',
+    'TREE_DOOR_BROWN',
+    'MAPLE_LEAVES',
+    'MAGIC_STARS',
+    'SAND_BRICK',
+    'DOOR_TEXTURE',
+    'BLADE',
+    'SANDSTONE',
+    'PAINTING_ELF',
+    'FIRE_CAPE',
+    'LEAVES_DISEASED',
+    'MARBLE',
+    'CLEAN_TILE',
+    'ROOF_SHINGLES_2',
+    'ROOF_BRICK_TILE',
+    'STONE_PATTERN',
+    'TEXTURE_47',
+    'HIEROGLYPHICS',
+    'TEXTURE_49'
+];
+
+// Normal map file for each vanilla texture ID (null = slot stays flat).
+// Files are served from /hd/textures/ and loaded asynchronously into the normal atlas.
+const NORMAL_MAP_FOR_TEXTURE: readonly (string | null)[] = [
+    null,                           // 0  door
+    null,                           // 1  water
+    'hd_brick_n.png',               // 2  wall
+    'hd_wood_planks_1_n.png',       // 3  planks
+    'wood_grain_2_n.png',           // 4  elfdoor
+    'wood_grain_3_n.png',           // 5  darkwood
+    'hd_roof_shingles_n.png',       // 6  roof
+    null,                           // 7  damage
+    null,                           // 8  leafytree
+    null,                           // 9  treestump
+    null,                           // 10 leafybase
+    'hd_concrete_n.png',            // 11 mossy
+    'metallic_1_n.png',             // 12 railings
+    null,                           // 13 painting1
+    null,                           // 14 painting2
+    'marble_4_n.png',               // 15 marble
+    'hd_simple_grain_wood_n.png',   // 16 wood2
+    null,                           // 17 fountain
+    null,                           // 18 thatched
+    null,                           // 19 cargonet
+    null,                           // 20 books
+    'hd_roof_brick_tile_n.png',     // 21 elfroof2
+    'wood_grain_2_n.png',           // 22 elfwood
+    'hd_brick_brown_n.png',         // 23 mossybricks
+    null,                           // 24 water_animated
+    null,                           // 25 gungywater
+    null,                           // 26 web
+    'hd_roof_shingles_n.png',       // 27 elfroof
+    null,                           // 28 mossydamage
+    null,                           // 29 bamboo
+    null,                           // 30 willowtex3
+    null,                           // 31 lava
+    'bark_n.png',                   // 32 bark
+    null,                           // 33 mapletree
+    null,                           // 34 yewtree
+    'hd_sand_brick_n.png',          // 35 elfbrick
+    'wood_grain_2_n.png',           // 36 elfwall
+    'metallic_1_n.png',             // 37 chainmail
+    null,                           // 38 mummy
+    null,                           // 39 elfpainting
+    null,                           // 40 jungleleaf4
+    null,                           // 41 plant
+    null,                           // 42 jungleleaf2
+    null,                           // 43 plant2
+    'hd_roof_shingles_n.png',       // 44 roof2
+    'wood_grain_2_n.png',           // 45 door2
+    'gravel_n.png',                 // 46 pebblefloor
+    'rock_1_n.png',                 // 47 rockwall
+    'hd_stone_pattern_n.png',       // 48 glyphs
+    null                            // 49 canvas
+];
+
+// Normal map file for each HDMaterial enum value (indexed by HDMaterial ordinal).
+// Loaded into atlas slots NORMAL_ATLAS_MATERIAL_SLOT_OFFSET + material_id (50–63).
+// Used for untextured terrain surfaces that have no vanilla texture.
+const NORMAL_MAP_FOR_MATERIAL: readonly (string | null)[] = [
+    'rock_2_n.png',         // 0  Default
+    null,                   // 1  Water  (procedural normals)
+    null,                   // 2  Lava   (procedural)
+    null,                   // 3  Model
+    'rock_1_n.png',         // 4  Stone
+    'wood_grain_2_n.png',   // 5  Wood
+    'marble_4_n.png',       // 6  Marble
+    'grunge_1_n.png',       // 7  Moss
+    'gravel_n.png',         // 8  Pebble
+    null,                   // 9  Foliage
+    'metallic_1_n.png',     // 10 Metal
+    'hd_roof_shingles_n.png', // 11 Roof
+    null,                   // 12 Unlit
+    'dirt_1_n.png',         // 13 Earth
+    null                    // 14 Seabed (no normal map — excluded from normal-mapping pass)
+];
+const NORMAL_ATLAS_MATERIAL_SLOT_OFFSET = 50;
+
+// Runtime texture debugger. Change this in the browser console and re-toggle/move camera:
+//   window.HD_TEXTURE_DEBUG_MODE = 'normal'
+//   window.HD_TEXTURE_DEBUG_MODE = 'flat'
+//   window.HD_TEXTURE_DEBUG_MODE = 'id-colours'
+//   window.HD_TEXTURE_DEBUG_MODE = 'single-texture'
+//   window.HD_TEXTURE_DEBUG_MODE = 'uv'
+//   window.HD_TEXTURE_DEBUG_MODE = 'texture-only'
+//   window.HD_TEXTURE_DEBUG_MODE = 'water-source'
+// These modes let us tell missing textures apart from wrong texture IDs, bad UVs, and atlas bleed.
+
+const terrainShader: ShaderSource = {
+    vertex: `#version 300 es
+precision highp float;
+
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec3 a_normal;
+layout(location = 2) in vec3 a_colour;
+layout(location = 3) in float a_material;
+layout(location = 4) in vec2 a_uv;
+layout(location = 5) in float a_texture;
+layout(location = 6) in float a_alpha;
+layout(location = 7) in float a_waterSource;
+
+uniform vec3 u_cameraPosition;
+uniform vec2 u_projectionScale;
+uniform float u_sinEyePitch;
+uniform float u_cosEyePitch;
+uniform float u_sinEyeYaw;
+uniform float u_cosEyeYaw;
+uniform float u_nearPlane;
+uniform float u_farPlane;
+uniform mat4 u_lightSpaceMatrix;
+
+out vec3 v_worldPos;
+out vec3 v_normal;
+out vec3 v_colour;
+out float v_material;
+out float v_distance;
+out vec2 v_uv;
+flat out int v_texture;
+out float v_alpha;
+flat out int v_waterSource;
+out vec4 v_lightSpacePos;
+
+void main() {
+    vec3 relative = a_position - u_cameraPosition;
+
+    float zPrime = relative.z * u_cosEyeYaw - relative.x * u_sinEyeYaw;
+    float viewX = relative.z * u_sinEyeYaw + relative.x * u_cosEyeYaw;
+    float viewY = relative.y * u_cosEyePitch - zPrime * u_sinEyePitch;
+    float viewZ = relative.y * u_sinEyePitch + zPrime * u_cosEyePitch;
+    // Use proper perspective clip coordinates instead of manually dividing x/y by
+    // viewZ with w=1. The old path could make near-plane terrain/model triangles
+    // fold or vanish at specific camera rotations, especially bridge/walkable
+    // surfaces close to the camera. With w=viewZ, WebGL clips the triangle against
+    // the near plane consistently while keeping the same screen projection.
+    float safeRange = max(u_farPlane - u_nearPlane, 1.0);
+    float ndcDepth = ((viewZ - u_nearPlane) / safeRange) * 2.0 - 1.0;
+
+    gl_Position = vec4(
+        viewX * u_projectionScale.x,
+        -viewY * u_projectionScale.y,
+        ndcDepth * viewZ,
+        viewZ
+    );
+
+    v_worldPos = a_position;
+    v_normal = normalize(a_normal);
+    v_colour = a_colour;
+    v_material = a_material;
+    v_distance = max(0.0, viewZ);
+    v_uv = a_uv;
+    v_texture = int(floor(a_texture + 0.5));
+    v_alpha = a_alpha;
+    v_waterSource = int(floor(a_waterSource + 0.5));
+    v_lightSpacePos = u_lightSpaceMatrix * vec4(a_position, 1.0);
+}
+`,
+    fragment: `#version 300 es
+precision highp float;
+
+in vec3 v_worldPos;
+in vec3 v_normal;
+in vec3 v_colour;
+in float v_material;
+in float v_distance;
+in vec2 v_uv;
+flat in int v_texture;
+in float v_alpha;
+flat in int v_waterSource;
+in vec4 v_lightSpacePos;
+
+uniform vec3 u_cameraPosition;
+uniform vec3 u_sunDirection;
+uniform vec3 u_skyColour;
+uniform float u_ambient;
+uniform float u_diffuseStrength;
+uniform float u_fogStart;
+uniform float u_fogDistance;
+uniform float u_time;
+uniform sampler2D u_textureAtlas;
+uniform vec4 u_atlasRects[128];
+uniform int u_textureDebugMode;
+uniform int u_cacheTextureCount;
+uniform sampler2D u_shadowMap;
+uniform float u_shadowStrength;
+uniform sampler2D u_normalAtlas;
+uniform float u_waterTextureDiffuse;
+uniform float u_waterFresnelStrength;
+uniform float u_waterSpecularStrength;
+uniform float u_waterFoamStrength;
+uniform sampler2D u_waterNormalMap;
+uniform sampler2D u_waterFlowMap;
+uniform sampler2D u_waterFoamMap;
+uniform float u_waterMapsReady;
+uniform vec3 u_hdAmbientColour;
+uniform vec3 u_hdSunColour;
+uniform vec3 u_hdFogColour;
+uniform float u_hdSkyStrength;
+uniform float u_hdExposure;
+uniform float u_hdContrast;
+uniform float u_hdSaturation;
+uniform float u_gammaCorrection;
+uniform float u_groundFogStart;
+uniform float u_groundFogEnd;
+uniform float u_groundFogOpacity;
+uniform float u_hdGroundTextureStrength;
+uniform float u_hdGroundNormalStrength;
+uniform float u_hdGroundTextureScale;
+uniform float u_hdGroundMacroStrength;
+uniform sampler2D u_hdGroundAtlas;
+uniform float u_hdGroundMapsReady;
+uniform sampler2D u_hdTextureAtlas;
+uniform vec4 u_hdAtlasRects[50];
+uniform float u_hdAtlasReady;
+
+out vec4 outColour;
+
+float computeShadow(vec3 normal, vec3 sunDir) {
+    vec3 proj = v_lightSpacePos.xyz / v_lightSpacePos.w;
+    proj = proj * 0.5 + 0.5;
+    if (proj.x < 0.0 || proj.x > 1.0 || proj.y < 0.0 || proj.y > 1.0 || proj.z < 0.0 || proj.z > 1.0) {
+        return 0.0;
+    }
+    float bias = max(0.008 * (1.0 - dot(normal, sunDir)), 0.0005);
+    vec2 texelSize = 1.0 / vec2(2048.0);
+    float shadow = 0.0;
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            float depth = texture(u_shadowMap, proj.xy + vec2(float(x), float(y)) * texelSize).r;
+            shadow += proj.z - bias > depth ? 1.0 : 0.0;
+        }
+    }
+    return shadow / 9.0;
+}
+
+vec3 debugTextureColour(int id) {
+    if (id < 0) {
+        return vec3(0.12, 0.12, 0.12);
+    }
+    if (id >= u_cacheTextureCount) {
+        return vec3(1.0, 0.0, 1.0);
+    }
+    float f = float(id + 1);
+    return fract(vec3(f * 0.1031, f * 0.3677, f * 0.6893));
+}
+
+float hash21(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+}
+
+float noise2(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = hash21(i);
+    float b = hash21(i + vec2(1.0, 0.0));
+    float c = hash21(i + vec2(0.0, 1.0));
+    float d = hash21(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+vec2 waterWorldUvs(float scale) {
+    return -v_worldPos.xz / (128.0 * scale);
+}
+
+vec3 waterMapNormal(vec2 uv) {
+    vec3 packed = texture(u_waterNormalMap, fract(uv)).rgb * 2.0 - 1.0;
+    return normalize(vec3(packed.x, 0.0, packed.y));
+}
+
+vec2 waterFlowMap(vec2 uv) {
+    vec2 flow = texture(u_waterFlowMap, fract(uv)).rg * 2.0 - 1.0;
+    return flow * 0.055;
+}
+
+float waterFoamMap(vec2 uv) {
+    return texture(u_waterFoamMap, fract(uv)).r;
+}
+
+// sRGB/linear color space conversion — ported from RLHD utils/color_utils.glsl.
+// Lighting math must happen in linear light space; vertex colours and texture
+// samples are gamma-encoded (sRGB), so we convert before and after.
+vec3 srgbToLinear(vec3 srgb) {
+    return mix(srgb / 12.92,
+               pow(max((srgb + vec3(0.055)) / vec3(1.055), vec3(0.0)), vec3(2.4)),
+               step(vec3(0.04045), srgb));
+}
+vec3 linearToSrgb(vec3 rgb) {
+    return mix(rgb * 12.92,
+               1.055 * pow(max(rgb, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055,
+               step(vec3(0.0031308), rgb));
+}
+
+// HSL / HSV conversions — ported from RLHD utils/color_utils.glsl.
+// Used for saturation and contrast adjustment in perceptual colour space.
+vec3 srgbToHsl(vec3 srgb) {
+    float V    = max(max(srgb.r, srgb.g), srgb.b);
+    float Xmin = min(min(srgb.r, srgb.g), srgb.b);
+    float C    = V - Xmin;
+    float H    = 0.0;
+    if (C > 0.0) {
+        if      (V == srgb.r) H = mod((srgb.g - srgb.b) / C, 6.0);
+        else if (V == srgb.g) H = (srgb.b - srgb.r) / C + 2.0;
+        else                  H = (srgb.r - srgb.g) / C + 4.0;
+    }
+    float L     = (V + Xmin) * 0.5;
+    float denom = 1.0 - abs(2.0 * L - 1.0);
+    float SL    = abs(denom) < 0.001 ? 0.0 : C / denom;
+    return vec3(H / 6.0, SL, L);
+}
+vec3 hslToSrgb(vec3 hsl) {
+    float C  = (1.0 - abs(2.0 * hsl.z - 1.0)) * hsl.y;
+    float Hp = fract(hsl.x) * 6.0;
+    float m  = hsl.z - C * 0.5;
+    float r  = clamp(abs(Hp - 3.0) - 1.0, 0.0, 1.0);
+    float g  = clamp(2.0 - abs(Hp - 2.0), 0.0, 1.0);
+    float b  = clamp(2.0 - abs(Hp - 4.0), 0.0, 1.0);
+    return vec3(r, g, b) * C + m;
+}
+vec3 srgbToHsv(vec3 rgb) {
+    vec3  hsl = srgbToHsl(rgb);
+    float v   = hsl.z + hsl.y * min(hsl.z, 1.0 - hsl.z);
+    float s   = abs(v) < 0.001 ? 0.0 : 2.0 * (1.0 - hsl.z / v);
+    return vec3(hsl.x, s, v);
+}
+vec3 hsvToSrgb(vec3 hsv) {
+    float l     = hsv.z * (1.0 - hsv.y * 0.5);
+    float denom = min(l, 1.0 - l);
+    float s     = abs(denom) < 0.001 ? 0.0 : (hsv.z - l) / denom;
+    return hslToSrgb(vec3(hsv.x, s, l));
+}
+
+vec3 untexturedTerrainDetail(vec3 colour, float material) {
+    vec2 p = v_worldPos.xz / 128.0;
+    float broad = noise2(p * 2.1);
+    float fine = noise2(p * 11.0);
+    float grit = hash21(floor(p * 42.0));
+
+    if (material == 9.0 || material == 7.0) {
+        vec3 darkGrass  = vec3(0.22, 0.42, 0.13);
+        vec3 lightGrass = vec3(0.52, 0.72, 0.25);
+        vec3 grass = mix(darkGrass, lightGrass, broad * 0.72 + fine * 0.28);
+        return mix(colour, grass, material == 7.0 ? 0.38 : 0.52) * (0.92 + fine * 0.22);
+    }
+
+    if (material == 13.0) {
+        vec3 dirtDark = vec3(0.24, 0.20, 0.15);
+        vec3 dirtLight = vec3(0.48, 0.41, 0.30);
+        vec3 dirt = mix(dirtDark, dirtLight, broad);
+        dirt += (grit > 0.82 ? vec3(0.10) : vec3(0.0));
+        return mix(colour, dirt, 0.46) * (0.86 + fine * 0.24);
+    }
+
+    if (material == 4.0 || material == 8.0 || material == 0.0) {
+        float cracks = smoothstep(0.83, 0.98, noise2(p * 7.5));
+        vec3 stone = mix(vec3(0.25, 0.25, 0.23), vec3(0.55, 0.53, 0.47), broad);
+        stone = mix(stone, vec3(0.08), cracks * 0.32);
+        return mix(colour, stone, material == 0.0 ? 0.24 : 0.42) * (0.9 + fine * 0.18);
+    }
+
+    if (material == 14.0) {
+        // Seabed: sandy silt with occasional pebble grit.
+        vec3 sandDark  = vec3(0.20, 0.18, 0.12);
+        vec3 sandLight = vec3(0.40, 0.36, 0.24);
+        vec3 sand = mix(sandDark, sandLight, broad * 0.68 + fine * 0.32);
+        sand += (grit > 0.86 ? vec3(0.07, 0.06, 0.04) : vec3(0.0));
+        return mix(colour, sand, 0.60) * (0.88 + fine * 0.20);
+    }
+
+    return colour;
+}
+
+
+bool hdGroundMaterial(float material, bool validCacheTexture) {
+    // Do not replace real 254/cache textures.
+    // Only apply HD ground material detail to untextured terrain.
+    if (validCacheTexture) {
+        return false;
+    }
+
+    return material == 4.0 || material == 7.0 || material == 8.0 ||
+           material == 13.0 || material == 14.0 ||
+           material == 9.0;
+}
+
+vec3 hdMaterialBaseColour(float material) {
+    // Natural, less neon base tones for 2004 terrain. These are used both as
+    // fallback colours and as a colour-correction target for the 117/OSRS ground atlas.
+    if (material == 9.0)  { return vec3(0.30, 0.58, 0.15); } // grass
+    if (material == 7.0)  { return vec3(0.22, 0.38, 0.12); } // moss
+    if (material == 13.0) { return vec3(0.43, 0.37, 0.27); } // dirt/path
+    if (material == 14.0) { return vec3(0.46, 0.41, 0.29); } // silt/sand
+    if (material == 8.0)  { return vec3(0.36, 0.35, 0.31); } // gravel
+    if (material == 4.0)  { return vec3(0.46, 0.45, 0.40); } // stone
+    return vec3(0.38, 0.36, 0.32);
+}
+
+
+
+float hdGroundAtlasSlot(float material) {
+    // osrs_ground_atlas.png layout is 4x2:
+    // 0 grass, 1 dirt, 2 sand/bank, 3 road/path tile,
+    // 4 cobble/gravel, 5 grey stone, 6 rock, 7 moss.
+    if (material == 9.0)  { return 0.0; } // grass / foliage terrain
+    if (material == 7.0)  { return 7.0; } // moss / darker foliage ground
+    if (material == 13.0) { return 3.0; } // road/path tile
+    if (material == 14.0) { return 2.0; } // sand / river bank / seabed
+    if (material == 8.0)  { return 4.0; } // gravel / pebbles
+    if (material == 4.0)  { return 5.0; } // stone
+    return 6.0;
+}
+
+vec3 hdGroundAtlasSample(float slot, vec2 localUv) {
+    vec2 grid = vec2(4.0, 2.0);
+    vec2 cell = vec2(mod(slot, grid.x), floor(slot / grid.x));
+    const float HALF_TEXEL = 0.5 / 128.0;
+    localUv = clamp(fract(localUv), HALF_TEXEL, 1.0 - HALF_TEXEL);
+    vec2 atlasUv = (cell + localUv) / grid;
+    return texture(u_hdGroundAtlas, atlasUv).rgb;
+}
+
+vec3 hdGroundAtlasAlbedo(float material, vec2 uv) {
+    float slot = hdGroundAtlasSlot(material);
+
+    // Keep world-space ground detail smaller than before. The asset atlas is very
+    // high-contrast, so oversampling it made river banks/roads look like hay and
+    // blocky checkerboards.
+    float scale = 1.0;
+    if (material == 9.0) {
+        scale = 1.65;
+    } else if (material == 7.0) {
+        scale = 1.50;
+    } else if (material == 13.0) {
+        scale = 1.65;
+    } else if (material == 14.0) {
+        scale = 1.35;
+    } else if (material == 4.0 || material == 8.0) {
+        scale = 1.35;
+    }
+
+    vec2 localUv = uv * scale;
+    vec3 tex = hdGroundAtlasSample(slot, localUv);
+
+    // Dirt road/path: choose between true path tiles and dirt from the original
+    // 2004 floor colour. Dark/grey road overlays get the path tile; warmer/yellower
+    // river banks and dirt patches keep the dirt sample. This avoids paving whole
+    // hillsides while fixing the flat muddy road strips.
+    if (material == 13.0) {
+        vec3 dirtTex = hdGroundAtlasSample(1.0, localUv * 1.20 + vec2(0.23, 0.41));
+        // Castle/city roads should read like pale packed gravel/cobbled dirt, not sand slabs.
+        // Use the dedicated road slot strongly and at a higher frequency so the path looks
+        // like the OSRS HD reference: small stones, soft beige-grey colour, no big blocks.
+        vec3 pathTex = hdGroundAtlasSample(3.0, localUv * 2.65);
+        float srcMax = max(max(v_colour.r, v_colour.g), v_colour.b);
+        float srcMin = min(min(v_colour.r, v_colour.g), v_colour.b);
+        float srcSat = srcMax - srcMin;
+        float srcLum = dot(v_colour, vec3(0.299, 0.587, 0.114));
+        float greenBias = max(v_colour.g - max(v_colour.r, v_colour.b), 0.0);
+        float roadMask = clamp((1.0 - srcSat * 3.0) + (0.62 - srcLum) * 1.2 - greenBias * 4.0, 0.0, 1.0);
+        roadMask = max(roadMask, 0.72);
+        tex = mix(dirtTex, pathTex, roadMask);
+        tex = mix(tex, vec3(0.58, 0.54, 0.43), 0.16);
+        tex *= 0.98;
+    }
+
+    // Grass/moss: the source grass is very saturated under HD lighting. Pull it
+    // down to a darker OldSchool/RLHD green and reduce contrast.
+    if (material == 9.0) {
+        float grain = noise2(uv * 12.0);
+        float luma = dot(tex, vec3(0.299, 0.587, 0.114));
+        tex = mix(vec3(luma), tex, 0.55);
+        tex = mix(tex, vec3(0.30, 0.62, 0.14), 0.55);
+        tex *= 0.88 + grain * 0.12;
+    } else if (material == 7.0) {
+        tex = mix(tex, vec3(0.18, 0.35, 0.10), 0.55);
+        tex *= 0.88;
+    } else if (material == 14.0) {
+        tex = mix(tex, vec3(0.46, 0.39, 0.27), 0.58);
+        tex *= 0.90;
+    } else if (material == 4.0 || material == 8.0) {
+        tex = mix(tex, hdMaterialBaseColour(material), 0.42);
+        tex *= 0.92;
+    }
+
+    return clamp(tex, 0.0, 1.0);
+}
+
+float hdGroundHeight(float material, vec2 uv) {
+    if (u_hdGroundMapsReady > 0.5) {
+        vec3 tex = hdGroundAtlasAlbedo(material, uv);
+        float luma = dot(tex, vec3(0.299, 0.587, 0.114));
+        float fine = noise2(uv * 9.0);
+        return mix(luma, fine, 0.18);
+    }
+
+    float broad = noise2(uv * 1.35);
+    float fine = noise2(uv * 7.0);
+    float grit = hash21(floor(uv * 22.0));
+
+    if (material == 9.0 || material == 7.0) {
+        float blades = noise2(vec2(uv.x * 16.0, uv.y * 34.0));
+        return broad * 0.32 + fine * 0.28 + blades * 0.40;
+    }
+
+    if (material == 13.0 || material == 14.0) {
+        float speckles = smoothstep(0.70, 1.0, grit);
+        return broad * 0.46 + fine * 0.34 + speckles * 0.20;
+    }
+
+    if (material == 4.0 || material == 8.0) {
+        float chips = smoothstep(0.64, 1.0, grit);
+        float cracks = smoothstep(0.78, 0.98, noise2(uv * 4.5));
+        return broad * 0.28 + fine * 0.30 + chips * 0.28 - cracks * 0.22;
+    }
+
+    return broad * 0.5 + fine * 0.5;
+}
+
+vec3 hdGroundAlbedo(float material, vec2 uv) {
+    if (u_hdGroundMapsReady > 0.5) {
+        return hdGroundAtlasAlbedo(material, uv);
+    }
+
+    vec3 base = hdMaterialBaseColour(material);
+    float broad = noise2(uv * 1.45);
+    float fine = noise2(uv * 8.5);
+    float grit = hash21(floor(uv * 26.0));
+
+    if (material == 9.0) {
+        vec3 darkGrass  = vec3(0.18, 0.40, 0.10);
+        vec3 midGrass   = vec3(0.30, 0.58, 0.16);
+        vec3 lightGrass = vec3(0.45, 0.72, 0.22);
+        vec3 grass = mix(darkGrass, lightGrass, broad * 0.62 + fine * 0.38);
+        grass = mix(grass, midGrass, 0.32);
+        return grass * (0.90 + fine * 0.16);
+    }
+
+    if (material == 7.0) {
+        vec3 mossDark  = vec3(0.15, 0.32, 0.09);
+        vec3 mossLight = vec3(0.32, 0.48, 0.16);
+        return mix(mossDark, mossLight, broad * 0.70 + fine * 0.30) * (0.92 + fine * 0.18);
+    }
+
+    if (material == 13.0) {
+        vec3 dirtDark = vec3(0.29, 0.25, 0.18);
+        vec3 dirtLight = vec3(0.51, 0.44, 0.32);
+        vec3 dirt = mix(dirtDark, dirtLight, broad * 0.55 + fine * 0.45);
+        dirt += (grit > 0.84 ? vec3(0.07, 0.06, 0.045) : vec3(0.0));
+        return dirt;
+    }
+
+    if (material == 14.0) {
+        vec3 sandDark = vec3(0.27, 0.23, 0.15);
+        vec3 sandLight = vec3(0.52, 0.45, 0.30);
+        return mix(sandDark, sandLight, broad * 0.64 + fine * 0.36);
+    }
+
+    if (material == 4.0 || material == 8.0) {
+        vec3 stoneDark = material == 8.0 ? vec3(0.25, 0.25, 0.23) : vec3(0.30, 0.30, 0.28);
+        vec3 stoneLight = material == 8.0 ? vec3(0.52, 0.50, 0.44) : vec3(0.59, 0.58, 0.53);
+        vec3 stone = mix(stoneDark, stoneLight, broad * 0.56 + fine * 0.44);
+        float crack = smoothstep(0.78, 0.98, noise2(uv * 4.4));
+        stone = mix(stone, vec3(0.10), crack * 0.22);
+        stone += (grit > 0.88 ? vec3(0.06) : vec3(0.0));
+        return stone;
+    }
+
+    return base * (0.80 + fine * 0.35);
+}
+
+vec3 applyHdGroundMaterial(vec3 colour, float material, bool validCacheTexture) {
+    if (!hdGroundMaterial(material, validCacheTexture)) {
+        return colour;
+    }
+
+    vec2 uv = v_worldPos.xz / max(u_hdGroundTextureScale, 32.0);
+    vec3 hd = hdGroundAlbedo(material, uv);
+
+    // Macro variation breaks up large repeating areas and mimics RLHD-style material
+    // variation without requiring OSRS scene/underlay metadata.
+    float macro = noise2(v_worldPos.xz / 1024.0);
+    hd *= 1.0 + (macro - 0.5) * u_hdGroundMacroStrength;
+
+    // Keep only a light amount of the old 2004 vertex hue. Too much tinting was
+    // turning grass neon and washing roads out.
+    vec3 sourceTint = mix(vec3(1.0), max(colour, vec3(0.035)) / max(vec3(dot(colour, vec3(0.333))), vec3(0.08)), 0.12);
+    vec3 hdTinted = hd * sourceTint;
+
+    float strength = clamp(u_hdGroundTextureStrength, 0.0, 1.0);
+    if (material == 9.0 || material == 7.0) {
+        strength = max(strength, 0.54);
+    } else if (material == 13.0) {
+        strength = max(strength, 0.72);
+    } else if (material == 14.0) {
+        strength = max(strength, 0.44);
+    } else if (material == 4.0 || material == 8.0) {
+        strength = max(strength, 0.50);
+    }
+
+    return mix(colour, hdTinted, clamp(strength, 0.0, 0.68));
+}
+
+vec3 applyHdGroundNormal(vec3 normal, float material, bool validCacheTexture) {
+    if (!hdGroundMaterial(material, validCacheTexture) || u_hdGroundNormalStrength <= 0.0) {
+        return normal;
+    }
+
+    vec2 uv = v_worldPos.xz / max(u_hdGroundTextureScale, 32.0);
+    float e = 1.0 / max(u_hdGroundTextureScale, 32.0);
+    float hL = hdGroundHeight(material, uv - vec2(e, 0.0));
+    float hR = hdGroundHeight(material, uv + vec2(e, 0.0));
+    float hD = hdGroundHeight(material, uv - vec2(0.0, e));
+    float hU = hdGroundHeight(material, uv + vec2(0.0, e));
+    vec3 bump = vec3((hL - hR), 0.0, (hD - hU)) * clamp(u_hdGroundNormalStrength, 0.0, 2.0) * 0.55;
+    return normalize(normal + bump);
+}
+
+void main() {
+    vec3 normal = normalize(v_normal);
+    vec3 viewDir = normalize(u_cameraPosition - v_worldPos);
+    vec3 sunDir = normalize(-u_sunDirection);
+    float diffuse = max(dot(normal, sunDir), 0.0);
+    float shadow = (u_textureDebugMode != 0) ? 0.0 : computeShadow(normal, sunDir);
+    float shadowFactor = shadow * u_shadowStrength;
+    float light = u_ambient * (1.0 - shadowFactor * 0.55) + diffuse * u_diffuseStrength * (1.0 - shadowFactor);
+    float material = floor(v_material + 0.5);
+
+    vec3 baseColour = v_colour;
+
+    bool hasTextureId = v_texture >= 0;
+    bool validCacheTexture = hasTextureId && v_texture < u_cacheTextureCount;
+
+    if (u_textureDebugMode == 9) {
+        // Shader/uniform proof mode. If F8 works, the whole HD scene turns bright pink.
+        outColour = vec4(1.0, 0.0, 1.0, 1.0);
+        return;
+    }
+
+    if (u_textureDebugMode == 6) {
+        // Water-source mode: plain textured terrain water = blue, shaped textured
+        // terrain water = yellow, model water = magenta. Colour-inferred terrain
+        // water uses cyan/orange so false positives are obvious in screenshots.
+        if (material == 1.0) {
+            if (v_waterSource == 1) {
+                baseColour = vec3(0.05, 0.45, 1.0);
+            } else if (v_waterSource == 2) {
+                baseColour = vec3(1.0, 0.86, 0.05);
+            } else if (v_waterSource == 3) {
+                baseColour = vec3(1.0, 0.05, 0.85);
+            } else if (v_waterSource == 4) {
+                baseColour = vec3(0.0, 0.95, 1.0);
+            } else if (v_waterSource == 5) {
+                baseColour = vec3(1.0, 0.45, 0.0);
+            } else {
+                baseColour = vec3(0.0, 1.0, 0.7);
+            }
+            outColour = vec4(baseColour, 1.0);
+            return;
+        }
+
+        outColour = vec4(vec3(0.08), 1.0);
+        return;
+    }
+
+    if (u_textureDebugMode == 7) {
+        // RLHD-only proof mode. Textured faces show only the 117/RLHD atlas.
+        // Untextured ground shows only the HD material atlas/procedural material path.
+        // Red means the face has a cache texture ID but no loaded RLHD override for that slot.
+        if (validCacheTexture && material != 1.0) {
+            int atlasTexture = v_texture;
+            vec4 hdRect = u_hdAtlasRects[atlasTexture];
+            vec2 hdAtlasUv = mix(hdRect.xy, hdRect.zw, fract(v_uv));
+            vec4 hdTexel = texture(u_hdTextureAtlas, hdAtlasUv);
+            if (u_hdAtlasReady > 0.5 && hdTexel.a > 0.1) {
+                outColour = vec4(hdTexel.rgb, 1.0);
+            } else {
+                outColour = vec4(1.0, 0.0, 0.0, 1.0);
+            }
+            return;
+        }
+
+        if (!validCacheTexture && hdGroundMaterial(material, validCacheTexture)) {
+            vec2 groundUv = v_worldPos.xz / max(u_hdGroundTextureScale, 32.0);
+            outColour = vec4(hdGroundAlbedo(material, groundUv), 1.0);
+            return;
+        }
+
+        outColour = vec4(baseColour, 1.0);
+        return;
+    }
+
+    if (u_textureDebugMode == 2 && hasTextureId) {
+        // ID-colour mode: every texture ID gets a unique flat colour.
+        // Magenta means the client tried to use a texture outside the 254 cache range.
+        baseColour = debugTextureColour(v_texture);
+        light = 1.0;
+    } else if (u_textureDebugMode == 4 && hasTextureId) {
+        // UV mode: shows whether the generated UVs are stable and non-warped.
+        baseColour = vec3(fract(v_uv.x), fract(v_uv.y), 0.5);
+        light = 1.0;
+    } else if (u_textureDebugMode != 1 && validCacheTexture) {
+        int atlasTexture = u_textureDebugMode == 3 ? 0 : v_texture;
+
+        vec4 rect = u_atlasRects[atlasTexture];
+        vec2 uv = fract(v_uv);
+        if (material == 1.0) {
+            // World-space base UV — seamless across tile boundaries, no grid lines.
+            vec2 wuvTex = v_worldPos.xz / 640.0;
+            float du = noise2(wuvTex * 3.5 + vec2(u_time * 0.05, 0.0)) - 0.5;
+            float dv = noise2(wuvTex * 3.5 + vec2(0.0, u_time * 0.04)) - 0.5;
+            uv = wuvTex + vec2(du * 0.018, dv * 0.015);
+        }
+vec2 atlasUv = mix(rect.xy, rect.zw, fract(uv));
+vec4 texel = texture(u_textureAtlas, atlasUv);
+float textureBlend = 0.9;
+        // HD texture override: replace vanilla RGB with RLHD high-res art where available.
+        // Vanilla alpha is preserved so transparent textures (foliage etc.) keep their silhouette.
+        if (u_hdAtlasReady > 0.5 && atlasTexture < 50 && material != 1.0) {
+            vec4 hdRect = u_hdAtlasRects[atlasTexture];
+            vec2 hdAtlasUv = mix(hdRect.xy, hdRect.zw, fract(uv));
+            vec4 hdTexel = texture(u_hdTextureAtlas, hdAtlasUv);
+            if (hdTexel.a > 0.1) {
+                texel = vec4(hdTexel.rgb, max(texel.a, hdTexel.a));
+textureBlend = 1.0;
+            }
+        }
+        if (material == 1.0) {
+            // Water never discards — atlas padding must not punch holes in the surface.
+            if (texel.a >= 0.05) {
+                baseColour = mix(baseColour, texel.rgb, u_waterTextureDiffuse);
+            }
+        } else if (texel.a >= 0.05) {
+            baseColour = mix(baseColour, texel.rgb, textureBlend);
+            if (u_textureDebugMode == 5) {
+                outColour = vec4(texel.rgb, 1.0);
+                return;
+            }
+        } else {
+            discard;
+        }
+    }
+
+    if (!validCacheTexture && u_textureDebugMode == 0) {
+        baseColour = untexturedTerrainDetail(baseColour, material);
+    }
+
+// Only use generated/ground-material textures on untextured terrain.
+// If a real cache texture/HD override exists, keep that texture instead of
+// covering it with the blurry ground atlas/procedural fallback.
+if (u_textureDebugMode == 0 && !validCacheTexture) {
+    baseColour = applyHdGroundMaterial(baseColour, material, validCacheTexture);
+}
+
+    // Texture-space normal mapping.
+    // Textured surfaces (validCacheTexture) use the per-texture atlas slot with the same
+    // UV as the colour sample.  Untextured terrain uses a per-material slot (50+material)
+    // sampled with world-space planar UVs so the detail tiles independently of tile size.
+    if (u_textureDebugMode == 0 && material != 1.0 && material != 2.0 && material != 12.0 && material != 14.0) {
+        int normalSlot;
+        vec2 normalUv;
+        if (validCacheTexture) {
+            normalSlot = v_texture;
+            normalUv = v_uv;
+        } else {
+            normalSlot = 50 + int(material);
+            normalUv = v_worldPos.xz / 512.0;
+        }
+        vec4 normalRect = u_atlasRects[normalSlot];
+        vec2 normalAtlasUv = mix(normalRect.xy, normalRect.zw, fract(normalUv));
+        vec4 ns = texture(u_normalAtlas, normalAtlasUv);
+        vec3 q1 = dFdx(v_worldPos);
+        vec3 q2 = dFdy(v_worldPos);
+        vec2 st1 = dFdx(normalUv);
+        vec2 st2 = dFdy(normalUv);
+        float nmDet = st1.x * st2.y - st2.x * st1.y;
+        if (abs(nmDet) > 1e-5) {
+            vec3 N = normalize(normal);
+            vec3 T = normalize((q1 * st2.y - q2 * st1.y) / nmDet);
+            T = normalize(T - dot(T, N) * N);
+            vec3 B = cross(N, T);
+            normal = normalize(mat3(T, B, N) * normalize(ns.rgb * 2.0 - 1.0));
+            diffuse = max(dot(normal, sunDir), 0.0);
+            light = u_ambient * (1.0 - shadowFactor * 0.55) + diffuse * u_diffuseStrength * (1.0 - shadowFactor);
+        }
+    }
+
+    if (u_textureDebugMode == 0) {
+        normal = applyHdGroundNormal(normal, material, validCacheTexture);
+        diffuse = max(dot(normal, sunDir), 0.0);
+        light = u_ambient * (1.0 - shadowFactor * 0.55) + diffuse * u_diffuseStrength * (1.0 - shadowFactor);
+    }
+
+    float alpha = v_alpha;
+
+    if (material == 12.0) {
+        light = 1.0;
+    } else if (material == 1.0) {
+        // Water: RLHD-style mapped water.  Uses world-space UVs, flow map,
+        // dual normal samples, foam mask, Fresnel, specular sparkle and seabed tint.
+        // If the three PNGs are missing, it falls back to the old procedural noise.
+        float t = u_time;
+        float mapsReady = step(0.5, u_waterMapsReady);
+
+        vec2 wuv3  = waterWorldUvs(3.0);
+        vec2 wuv15 = waterWorldUvs(15.0);
+
+        vec2 proceduralFlow = vec2(
+            noise2(wuv15 * 4.0 + vec2(t * 0.0020,  0.0)),
+            noise2(wuv15 * 4.0 + vec2(0.0, -t * 0.0015))
+        ) * 0.025;
+        vec2 mappedFlow = waterFlowMap(wuv15 + vec2(t * 0.006, -t * 0.004));
+        vec2 flowOff = mix(proceduralFlow, mappedFlow, mapsReady);
+
+        vec2 uv1 = wuv3.yx - vec2(t * 0.020, 0.0) + flowOff;
+        vec2 uv2 = wuv3    + vec2(0.0, t * 0.017)  - flowOff.yx;
+
+        const float E = 0.04;
+        float n1c  = noise2(uv1 * 8.0);
+        float n1dx = noise2(uv1 * 8.0 + vec2(E, 0.0)) - noise2(uv1 * 8.0 - vec2(E, 0.0));
+        float n1dz = noise2(uv1 * 8.0 + vec2(0.0, E)) - noise2(uv1 * 8.0 - vec2(0.0, E));
+        float n2dx = noise2(uv2 * 8.0 + vec2(E, 0.0)) - noise2(uv2 * 8.0 - vec2(E, 0.0));
+        float n2dz = noise2(uv2 * 8.0 + vec2(0.0, E)) - noise2(uv2 * 8.0 - vec2(0.0, E));
+        vec3 proceduralNormal = normalize(normal + vec3((n1dx + n2dx) * 0.090, 0.0, (n1dz + n2dz) * 0.090));
+
+        vec3 mappedN1 = waterMapNormal(uv1);
+        vec3 mappedN2 = waterMapNormal(uv2 * 1.37 + vec2(0.21, -0.13));
+        vec3 mappedNormal = normalize(normal + (mappedN1 + mappedN2) * 0.070);
+        vec3 waterNormal = normalize(mix(proceduralNormal, mappedNormal, mapsReady));
+
+        float lightDotN = max(dot(waterNormal, sunDir), 0.0);
+        float viewDotN  = clamp(dot(viewDir, waterNormal), 0.0, 1.0);
+        float baseOpacity  = 0.68;
+        float fresnel      = 1.0 - viewDotN;
+        float finalFresnel = clamp(mix(baseOpacity, 1.0, fresnel * 1.2 * max(u_waterFresnelStrength, 0.0)), 0.0, 1.0);
+
+        vec3 waterColorDark  = vec3(0.020, 0.105, 0.240);
+        vec3 waterColorMid   = vec3(0.060, 0.255, 0.520);
+        vec3 waterColorLight = vec3(0.250, 0.560, 0.820);
+        vec3 surfaceColor = finalFresnel < 0.5
+            ? mix(waterColorDark, waterColorMid, finalFresnel * 2.0)
+            : mix(waterColorMid, waterColorLight, (finalFresnel - 0.5) * 2.0);
+
+        vec3 ambientLightOut = u_hdAmbientColour * u_ambient;
+        vec3 dirLight        = u_hdSunColour * u_diffuseStrength;
+        vec3 lightOut        = lightDotN * dirLight;
+        vec3 halfVec         = normalize(viewDir + sunDir);
+        float sparkleMask    = pow(max(noise2(uv1 * 28.0 + uv2 * 11.0) - 0.62, 0.0) / 0.38, 2.0);
+        float spec           = pow(max(dot(waterNormal, halfVec), 0.0), 420.0) * (0.75 + sparkleMask * 0.45);
+        vec3 lightSpecOut    = dirLight * spec * 0.82 * max(u_waterSpecularStrength, 0.0);
+        vec3 skyLightOut     = u_hdFogColour * max(-waterNormal.y, 0.0) * u_hdSkyStrength;
+        vec3 compositeLight  = ambientLightOut + lightOut + lightSpecOut + skyLightOut + surfaceColor * 0.80;
+
+        vec3 waterSurfaceColor = vec3(0.045, 0.190, 0.410);
+        vec3 baseColor = mix(waterSurfaceColor * compositeLight, surfaceColor, 0.96);
+
+        float proceduralFoam = pow(max(noise2(uv1 * 12.0 + uv2 * 8.0 + vec2(t * 0.008, 0.0)) - 0.72, 0.0) / 0.28, 3.0);
+        float mappedFoam = waterFoamMap(uv1 * 0.75 + uv2 * 0.25 + flowOff * 2.0);
+
+        // Shore foam without adjacency data: tile/water edge proximity creates a thin,
+        // broken edge band. This is cheap and stable because it uses world-space tile UVs.
+        vec2 tileUv = fract(v_worldPos.xz / 128.0);
+        float edgeDistance = min(min(tileUv.x, 1.0 - tileUv.x), min(tileUv.y, 1.0 - tileUv.y));
+        float shoreBand = 1.0 - smoothstep(0.020, 0.135, edgeDistance);
+        shoreBand *= smoothstep(0.18, 0.85, noise2(v_worldPos.xz / 92.0 + vec2(t * 0.015, -t * 0.012)));
+
+        float foamAmount = clamp((mix(proceduralFoam, mappedFoam, mapsReady) * 0.38 + shoreBand * 0.30) * max(u_waterFoamStrength, 0.0), 0.0, 0.62);
+        vec3 foamColor = vec3(0.93, 0.97, 1.0) * (ambientLightOut + lightOut + vec3(0.18));
+        baseColor = mix(baseColor, foamColor, foamAmount);
+
+        // Underwater/seabed tint: water gets deeper and more blue with alpha-depth.
+        float depthHint = clamp(v_alpha, 0.0, 1.0);
+        vec3 seabedTint = vec3(0.035, 0.105, 0.210);
+        baseColor = mix(baseColor, seabedTint, depthHint * 0.22);
+
+        baseColor += lightSpecOut / 3.0;
+        if (validCacheTexture) {
+            baseColor = mix(baseColor, baseColour, min(u_waterTextureDiffuse, 0.02));
+        }
+
+        alpha      = max(baseOpacity, max(foamAmount, max(finalFresnel, length(lightSpecOut / 3.0))));
+        light      = 1.0;
+        baseColour = baseColor;
+        normal     = waterNormal;
+
+    } else if (material == 2.0) {
+        // Lava: RLHD-inspired dual-layer flow and crack animation
+        float t = u_time;
+        float flow  = sin(t * 2.8 + v_uv.x * 11.0 + v_uv.y * 8.5) * 0.5 + 0.5;
+        float crack = cos(t * 1.5 + v_uv.y * 14.0 - v_uv.x * 10.0) * 0.5 + 0.5;
+        float lavaPattern = mix(flow, crack, 0.45);
+
+        vec3 lavaDark = vec3(0.52, 0.03, 0.00);
+        vec3 lavaMid  = vec3(0.88, 0.17, 0.01);
+        vec3 lavaGlow = vec3(1.00, 0.54, 0.05);
+        vec3 lavaColor = lavaPattern < 0.5
+            ? mix(lavaDark, lavaMid, lavaPattern * 2.0)
+            : mix(lavaMid, lavaGlow, (lavaPattern - 0.5) * 2.0);
+
+        baseColour = mix(baseColour, lavaColor, 0.72);
+        light = max(light, 1.05 + lavaPattern * 0.22);
+
+    } else if (material == 4.0 || material == 8.0) {
+        // Stone / Pebble
+        baseColour = mix(vec3(dot(baseColour, vec3(0.299, 0.587, 0.114))), baseColour, 0.72);
+        light *= 0.94;
+    } else if (material == 5.0 || material == 11.0) {
+        // Wood / Roof
+        baseColour *= vec3(1.08, 0.98, 0.82);
+        light *= material == 11.0 ? 0.9 : 0.98;
+    } else if (material == 6.0) {
+        // Marble: subtle Blinn-Phong specular for polished appearance
+        baseColour = mix(baseColour, vec3(0.78, 0.78, 0.72), 0.24);
+        vec3 halfVec = normalize(viewDir + sunDir);
+        float spec = pow(max(dot(normal, halfVec), 0.0), 48.0);
+        baseColour += vec3(0.90, 0.88, 0.82) * spec * 0.26;
+        light *= 1.04;
+    } else if (material == 7.0 || material == 9.0) {
+        // Moss / Foliage
+        baseColour *= vec3(0.90, 1.15, 0.80);
+        light *= 0.97;
+    } else if (material == 10.0) {
+        // Metal: Blinn-Phong specular using actual view direction (RLHD uses specularStrength/Gloss per material)
+        baseColour = mix(baseColour, vec3(0.62, 0.62, 0.58), 0.25);
+        vec3 halfVec = normalize(viewDir + sunDir);
+        float spec = pow(max(dot(normal, halfVec), 0.0), 32.0);
+        baseColour += vec3(0.75, 0.72, 0.68) * spec * 0.42;
+    } else if (material == 14.0) {
+        // Seabed: terrain rendered below the water surface.
+        // v_alpha is repurposed as normalised water depth [0 = surface, 1 = max depth].
+        float depth = v_alpha;
+        // Tint toward deep-water blue and darken with depth.
+        vec3 depthColor = vec3(0.04, 0.10, 0.22);
+        baseColour = mix(baseColour, depthColor, depth * 0.65);
+        light *= (1.0 - depth * 0.45);
+        // Seabed is always opaque — the water surface above provides the transparency.
+        alpha = 1.0;
+    }
+
+    // RLHD-style environment lighting with sRGB/linear colour-space workflow.
+    // Vertex colours are gamma-encoded (sRGB). Converting to linear before the
+    // light accumulation and back to sRGB afterwards is how RLHD achieves its
+    // characteristic look: shadows open up, highlights stay controlled, and
+    // midtones are physically accurate rather than gamma-crushed.
+    float skyFacing = max(-normal.y, 0.0);
+    vec3 colour;
+    if (material == 1.0 || material == 12.0) {
+        // Water and unlit surfaces bypass lighting entirely.
+        colour = baseColour;
+    } else {
+        vec3 baseLinear = srgbToLinear(baseColour);
+        vec3 envAmbient = baseLinear * u_hdAmbientColour * u_ambient * (1.0 - shadowFactor * 0.65);
+        vec3 envSun     = baseLinear * u_hdSunColour * diffuse * u_diffuseStrength * (1.0 - shadowFactor);
+        vec3 envSky     = baseLinear * u_hdFogColour * skyFacing * u_hdSkyStrength;
+        colour = linearToSrgb(max(envAmbient + envSun + envSky, vec3(0.0)));
+    }
+
+    colour = max(colour * u_hdExposure, vec3(0.0));
+    colour = clamp(colour, 0.0, 1.0);
+
+    // HSV saturation + contrast — matches RLHD scene_frag.glsl post-processing.
+    // Operating in HSV preserves hue and handles dark/light regions symmetrically,
+    // unlike a raw linear contrast which crushes darks too aggressively.
+    if (u_hdSaturation != 1.0 || u_hdContrast != 1.0) {
+        vec3 hsv = srgbToHsv(colour);
+        hsv.y *= u_hdSaturation;
+        if (hsv.z > 0.5) {
+            hsv.z = 0.5 + (hsv.z - 0.5) * u_hdContrast;
+        } else {
+            hsv.z = 0.5 - (0.5 - hsv.z) * u_hdContrast;
+        }
+        colour = clamp(hsvToSrgb(hsv), 0.0, 1.0);
+    }
+
+    // Distance fog
+    float fogLinear = clamp((v_distance - u_fogStart) / max(u_fogDistance - u_fogStart, 1.0), 0.0, 1.0);
+    float fog = smoothstep(0.0, 1.0, fogLinear);
+
+    // Ground fog — height-based atmospheric haze (from RLHD scene_frag.glsl).
+    // Disabled by default (u_groundFogOpacity == 0). Enable via:
+    //   window.HD_GROUND_FOG_START = <worldY>; window.HD_GROUND_FOG_END = <worldY-200>;
+    //   window.HD_GROUND_FOG_OPACITY = 0.6;
+    float groundFog = 0.0;
+    if (u_groundFogOpacity > 0.0) {
+        float gf = 1.0 - clamp(
+            (v_worldPos.y - u_groundFogStart) / max(u_groundFogEnd - u_groundFogStart, 1.0),
+            0.0, 1.0);
+        groundFog = mix(0.0, u_groundFogOpacity, gf) * clamp(v_distance / 1500.0, 0.0, 1.0);
+    }
+
+    float combinedFog = 1.0 - (1.0 - fog) * (1.0 - groundFog);
+    colour = mix(colour, u_hdFogColour, combinedFog * 0.95);
+
+    // Gamma correction — from RLHD scene_frag.glsl final pass.
+    // Default 1.0 is neutral. Raise slightly (e.g. 1.1) to brighten;
+    // lower (e.g. 0.9) to darken. Tune via: window.HD_GAMMA_CORRECTION = 1.05;
+    colour = pow(max(colour, vec3(0.0)), vec3(u_gammaCorrection));
+    colour = clamp(colour, 0.0, 1.0);
+
+    outColour = vec4(colour, alpha);
+}
+`
+};
+
+const uiShader: ShaderSource = {
+    vertex: `#version 300 es
+precision highp float;
+
+layout(location = 0) in vec2 a_position;
+layout(location = 1) in vec2 a_uv;
+
+uniform vec2 u_canvasSize;
+
+out vec2 v_uv;
+
+void main() {
+    vec2 clip = vec2(
+        (a_position.x / u_canvasSize.x) * 2.0 - 1.0,
+        1.0 - (a_position.y / u_canvasSize.y) * 2.0
+    );
+    gl_Position = vec4(clip, 0.0, 1.0);
+    v_uv = a_uv;
+}
+`,
+    fragment: `#version 300 es
+precision highp float;
+
+in vec2 v_uv;
+uniform sampler2D u_uiTexture;
+uniform float u_keyed;
+out vec4 outColour;
+
+void main() {
+    vec4 texel = texture(u_uiTexture, v_uv);
+
+    // PixMap.drawKeyed uses 0xff00ff as the HD viewport hole.
+    // Discard both true alpha and magenta-keyed pixels so the HD world stays visible.
+    if (texel.a < 0.05) {
+        discard;
+    }
+    if (u_keyed > 0.5 && texel.r > 0.95 && texel.g < 0.08 && texel.b > 0.95) {
+        discard;
+    }
+
+    outColour = texel;
+}
+`
+};
+
+export type HDRendererStatus = {
+    enabled: boolean;
+    available: boolean;
+    reason: string;
+    groundTileCount: number;
+    terrainVertexCount: number;
+    modelDrawCount: number;
+    modelVertexCount: number;
+    modelBatchCount: number;
+    clippedTriangleCount: number;
+    skippedBackfaceCount: number;
+    materialCounts: number[];
+    textureAtlasReady: boolean;
+    textureAtlasLoadedCount: number;
+    textureUseCounts: number[];
+    untexturedTriangleCount: number;
+    invalidTextureCount: number;
+};
+
+type HDTextureDiagnostic = {
+    id: number;
+    name: string;
+    serverName: string;
+    osrsName: string;
+    count: number;
+    loaded: boolean;
+    hasPalette: boolean;
+    width: number;
+    height: number;
+    material: string;
+    transparent: boolean;
+};
+
+type HDTextureIdMapEntry = {
+    id: number;
+    serverName: string;
+    osrsName: string;
+    material: string;
+    transparent: boolean;
+};
+
+type HDTextureDiagnostics = {
+    mode: string;
+    atlasReady: boolean;
+    atlasLoadedCount: number;
+    hdAtlasExpectedCount: number;
+    hdAtlasLoadedCount: number;
+    hdAtlasFailedCount: number;
+    hdAtlasPendingCount: number;
+    hdAtlasLoadResults: string[];
+    hdGroundMapsReady: boolean;
+    waterMapsReady: boolean;
+    untexturedTriangleCount: number;
+    invalidTextureCount: number;
+    textureIdMap: HDTextureIdMapEntry[];
+    topTextures: HDTextureDiagnostic[];
+};
+
+export type HDGroundTileInput = {
+    level: number;
+    x: number;
+    z: number;
+    shape: number;
+    rotation: number;
+    texture: number;
+    heights: [number, number, number, number];
+    colours: [number, number, number, number];
+    secondaryColours: [number, number, number, number];
+    overlay: number;
+    underlay: number;
+    overlayId: number;
+    underlayId: number;
+};
+
+export type HDCameraInput = {
+    eyeX: number;
+    eyeY: number;
+    eyeZ: number;
+    eyePitch: number;
+    eyeYaw: number;
+    sinEyePitch: number;
+    cosEyePitch: number;
+    sinEyeYaw: number;
+    cosEyeYaw: number;
+    maxLevel: number;
+    minTileX: number;
+    minTileZ: number;
+    maxTileX: number;
+    maxTileZ: number;
+};
+
+export type HDModelInput = {
+    vertexCount: number;
+    vertexX: Int32Array | null;
+    vertexY: Int32Array | null;
+    vertexZ: Int32Array | null;
+    faceCount: number;
+    faceVertexA: Int32Array | null;
+    faceVertexB: Int32Array | null;
+    faceVertexC: Int32Array | null;
+    faceRenderType: Int32Array | null;
+    facePriority: Int32Array | null;
+    priority: number;
+    faceAlpha: Int32Array | null;
+    faceColour: Int32Array | null;
+    faceColourA: Int32Array | null;
+    faceColourB: Int32Array | null;
+    faceColourC: Int32Array | null;
+    faceTextureP: Int32Array | null;
+    faceTextureM: Int32Array | null;
+    faceTextureN: Int32Array | null;
+};
+
+export default class HDRenderer {
+    private static enabled: boolean = false;
+    private static canvas: HTMLCanvasElement | null = null;
+    private static gl: WebGL2RenderingContext | null = null;
+    private static terrainProgram: WebGLProgram | null = null;
+    private static terrainBuffer: WebGLBuffer | null = null;
+    private static terrainVao: WebGLVertexArrayObject | null = null;
+    private static modelBuffers: Map<number, WebGLBuffer> = new Map();
+    private static modelVaos: Map<number, WebGLVertexArrayObject> = new Map();
+    private static reason: string = 'not initialized';
+    private static groundTiles: HDGroundTileInput[] = [];
+    private static groundTileMap: Map<string, HDGroundTileInput> = new Map();
+    private static visibleGroundKeys: Set<string> = new Set();
+    private static sceneDirty: boolean = false;
+    private static terrainVertexCount: number = 0;
+    private static waterBuffer: WebGLBuffer | null = null;
+    private static waterVao: WebGLVertexArrayObject | null = null;
+    private static waterVertexCount: number = 0;
+    private static modelBatches: Map<number, number[]> = new Map();
+    private static transparentBatches: TransparentBatch[] = [];
+    // Live players/NPCs/bots are isolated from normal model batching. If a camera
+    // movement spike causes one frame to miss actor queuing, HD can reuse the last
+    // good actor batch instead of clearing them for a visible flicker.
+    private static dynamicModelBatches: Map<number, number[]> = new Map();
+    private static dynamicTransparentBatches: TransparentBatch[] = [];
+    private static lastGoodDynamicModelBatches: Map<number, number[]> = new Map();
+    private static lastGoodDynamicTransparentBatches: TransparentBatch[] = [];
+    private static dynamicModelBuffers: Map<number, WebGLBuffer> = new Map();
+    private static dynamicModelVaos: Map<number, WebGLVertexArrayObject> = new Map();
+    // Static far-scene cache: expensive 25-tile scenery is built only when the
+    // loaded HD tile range changes, then drawn from cached GPU buffers every frame.
+    private static staticFarModelBatches: Map<number, number[]> = new Map();
+    private static staticFarTransparentBatches: TransparentBatch[] = [];
+    private static pendingStaticFarModelBatches: Map<number, number[]> = new Map();
+    private static pendingStaticFarTransparentBatches: TransparentBatch[] = [];
+    private static staticFarModelBuffers: Map<number, WebGLBuffer> = new Map();
+    private static staticFarModelVaos: Map<number, WebGLVertexArrayObject> = new Map();
+    private static staticFarGpuDirty: boolean = true;
+    private static staticFarSceneKey: string = '';
+    private static staticFarSceneBuilding: boolean = false;
+    private static modelDrawCount: number = 0;
+    private static modelVertexCount: number = 0;
+    private static modelBatchCount: number = 0;
+    private static clippedTriangleCount: number = 0;
+    private static skippedBackfaceCount: number = 0;
+    private static materialCounts: number[] = [];
+    private static textureUseCounts: number[] = [];
+    private static untexturedTriangleCount: number = 0;
+    private static invalidTextureCount: number = 0;
+    private static camera: HDCameraInput | null = null;
+    private static frameStarted: boolean = false;
+    private static textureAtlas: WebGLTexture | null = null;
+    private static textureRects: TextureAtlasRect[] = [];
+    private static textureAtlasReady: boolean = false;
+    private static textureAtlasLoadedCount: number = 0;
+    private static uniformCache: Map<string, WebGLUniformLocation | null> = new Map();
+    private static atlasRectLocations: (WebGLUniformLocation | null)[] = [];
+    private static uiProgram: WebGLProgram | null = null;
+    private static uiBuffer: WebGLBuffer | null = null;
+    private static uiVao: WebGLVertexArrayObject | null = null;
+    private static uiTexture: WebGLTexture | null = null;
+    private static uiUniformCanvasSize: WebGLUniformLocation | null = null;
+    private static uiUniformTexture: WebGLUniformLocation | null = null;
+    private static uiUniformKeyed: WebGLUniformLocation | null = null;
+    private static debugHotkeysInstalled: boolean = false;
+    private static debugOverlay: HTMLDivElement | null = null;
+    private static diagnosticsOverlay: HTMLPreElement | null = null;
+    private static smoothNormalCache: Map<number, readonly [number, number, number]> = new Map();
+    private static normalAtlas: WebGLTexture | null = null;
+    private static normalAtlasPendingImages: { slot: number; data: Uint8ClampedArray }[] = [];
+    private static colorAtlasPendingImages: { slot: number; data: Uint8ClampedArray }[] = [];
+    private static hdTextureAtlas: WebGLTexture | null = null;
+    private static hdAtlasRects: TextureAtlasRect[] = [];
+    private static hdAtlasLoadingStarted: boolean = false;
+    private static hdAtlasPendingImages: { slot: number; data: Uint8ClampedArray }[] = [];
+    private static hdAtlasRectLocations: (WebGLUniformLocation | null)[] = [];
+    private static hdAtlasLoadedCount: number = 0;
+    private static hdAtlasFailedCount: number = 0;
+    private static hdAtlasLoadResults: string[] = [];
+    private static waterNormalMap: WebGLTexture | null = null;
+    private static waterFlowMap: WebGLTexture | null = null;
+    private static waterFoamMap: WebGLTexture | null = null;
+    private static waterMapsReady: boolean = false;
+    private static hdGroundAtlas: WebGLTexture | null = null;
+    private static hdGroundMapsReady: boolean = false;
+    private static shadowProgram: WebGLProgram | null = null;
+    private static shadowFbo: WebGLFramebuffer | null = null;
+    private static shadowDepthTexture: WebGLTexture | null = null;
+    private static shadowUniformMatrix: WebGLUniformLocation | null = null;
+    private static lightSpaceMatrix: Float32Array = new Float32Array(16);
+    private static skyboxProgram: WebGLProgram | null = null;
+    private static skyboxBuffer: WebGLBuffer | null = null;
+    private static skyboxVao: WebGLVertexArrayObject | null = null;
+    private static skyboxUniSinPitch: WebGLUniformLocation | null = null;
+    private static skyboxUniCosPitch: WebGLUniformLocation | null = null;
+    private static skyboxUniSinYaw: WebGLUniformLocation | null = null;
+    private static skyboxUniCosYaw: WebGLUniformLocation | null = null;
+    private static skyboxUniProjScale: WebGLUniformLocation | null = null;
+    private static skyboxUniZenith: WebGLUniformLocation | null = null;
+    private static skyboxUniHorizon: WebGLUniformLocation | null = null;
+    private static skyboxUniSunDir: WebGLUniformLocation | null = null;
+    private static modelUsedKeys: Set<number> = new Set();
+    private static queuedModelKeys: Set<string> = new Set();
+    private static staticFarTransparentBuffers: Map<number, WebGLBuffer> = new Map();
+    private static staticFarTransparentVaos: Map<number, WebGLVertexArrayObject> = new Map();
+    private static farModelDrawCount: number = 0;
+    private static dynamicModelQueueing: boolean = false;
+    private static dynamicModelDrawCount: number = 0;
+    private static dynamicModelVertexCount: number = 0;
+    private static lastGoodDynamicFrameNumber: number = 0;
+    private static modelObjectIds: WeakMap<object, number> = new WeakMap();
+    private static nextModelObjectId: number = 1;
+    private static lastCameraRange: { minX: number; minZ: number; maxX: number; maxZ: number; maxLevel: number } | null = null;
+    private static groundObjectCache: Map<string, Ground> = new Map();
+    private static safeWarmupFrames: number = 0;
+    private static frameNumber: number = 0;
+    private static lastColourTableSignature: number = 0;
+
+
+    // ── Pre-allocated scratch buffers (zero GC allocations per model/face) ──────
+    // World-space vertex coordinates – sized for the largest plausible RS2 model.
+    private static _wx: Int32Array = new Int32Array(65536);
+    private static _wy: Int32Array = new Int32Array(65536);
+    private static _wz: Int32Array = new Int32Array(65536);
+    // Per-face positions (reused across faces)
+    private static _pa: [number, number, number] = [0, 0, 0];
+    private static _pb: [number, number, number] = [0, 0, 0];
+    private static _pc: [number, number, number] = [0, 0, 0];
+    // Per-face colours (reused across faces)
+    private static _ca: [number, number, number] = [0, 0, 0];
+    private static _cb: [number, number, number] = [0, 0, 0];
+    private static _cc: [number, number, number] = [0, 0, 0];
+    private static _avgC: [number, number, number] = [0, 0, 0];
+    // Per-face UV coordinates (reused across faces)
+    private static _uvA: [number, number] = [0, 0];
+    private static _uvB: [number, number] = [0, 1];
+    private static _uvC: [number, number] = [1, 0];
+    // Input face vertices for clipping (3 slots)
+    private static _fv0: HDClipVertex = { position: [0, 0, 0] as [number,number,number], colour: [0, 0, 0] as [number,number,number], uv: [0, 0] as [number,number], depth: 0 };
+    private static _fv1: HDClipVertex = { position: [0, 0, 0] as [number,number,number], colour: [0, 0, 0] as [number,number,number], uv: [0, 0] as [number,number], depth: 0 };
+    private static _fv2: HDClipVertex = { position: [0, 0, 0] as [number,number,number], colour: [0, 0, 0] as [number,number,number], uv: [0, 0] as [number,number], depth: 0 };
+    private static _fvIn: HDClipVertex[] = [HDRenderer._fv0, HDRenderer._fv1, HDRenderer._fv2];
+    // Clipped output vertices (max 4 for a triangle clipped against 1 plane)
+    private static _fvOut: HDClipVertex[] = [
+        { position: [0, 0, 0] as [number,number,number], colour: [0, 0, 0] as [number,number,number], uv: [0, 0] as [number,number], depth: 0 },
+        { position: [0, 0, 0] as [number,number,number], colour: [0, 0, 0] as [number,number,number], uv: [0, 0] as [number,number], depth: 0 },
+        { position: [0, 0, 0] as [number,number,number], colour: [0, 0, 0] as [number,number,number], uv: [0, 0] as [number,number], depth: 0 },
+        { position: [0, 0, 0] as [number,number,number], colour: [0, 0, 0] as [number,number,number], uv: [0, 0] as [number,number], depth: 0 },
+    ];
+    private static _fvOutLen: number = 0;
+    // Shared GPU upload buffer – grows by doubling if needed.
+    private static _uploadBuf: Float32Array = new Float32Array(4 * 1024 * 1024);
+    // Per-face scratch: triangle normal and texture-basis world-space vectors.
+    private static _norm: [number, number, number] = [0, 0, 0];
+    private static _tOrigin: [number, number, number] = [0, 0, 0];
+    private static _tU: [number, number, number] = [0, 0, 0];
+    private static _tV: [number, number, number] = [0, 0, 0];
+
+
+    static setEnabled(enabled: boolean): HDRendererStatus {
+        this.enabled = enabled;
+
+        if (!enabled) {
+            if (this.canvas) {
+                this.canvas.style.display = 'none';
+            }
+            this.setSoftwareCanvasHidden(false);
+            this.frameStarted = false;
+            return this.status();
+        }
+
+        // Do NOT reset textureAtlasReady here. The vanilla atlas and HD atlas are built
+        // from static data (cache + RLHD files) that doesn't change between scenes.
+        // Resetting caused the atlas to be rebuilt from scratch on every mapBuild,
+        // creating a ~1-second flash back to vanilla textures on every map transition.
+        this.sceneDirty = true;
+        this.frameStarted = false;
+        this.installTextureDebugHotkeys();
+        (globalThis as any)._hdPhase = 'setEnabled-init';
+        this.init();
+        return this.status(false);
+    }
+
+    static status(syncTerrain: boolean = true): HDRendererStatus {
+        if (syncTerrain && this.enabled) {
+            this.syncTerrain();
+        }
+
+        return {
+            enabled: this.enabled,
+            available: this.gl !== null && this.terrainProgram !== null,
+            reason: this.reason,
+            groundTileCount: this.groundTiles.length,
+            terrainVertexCount: this.terrainVertexCount,
+            modelDrawCount: this.modelDrawCount,
+            modelVertexCount: this.modelVertexCount,
+            modelBatchCount: this.modelBatchCount,
+            clippedTriangleCount: this.clippedTriangleCount,
+            skippedBackfaceCount: this.skippedBackfaceCount,
+            materialCounts: [...this.materialCounts],
+            textureAtlasReady: this.textureAtlasReady,
+            textureAtlasLoadedCount: this.textureAtlasLoadedCount,
+            textureUseCounts: [...this.textureUseCounts],
+            untexturedTriangleCount: this.untexturedTriangleCount,
+            invalidTextureCount: this.invalidTextureCount
+        };
+    }
+
+    static isEnabled(): boolean {
+        return this.enabled;
+    }
+
+    static startSafeWarmup(frames: number = 120): void {
+        this.safeWarmupFrames = Math.max(this.safeWarmupFrames, frames | 0);
+    }
+
+    static isSafeWarmupActive(): boolean {
+        return this.safeWarmupFrames > 0;
+    }
+
+    // Call this before mapBuild on first login so the atlas upload happens while
+    // the loading screen is still showing, not on the first visible HD frame.
+    static prewarmAtlas(): void {
+        if (!this.enabled) {
+            return;
+        }
+        this.init();
+        this.ensureTextureAtlas();
+    }
+
+    static beginStaticFarScene(key: string): boolean {
+        if ((globalThis as any).DISABLE_HD_FAR_MODELS === true) {
+            return false;
+        }
+
+        // Reuse the static far-scene buffers while standing on the same loaded HD
+        // tile range. This keeps the 25-tile visual radius without rebuilding every
+        // fence/tree/bush model every camera rotation frame.
+        if (this.staticFarSceneKey === key && !this.staticFarGpuDirty) {
+            return false;
+        }
+
+        // Build into a pending cache first.  If a camera/movement spike happens
+        // during the rebuild, the previous good static scene remains drawable
+        // instead of clearing fences/bridges/gates for one visible frame.
+        this.pendingStaticFarModelBatches.clear();
+        this.pendingStaticFarTransparentBatches.length = 0;
+        this.staticFarSceneBuilding = true;
+        this.staticFarSceneKey = key;
+        return true;
+    }
+
+    static endStaticFarScene(): void {
+        if (this.staticFarSceneBuilding) {
+            this.staticFarModelBatches = this.pendingStaticFarModelBatches;
+            this.staticFarTransparentBatches = this.pendingStaticFarTransparentBatches;
+            this.pendingStaticFarModelBatches = new Map();
+            this.pendingStaticFarTransparentBatches = [];
+            this.staticFarGpuDirty = true;
+        }
+        this.staticFarSceneBuilding = false;
+    }
+
+    static invalidateStaticFarScene(): void {
+        this.staticFarSceneKey = '';
+        this.staticFarGpuDirty = true;
+    }
+
+    private static clearStaticFarScene(): void {
+        this.staticFarSceneKey = '';
+        this.staticFarModelBatches.clear();
+        this.staticFarTransparentBatches.length = 0;
+        this.pendingStaticFarModelBatches.clear();
+        this.pendingStaticFarTransparentBatches.length = 0;
+        this.staticFarGpuDirty = true;
+        this.staticFarSceneBuilding = false;
+
+        if (this.gl) {
+            for (const vao of this.staticFarModelVaos.values()) {
+                if (vao) {
+                    this.gl.deleteVertexArray(vao);
+                }
+            }
+            for (const buffer of this.staticFarModelBuffers.values()) {
+                if (buffer) {
+                    this.gl.deleteBuffer(buffer);
+                }
+            }
+            for (const vao of this.staticFarTransparentVaos.values()) {
+                if (vao) {
+                    this.gl.deleteVertexArray(vao);
+                }
+            }
+            for (const buffer of this.staticFarTransparentBuffers.values()) {
+                if (buffer) {
+                    this.gl.deleteBuffer(buffer);
+                }
+            }
+        }
+        this.staticFarModelVaos.clear();
+        this.staticFarModelBuffers.clear();
+        this.staticFarTransparentVaos.clear();
+        this.staticFarTransparentBuffers.clear();
+    }
+
+
+    static resetScene(): void {
+        this.groundTiles.length = 0;
+        this.groundTileMap.clear();
+        this.visibleGroundKeys.clear();
+        this.groundObjectCache.clear();
+        this.clearStaticFarScene();
+        this.sceneDirty = true;
+        this.terrainVertexCount = 0;
+        this.lastCameraRange = null;
+    }
+
+    static addGroundTile(tile: HDGroundTileInput): void {
+        const key = this.groundKey(tile.level, tile.x, tile.z);
+        this.groundTiles.push(tile);
+        this.groundTileMap.set(key, tile);
+        this.sceneDirty = true;
+    }
+
+    static prepareTerrain(): void {
+        if (this.sceneDirty) {
+            this.buildSmoothNormals();
+        }
+    }
+
+    private static makeGround(tile: HDGroundTileInput): Ground {
+        return new Ground(
+            tile.x, tile.z,
+            tile.shape, tile.rotation,
+            tile.texture,
+            tile.heights[0], tile.heights[1], tile.heights[2], tile.heights[3],
+            tile.colours[0], tile.colours[1], tile.colours[2], tile.colours[3],
+            tile.secondaryColours[0], tile.secondaryColours[1], tile.secondaryColours[2], tile.secondaryColours[3],
+            tile.overlay, tile.underlay
+        );
+    }
+
+    private static getGround(tile: HDGroundTileInput): Ground {
+        const key = this.groundKey(tile.level, tile.x, tile.z);
+        let ground = this.groundObjectCache.get(key);
+        if (!ground) {
+            ground = this.makeGround(tile);
+            this.groundObjectCache.set(key, ground);
+        }
+        return ground;
+    }
+
+static queueGroundTile(level: number, x: number, z: number): void {
+    if (!this.enabled || !this.frameStarted) {
+        return;
+    }
+
+    this.visibleGroundKeys.add(this.groundKey(level, x, z));
+}
+    static beginFrame(camera: HDCameraInput): void {
+        if (!this.enabled) {
+            return;
+        }
+
+        this.init();
+        this.ensureTextureAtlas();
+        this.camera = camera;
+        this.visibleGroundKeys.clear();
+        this.modelBatches.clear();
+        this.transparentBatches.length = 0;
+        this.dynamicModelBatches.clear();
+        this.dynamicTransparentBatches.length = 0;
+        this.modelDrawCount = 0;
+        this.farModelDrawCount = 0;
+        this.dynamicModelDrawCount = 0;
+        this.modelVertexCount = 0;
+        this.dynamicModelVertexCount = 0;
+        this.modelBatchCount = 0;
+        this.clippedTriangleCount = 0;
+        this.skippedBackfaceCount = 0;
+        this.materialCounts = new Array(14).fill(0);
+        this.textureUseCounts = new Array(CACHE_TEXTURE_COUNT).fill(0);
+        this.untexturedTriangleCount = 0;
+        this.invalidTextureCount = 0;
+        this.queuedModelKeys.clear();
+        this.frameStarted = true;
+        this.frameNumber++;
+    }
+
+    static beginDynamicModelQueue(): void {
+        this.dynamicModelQueueing = true;
+    }
+
+    static endDynamicModelQueue(): void {
+        this.dynamicModelQueueing = false;
+    }
+
+    private static cloneBatchMap(source: Map<number, number[]>): Map<number, number[]> {
+        const clone = new Map<number, number[]>();
+        for (const [key, vertices] of source) {
+            clone.set(key, vertices.slice());
+        }
+        return clone;
+    }
+
+    private static cloneTransparentBatches(source: TransparentBatch[]): TransparentBatch[] {
+        return source.map((batch) => ({
+            depth: batch.depth,
+            priority: batch.priority,
+            texture: batch.texture,
+            vertices: batch.vertices.slice()
+        }));
+    }
+
+    private static stabiliseDynamicModelsForFrame(): void {
+        const holdFrames = Number((globalThis as any).HD_DYNAMIC_HOLD_FRAMES ?? 6);
+        if (this.dynamicModelDrawCount > 0) {
+            this.lastGoodDynamicModelBatches = this.cloneBatchMap(this.dynamicModelBatches);
+            this.lastGoodDynamicTransparentBatches = this.cloneTransparentBatches(this.dynamicTransparentBatches);
+            this.lastGoodDynamicFrameNumber = this.frameNumber;
+            return;
+        }
+
+        if (this.lastGoodDynamicFrameNumber > 0 && this.frameNumber - this.lastGoodDynamicFrameNumber <= holdFrames) {
+            this.dynamicModelBatches = this.cloneBatchMap(this.lastGoodDynamicModelBatches);
+            this.dynamicTransparentBatches = this.cloneTransparentBatches(this.lastGoodDynamicTransparentBatches);
+        }
+    }
+
+    static queueModel(model: HDModelInput, yaw: number, relativeX: number, relativeY: number, relativeZ: number): void {
+        if (!this.enabled || !this.frameStarted || !this.camera) {
+            return;
+        }
+
+        // Keep HD models enabled, but heavily budgeted. Full unbounded model batching
+        // was the crash point after warmup. This draws nearby objects/players again
+        // without allowing one bad model or a huge batch to kill the renderer.
+        // DevTools emergency switch: window.DISABLE_HD_MODELS = true
+        if ((globalThis as any).DISABLE_HD_MODELS === true) {
+            return;
+        }
+
+        const warmingUp = this.safeWarmupFrames > 0;
+        const isFarSceneModel = (globalThis as any)._HD_FAR_SCENE_QUEUING === true;
+        const isDynamicModel = this.dynamicModelQueueing && !isFarSceneModel;
+        const cacheStaticFarScene = this.staticFarSceneBuilding && isFarSceneModel;
+        const targetModelBatches = cacheStaticFarScene ? this.pendingStaticFarModelBatches : (isDynamicModel ? this.dynamicModelBatches : this.modelBatches);
+        const targetTransparentBatches = cacheStaticFarScene ? this.pendingStaticFarTransparentBatches : (isDynamicModel ? this.dynamicTransparentBatches : this.transparentBatches);
+
+        if (!model.vertexX || !model.vertexY || !model.vertexZ || !model.faceVertexA || !model.faceVertexB || !model.faceVertexC || !model.faceColourA) {
+            return;
+        }
+
+        const maxModelDist = Number((globalThis as any).HD_MODEL_DISTANCE ?? 6400);
+        const maxModelDistSq = maxModelDist * maxModelDist;
+        if (relativeX * relativeX + relativeY * relativeY + relativeZ * relativeZ > maxModelDistSq) {
+            return;
+        }
+
+        const modelBudget = Number((globalThis as any).HD_MODEL_BUDGET ?? (isFarSceneModel ? 9000 : (warmingUp ? 650 : 1600)));
+        if (!isDynamicModel && this.modelDrawCount >= modelBudget) {
+            return;
+        }
+        if (isDynamicModel) {
+            const dynamicBudget = Number((globalThis as any).HD_DYNAMIC_MODEL_BUDGET ?? 1024);
+            if (this.dynamicModelDrawCount >= dynamicBudget) {
+                return;
+            }
+        }
+
+        // The far-scene pass now runs during login warmup so static locs do not pop
+        // in 2 seconds late. Keep a separate cap for far models so static scenery
+        // cannot consume the whole frame budget before actors/NPCs/player models queue.
+        if (isFarSceneModel) {
+            const farModelBudget = Number((globalThis as any).HD_FAR_MODEL_BUDGET ?? (warmingUp ? 2500 : 9000));
+            if (this.farModelDrawCount >= farModelBudget) {
+                return;
+            }
+        }
+
+        const faceCount = Number(model.faceCount ?? 0);
+        const maxFacesPerModel = Number((globalThis as any).HD_MODEL_MAX_FACES ?? 1200);
+        if (faceCount <= 0 || faceCount > maxFacesPerModel) {
+            return;
+        }
+
+        const vertexBudget = Number((globalThis as any).HD_MODEL_VERTEX_BUDGET ?? (isFarSceneModel ? 1800000 : (warmingUp ? 120000 : 320000)));
+        if (isDynamicModel) {
+            const dynamicVertexBudget = Number((globalThis as any).HD_DYNAMIC_VERTEX_BUDGET ?? 500000);
+            if (this.dynamicModelVertexCount + faceCount * 3 > dynamicVertexBudget) {
+                return;
+            }
+        } else if (this.modelVertexCount + faceCount * 3 > vertexBudget) {
+            return;
+        }
+
+        const modelKey = `${isDynamicModel ? 'd' : 'm'}:${this.modelObjectId(model)}:${yaw}:${relativeX}:${relativeY}:${relativeZ}`;
+        if (this.queuedModelKeys.has(modelKey)) {
+            return;
+        }
+        this.queuedModelKeys.add(modelKey);
+
+        const sinYaw = yaw === 0 ? 0 : this.fixedSin(yaw);
+        const cosYaw = yaw === 0 ? 0 : this.fixedCos(yaw);
+
+        // Use pre-allocated world-space coordinate arrays (no per-model allocation).
+        const wx = this._wx, wy = this._wy, wz = this._wz;
+        const eyeX = this.camera.eyeX, eyeY = this.camera.eyeY, eyeZ = this.camera.eyeZ;
+
+        for (let v = 0; v < model.vertexCount; v++) {
+            let x = model.vertexX[v];
+            const y = model.vertexY[v];
+            let z = model.vertexZ[v];
+
+            if (yaw !== 0) {
+                const rotatedX = (z * sinYaw + x * cosYaw) >> 16;
+                z = (z * cosYaw - x * sinYaw) >> 16;
+                x = rotatedX;
+            }
+
+            wx[v] = eyeX + relativeX + x;
+            wy[v] = eyeY + relativeY + y;
+            wz[v] = eyeZ + relativeZ + z;
+        }
+
+        // Pre-allocated scratch buffers for per-face work (no per-face allocation).
+        const pa = this._pa, pb = this._pb, pc = this._pc;
+        const ca = this._ca, cb = this._cb, cc = this._cc, avgC = this._avgC;
+        const norm = this._norm;
+        const uvA = this._uvA, uvB = this._uvB, uvC = this._uvC;
+        const fv0 = this._fv0, fv1 = this._fv1, fv2 = this._fv2;
+
+        for (let f = 0; f < model.faceCount; f++) {
+            if (model.faceRenderType && model.faceRenderType[f] === -1) {
+                continue;
+            }
+            if (model.faceAlpha && model.faceAlpha[f] >= 254) {
+                continue;
+            }
+
+            const priority = model.facePriority ? model.facePriority[f] : model.priority;
+
+            const a = model.faceVertexA[f];
+            const b = model.faceVertexB[f];
+            const c = model.faceVertexC[f];
+
+            // Populate pre-allocated position tuples in-place (no allocation).
+            pa[0] = wx[a]; pa[1] = wy[a]; pa[2] = wz[a];
+            pb[0] = wx[b]; pb[1] = wy[b]; pb[2] = wz[b];
+            pc[0] = wx[c]; pc[1] = wy[c]; pc[2] = wz[c];
+
+            let type = 0;
+            if (model.faceRenderType) {
+                type = model.faceRenderType[f] & 0x3;
+            }
+
+            const texturedFace = model.faceRenderType ? model.faceRenderType[f] >> 2 : -1;
+            const hasTextureBasis = type >= 2 &&
+                texturedFace >= 0 &&
+                model.faceTextureP !== null &&
+                model.faceTextureM !== null &&
+                model.faceTextureN !== null &&
+                texturedFace < model.faceTextureP.length &&
+                texturedFace < model.faceTextureM.length &&
+                texturedFace < model.faceTextureN.length;
+            const textureCandidate = hasTextureBasis && model.faceColour ? model.faceColour[f] : -1;
+            const texture = this.isValid254Texture(textureCandidate) ? textureCandidate : -1;
+            this.countTexture(texture);
+
+            // Populate pre-allocated colour tuples in-place (no allocation).
+            this.colourIndexToRgbInto(model.faceColourA[f], ca);
+            this.colourIndexToRgbInto(model.faceColourB ? model.faceColourB[f] : model.faceColourA[f], cb);
+            this.colourIndexToRgbInto(model.faceColourC ? model.faceColourC[f] : model.faceColourA[f], cc);
+            this.averageColourInto(ca, cb, cc, avgC);
+
+            const textureMaterial = this.isValid254Texture(texture)
+                ? this.materialForModelTexture(texture, avgC)
+                : HDMaterial.Default;
+            const modelTexture = texture >= 0 && (
+                textureMaterial === HDMaterial.Water ||
+                textureMaterial === HDMaterial.Lava ||
+                !TERRAIN_ONLY_MODEL_TEXTURE_IDS.has(texture)
+            );
+            const material = type === 1
+                ? HDMaterial.Unlit
+                : modelTexture
+                ? (textureMaterial !== HDMaterial.Default ? textureMaterial : this.materialForModelColour(avgC))
+                : HDMaterial.Model;
+
+            // Compute normal in-place (no allocation).
+            this.triangleNormalInto(pa, pb, pc, norm);
+
+            if (material === HDMaterial.Water && (this.faceHeightDelta(pa, pb, pc) > WATER_SURFACE_MAX_HEIGHT_DELTA || Math.abs(norm[1]) < 0.35)) {
+                continue;
+            }
+            const alphaByte = model.faceAlpha ? model.faceAlpha[f] : 0;
+            const alpha = this.alphaForFace(alphaByte);
+            if (alpha < 1 && this.faceHeightDelta(pa, pb, pc) > TRANSPARENT_MODEL_MAX_HEIGHT_DELTA) {
+                continue;
+            }
+            this.countMaterial(material);
+            const batchKey = modelTexture ? texture : -1;
+            const batch = alpha < 1 ? [] : (targetModelBatches.get(batchKey) ?? []);
+            if (alpha >= 1) {
+                targetModelBatches.set(batchKey, batch);
+            }
+
+            // Set UV coordinates in-place (no allocation).
+            uvA[0] = 0; uvA[1] = 0;
+            uvB[0] = 1; uvB[1] = 0;
+            uvC[0] = 0; uvC[1] = 1;
+
+            if (modelTexture && hasTextureBasis && model.faceTextureP && model.faceTextureM && model.faceTextureN) {
+                const tA = model.faceTextureP[texturedFace];
+                const tB = model.faceTextureM[texturedFace];
+                const tC = model.faceTextureN[texturedFace];
+                // Write basis vectors into pre-allocated scratch (no allocation).
+                const to = this._tOrigin, tu = this._tU, tv = this._tV;
+                to[0] = wx[tA]; to[1] = wy[tA]; to[2] = wz[tA];
+                tu[0] = wx[tB]; tu[1] = wy[tB]; tu[2] = wz[tB];
+                tv[0] = wx[tC]; tv[1] = wy[tC]; tv[2] = wz[tC];
+                this.textureBasisUvsInto(pa, pb, pc, to, tu, tv, uvA, uvB, uvC);
+            }
+
+            // Populate pre-allocated clip vertex slots in-place (no allocation).
+            fv0.position[0] = pa[0]; fv0.position[1] = pa[1]; fv0.position[2] = pa[2];
+            fv0.colour[0] = ca[0]; fv0.colour[1] = ca[1]; fv0.colour[2] = ca[2];
+            fv0.uv[0] = uvA[0]; fv0.uv[1] = uvA[1];
+            fv0.depth = this.faceVertexDepth(pa);
+
+            fv1.position[0] = pb[0]; fv1.position[1] = pb[1]; fv1.position[2] = pb[2];
+            fv1.colour[0] = cb[0]; fv1.colour[1] = cb[1]; fv1.colour[2] = cb[2];
+            fv1.uv[0] = uvB[0]; fv1.uv[1] = uvB[1];
+            fv1.depth = this.faceVertexDepth(pb);
+
+            fv2.position[0] = pc[0]; fv2.position[1] = pc[1]; fv2.position[2] = pc[2];
+            fv2.colour[0] = cc[0]; fv2.colour[1] = cc[1]; fv2.colour[2] = cc[2];
+            fv2.uv[0] = uvC[0]; fv2.uv[1] = uvC[1];
+            fv2.depth = this.faceVertexDepth(pc);
+
+            if (cacheStaticFarScene) {
+                // Static far-scene buffers are reused while the camera rotates. They
+                // must therefore be camera-independent. Do NOT near-plane clip or
+                // backface-cull here using the current camera angle, otherwise the
+                // cached buffer permanently loses faces that should become visible
+                // from another rotation. WebGL's real perspective projection clips
+                // these raw world-space triangles correctly at draw time.
+                const o0 = this._fvOut[0];
+                o0.position[0] = fv0.position[0]; o0.position[1] = fv0.position[1]; o0.position[2] = fv0.position[2];
+                o0.colour[0] = fv0.colour[0]; o0.colour[1] = fv0.colour[1]; o0.colour[2] = fv0.colour[2];
+                o0.uv[0] = fv0.uv[0]; o0.uv[1] = fv0.uv[1]; o0.depth = fv0.depth;
+                const o1 = this._fvOut[1];
+                o1.position[0] = fv1.position[0]; o1.position[1] = fv1.position[1]; o1.position[2] = fv1.position[2];
+                o1.colour[0] = fv1.colour[0]; o1.colour[1] = fv1.colour[1]; o1.colour[2] = fv1.colour[2];
+                o1.uv[0] = fv1.uv[0]; o1.uv[1] = fv1.uv[1]; o1.depth = fv1.depth;
+                const o2 = this._fvOut[2];
+                o2.position[0] = fv2.position[0]; o2.position[1] = fv2.position[1]; o2.position[2] = fv2.position[2];
+                o2.colour[0] = fv2.colour[0]; o2.colour[1] = fv2.colour[1]; o2.colour[2] = fv2.colour[2];
+                o2.uv[0] = fv2.uv[0]; o2.uv[1] = fv2.uv[1]; o2.depth = fv2.depth;
+                this._fvOutLen = 3;
+            } else {
+                // Clip against near plane into _fvOut (no allocation).
+                this.clipPolygonToNearInto(3);
+                const outLen = this._fvOutLen;
+                if (outLen < 3) {
+                    this.clippedTriangleCount++;
+                    continue;
+                }
+
+                // No CPU backface culling for dynamic models. 2004 RS models have
+                // inconsistent winding orders and are pre-lit — culling by screen-space
+                // winding makes faces vanish as the camera rotates. Roofs are hidden by
+                // World's loc-shape filtering upstream, not here. The GPU z-buffer handles
+                // depth correctly without CPU-side face rejection.
+            }
+            const outLen = this._fvOutLen;
+
+            const beforeFloats = batch.length;
+            for (let i = 1; i < outLen - 1; i++) {
+                this.pushClippedTriangle(
+                    batch,
+                    this._fvOut[0], this._fvOut[i], this._fvOut[i + 1],
+                    material,
+                    modelTexture ? texture : -1,
+                    alpha,
+                    material === HDMaterial.Water ? HDWaterSource.Model : HDWaterSource.None
+                );
+            }
+
+            if (alpha < 1) {
+                targetTransparentBatches.push({
+                    depth: this.faceDepth(pa, pb, pc),
+                    priority,
+                    texture: batchKey,
+                    vertices: batch.slice(beforeFloats)
+                });
+            }
+
+            if (isDynamicModel) {
+                this.dynamicModelVertexCount += (batch.length - beforeFloats) / VERTEX_FLOATS;
+            } else {
+                this.modelVertexCount += (batch.length - beforeFloats) / VERTEX_FLOATS;
+            }
+        }
+
+        if (isDynamicModel) {
+            this.dynamicModelDrawCount++;
+        } else {
+            this.modelDrawCount++;
+        }
+        if (isFarSceneModel) {
+            this.farModelDrawCount++;
+        }
+        this.modelBatchCount = this.modelBatches.size + this.transparentBatches.length + this.dynamicModelBatches.size + this.dynamicTransparentBatches.length + this.staticFarModelBatches.size + this.staticFarTransparentBatches.length;
+    }
+
+    private static modelObjectId(model: HDModelInput): number {
+        const objectModel = model as object;
+        let id = this.modelObjectIds.get(objectModel);
+        if (!id) {
+            id = this.nextModelObjectId++;
+            this.modelObjectIds.set(objectModel, id);
+        }
+        return id;
+    }
+
+    static isWebglUiMode(): boolean {
+        return this.enabled && this.gl !== null;
+    }
+
+
+
+    static presentSoftwareCanvas(): boolean {
+        if (!this.enabled) {
+            return false;
+        }
+
+        this.init();
+        if (!this.gl || !this.canvas) {
+            return false;
+        }
+
+        const gameCanvas = document.getElementById('canvas') as HTMLCanvasElement | null;
+        if (!gameCanvas || gameCanvas.width <= 0 || gameCanvas.height <= 0) {
+            return false;
+        }
+
+        this.attachCanvas();
+        this.resizeCanvasToCss();
+        this.showTextureDebugOverlay(this.textureDebugModeName());
+        this.ensureUiRenderer();
+
+        if (!this.uiProgram || !this.uiVao || !this.uiBuffer || !this.uiTexture) {
+            return false;
+        }
+
+        const gl = this.gl;
+        const canvas = this.canvas;
+        const vertices = new Float32Array([
+            0, 0, 0, 0,
+            canvas.width, 0, 1, 0,
+            0, canvas.height, 0, 1,
+            0, canvas.height, 0, 1,
+            canvas.width, 0, 1, 0,
+            canvas.width, canvas.height, 1, 1
+        ]);
+
+        gl.useProgram(this.uiProgram);
+        gl.bindVertexArray(this.uiVao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.uiBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STREAM_DRAW);
+
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, this.uiTexture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, gameCanvas);
+
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.disable(gl.SCISSOR_TEST);
+        gl.disable(gl.DEPTH_TEST);
+        gl.depthMask(false);
+        gl.enable(gl.BLEND);
+        gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+        gl.uniform2f(this.uiUniformCanvasSize, canvas.width, canvas.height);
+        gl.uniform1i(this.uiUniformTexture, 1);
+        gl.uniform1f(this.uiUniformKeyed, 0);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        gl.disable(gl.BLEND);
+        gl.depthMask(true);
+        gl.bindVertexArray(null);
+        return true;
+    }
+
+    static drawPixMapLayer(imageData: ImageData, x: number, y: number, keyed: boolean): boolean {
+        if (!this.enabled) {
+            return false;
+        }
+
+        this.init();
+        if (!this.gl || !this.canvas) {
+            return false;
+        }
+
+        this.attachCanvas();
+        this.resizeCanvasToCss();
+        this.showTextureDebugOverlay(this.textureDebugModeName());
+        this.ensureUiRenderer();
+
+        if (!this.uiProgram || !this.uiVao || !this.uiBuffer || !this.uiTexture) {
+            return false;
+        }
+
+        const gl = this.gl;
+        const canvas = this.canvas;
+        const scaleX = canvas.width / 765;
+        const scaleY = canvas.height / 503;
+        const px = Math.round(x * scaleX);
+        const py = Math.round(y * scaleY);
+        const pw = Math.round(imageData.width * scaleX);
+        const ph = Math.round(imageData.height * scaleY);
+        const x0 = px;
+        const y0 = py;
+        const x1 = px + pw;
+        const y1 = py + ph;
+
+        const vertices = new Float32Array([
+            x0, y0, 0, 0,
+            x1, y0, 1, 0,
+            x0, y1, 0, 1,
+            x0, y1, 0, 1,
+            x1, y0, 1, 0,
+            x1, y1, 1, 1
+        ]);
+
+        gl.useProgram(this.uiProgram);
+        gl.bindVertexArray(this.uiVao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.uiBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STREAM_DRAW);
+
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, this.uiTexture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, imageData);
+
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.disable(gl.SCISSOR_TEST);
+        gl.disable(gl.DEPTH_TEST);
+        gl.depthMask(false);
+        gl.enable(gl.BLEND);
+        gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+        gl.uniform2f(this.uiUniformCanvasSize, canvas.width, canvas.height);
+        gl.uniform1i(this.uiUniformTexture, 1);
+        gl.uniform1f(this.uiUniformKeyed, keyed ? 1 : 0);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        gl.disable(gl.BLEND);
+        gl.depthMask(true);
+        gl.bindVertexArray(null);
+        return true;
+    }
+
+    static renderFrame(): void {
+        if (!this.enabled || !this.gl || !this.terrainProgram || !this.camera) {
+            this.frameStarted = false;
+            return;
+        }
+
+        try {
+            this.attachCanvas();
+            this.resizeCanvasToCss();
+            this.showTextureDebugOverlay(this.textureDebugModeName());
+
+            const canvas = this.canvas;
+            if (!canvas || canvas.width <= 0 || canvas.height <= 0) {
+                this.frameStarted = false;
+                return;
+            }
+
+            const gl = this.gl;
+            const viewport = this.viewportRect(canvas);
+
+            // Do not draw the HD viewport until the 254/cache texture atlas is complete.
+            // Otherwise HD can appear one frame with the software/correct cache textures,
+            // then switch to a partially-built WebGL atlas and look like the textures
+            // reverted or flashed. Leaving the software canvas alone here keeps the
+            // correct view visible while cache textures finish loading.
+            this.ensureTextureAtlas();
+            if (!this.textureAtlasReady) {
+                this.frameStarted = false;
+                return;
+            }
+
+            (globalThis as any)._hdPhase = 'renderFrame-syncTerrain';
+            this.refreshBrightnessPaletteState();
+            const syncStart = performance.now();
+            this.syncTerrain(this.camera);
+            const syncMs = performance.now() - syncStart;
+            if (syncMs > 250) {
+                fetch('/debug-log', { method: 'POST', body: '[hd-render] syncTerrain slow ' + syncMs.toFixed(1) + 'ms tiles:' + this.visibleGroundKeys.size + '/' + this.groundTiles.length + ' verts:' + this.terrainVertexCount + ' warmup:' + this.safeWarmupFrames }).catch(() => {});
+            }
+            (globalThis as any)._hdPhase = 'renderFrame-lightMatrix';
+            this.buildLightSpaceMatrix(this.camera);
+            (globalThis as any)._hdPhase = 'renderFrame-uploadModels';
+            this.stabiliseDynamicModelsForFrame();
+            this.uploadModelBuffers();
+            this.uploadDynamicModelBuffers();
+            this.uploadStaticFarModelBuffers();
+
+            // Shadows are enabled by default. Disable via: window.ENABLE_HD_SHADOWS = false
+            const hdShadowsEnabled = (globalThis as any).ENABLE_HD_SHADOWS !== false;
+            if (hdShadowsEnabled) {
+                (globalThis as any)._hdPhase = 'renderFrame-shadowPass';
+                this.renderShadowPass();
+            }
+
+            (globalThis as any)._hdPhase = 'renderFrame-mainPass';
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            // Do not clear the whole WebGL canvas here. The 254 UI is drawn later as
+            // PixMap layers, and many panels only redraw when dirty just like the
+            // original software client. Only clear the 3D viewport every frame.
+            gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+            gl.enable(gl.SCISSOR_TEST);
+            gl.scissor(viewport.x, viewport.y, viewport.width, viewport.height);
+            gl.clearColor(HD_SKY_COLOUR[0], HD_SKY_COLOUR[1], HD_SKY_COLOUR[2], 1);
+            gl.clearDepth(1);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            gl.enable(gl.DEPTH_TEST);
+            gl.depthFunc(gl.LEQUAL);
+            gl.disable(gl.CULL_FACE);
+            gl.disable(gl.BLEND);
+            gl.depthMask(true);
+
+            this.renderSkybox();
+
+            gl.useProgram(this.terrainProgram);
+            this.setCameraUniforms(viewport.width, viewport.height);
+            this.bindTextureAtlas();
+
+            if (this.terrainVertexCount > 0 && this.terrainVao) {
+                this.drawBuffer(this.terrainVao, this.terrainVertexCount);
+            }
+
+            this.drawStaticFarModels();
+            this.uploadAndDrawModels();
+            this.uploadAndDrawDynamicModels();
+
+            if (this.waterVertexCount > 0 && this.waterVao) {
+                gl.enable(gl.POLYGON_OFFSET_FILL);
+                gl.polygonOffset(-1.0, -1.0);
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+                this.drawBuffer(this.waterVao, this.waterVertexCount);
+                gl.disable(gl.BLEND);
+                gl.disable(gl.POLYGON_OFFSET_FILL);
+            }
+
+            gl.flush();
+            this.compositeViewportToGameCanvas(viewport);
+            gl.disable(gl.SCISSOR_TEST);
+            if (this.safeWarmupFrames > 0) {
+                this.safeWarmupFrames--;
+                if (this.safeWarmupFrames === 0) {
+                    fetch('/debug-log', { method: 'POST', body: '[hd-render] safe warmup complete; camera-independent static cache + stable transparent scenery enabled' }).catch(() => {});
+                }
+            }
+            this.publishStatus();
+        } catch (error) {
+            this.reason = error instanceof Error ? error.message : String(error);
+            fetch('/debug-log', {
+                method: 'POST',
+                body: '[hd-render] failed phase:' + String((globalThis as any)._hdPhase ?? '-') + ' error:' + this.reason.substring(0, 400)
+            }).catch(() => {});
+            this.enabled = false;
+            Pix3D.highDetail = false;
+            Pix3D.lowDetail = true;
+            this.setSoftwareCanvasHidden(false);
+            this.publishStatus();
+        } finally {
+            this.frameStarted = false;
+        }
+    }
+
+    private static normalKey(level: number, x: number, z: number): number {
+        // Numeric key avoids per-vertex string allocation. Coordinates are scene-unit
+        // multiples (max ~13312 for a 104-tile map), so 14-bit z, 14-bit x, 2-bit level
+        // all fit within JS safe-integer range.
+        return level * 268435456 + x * 16384 + z;
+    }
+
+    private static buildSmoothNormals(camera?: HDCameraInput): void {
+        this.smoothNormalCache.clear();
+        const acc = new Map<number, [number, number, number]>();
+
+        // Extend camera range by 1 tile so shared-edge vertices pick up neighbour normals.
+        const minX = camera ? camera.minTileX - 1 : -Infinity;
+        const maxX = camera ? camera.maxTileX + 1 : Infinity;
+        const minZ = camera ? camera.minTileZ - 1 : -Infinity;
+        const maxZ = camera ? camera.maxTileZ + 1 : Infinity;
+        const maxLvl = camera ? camera.maxLevel : Infinity;
+
+        for (const tile of this.groundTiles) {
+            if (tile.level > maxLvl || tile.x < minX || tile.x > maxX || tile.z < minZ || tile.z > maxZ) {
+                continue;
+            }
+            const ground = this.getGround(tile);
+
+            for (let i = 0; i < ground.faceVertexA.length; i++) {
+                const face = this.groundFace(tile, ground, i);
+                if (face.skip) {
+                    continue;
+                }
+
+                const pa = face.pa;
+                const pb = face.pb;
+                const pc = face.pc;
+                const [nx, ny, nz] = this.triangleNormal(pa, pb, pc);
+
+                for (const p of [pa, pb, pc]) {
+                    const key = this.normalKey(tile.level, p[0], p[2]);
+                    const n = acc.get(key);
+                    if (n) {
+                        n[0] += nx; n[1] += ny; n[2] += nz;
+                    } else {
+                        acc.set(key, [nx, ny, nz]);
+                    }
+                }
+            }
+        }
+
+        for (const [key, n] of acc) {
+            const len = Math.hypot(n[0], n[1], n[2]) || 1;
+            this.smoothNormalCache.set(key, [n[0] / len, n[1] / len, n[2] / len]);
+        }
+    }
+
+    private static colourTableSignature(): number {
+        // Pix3D.initColourTable(...) is called when the software brightness slider changes.
+        // HD terrain colours are baked into the terrain vertex buffer, so unlike HD models
+        // they will not react until the buffer is rebuilt.  Sampling the full 65k table
+        // every frame is unnecessary; these spaced samples reliably change when the table
+        // is regenerated, and the fallback length term catches table replacement.
+        const table = Pix3D.colourTable;
+        let sig = table.length | 0;
+        const step = Math.max(1, (table.length / 64) | 0);
+        for (let i = 0; i < table.length; i += step) {
+            sig = (((sig << 5) - sig) ^ table[i]) | 0;
+        }
+        // Include the final entry because the loop may not land on it exactly.
+        if (table.length > 0) {
+            sig = (((sig << 5) - sig) ^ table[table.length - 1]) | 0;
+        }
+        return sig | 0;
+    }
+
+    private static refreshBrightnessPaletteState(): void {
+        const sig = this.colourTableSignature();
+        if (this.lastColourTableSignature === 0) {
+            this.lastColourTableSignature = sig || 1;
+            return;
+        }
+
+        if (sig === this.lastColourTableSignature) {
+            return;
+        }
+
+        this.lastColourTableSignature = sig || 1;
+
+        // Terrain colour RGB is baked into the VBO through colourIndexToRgb().
+        // Rebuild immediately so the whole HD viewport changes brightness while
+        // standing still, matching non-HD behaviour.  Ground objects are cached too,
+        // so clear them before rebuilding from the original tile colour indices.
+        this.groundObjectCache.clear();
+        this.sceneDirty = true;
+        this.lastCameraRange = null;
+        this.terrainVertexCount = 0;
+        this.waterVertexCount = 0;
+        fetch('/debug-log', { method: 'POST', body: '[hd-render] software brightness changed; rebuilding HD terrain buffer' }).catch(() => {});
+    }
+
+    private static syncTerrain(camera?: HDCameraInput): void {
+        if (!this.gl || (!this.sceneDirty && !camera)) {
+            return;
+        }
+
+        const lc = this.lastCameraRange;
+        const cameraRangeUnchanged = camera && lc !== null &&
+            camera.minTileX === lc.minX &&
+            camera.minTileZ === lc.minZ &&
+            camera.maxTileX === lc.maxX &&
+            camera.maxTileZ === lc.maxZ &&
+            camera.maxLevel === lc.maxLevel;
+
+        if (!this.sceneDirty && cameraRangeUnchanged) {
+            return;
+        }
+
+        if (this.sceneDirty) {
+            this.buildSmoothNormals(camera);
+            this.sceneDirty = false;
+        }
+
+        const { land, water } = this.buildTerrainVertices(camera);
+        this.terrainVertexCount = land.length / VERTEX_FLOATS;
+        this.waterVertexCount = water.length / VERTEX_FLOATS;
+
+        if (!this.terrainBuffer) {
+            this.terrainBuffer = this.gl.createBuffer();
+        }
+
+        if (!this.terrainBuffer) {
+            this.reason = 'terrain buffer allocation failed';
+            return;
+        }
+
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.terrainBuffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, land, this.gl.STATIC_DRAW);
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+
+        if (!this.terrainVao) {
+            this.terrainVao = this.setupVao(this.terrainBuffer);
+        }
+
+        if (!this.waterBuffer) {
+            this.waterBuffer = this.gl.createBuffer();
+        }
+
+        if (this.waterBuffer) {
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.waterBuffer);
+            this.gl.bufferData(this.gl.ARRAY_BUFFER, water, this.gl.STATIC_DRAW);
+            this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+
+            if (!this.waterVao) {
+                this.waterVao = this.setupVao(this.waterBuffer);
+            }
+        }
+
+        if (camera) {
+            this.lastCameraRange = {
+                minX: camera.minTileX,
+                minZ: camera.minTileZ,
+                maxX: camera.maxTileX,
+                maxZ: camera.maxTileZ,
+                maxLevel: camera.maxLevel
+            };
+        }
+    }
+
+    private static buildTerrainVertices(camera?: HDCameraInput): { land: Float32Array; water: Float32Array } {
+        const landFloats: number[] = [];
+        const waterFloats: number[] = [];
+
+        // IMPORTANT:
+        // visibleGroundKeys only contains the tiny set of tiles touched by the old
+        // software visibility pass. During the safe HD warmup that can be just a few
+        // tiles around the player, which is why the HD view looked like a small island
+        // surrounded by grey sky.
+        //
+        // HD models are disabled by default now, so it is safe to build terrain from
+        // the full ground tile list and simply filter it by the HD camera range.
+        const tiles = this.groundTiles;
+
+        for (const tile of tiles) {
+            if (camera && !this.tileVisibleForCamera(tile, camera)) {
+                continue;
+            }
+
+            this.pushGroundTile(landFloats, waterFloats, tile);
+        }
+
+        return { land: new Float32Array(landFloats), water: new Float32Array(waterFloats) };
+    }
+
+    private static tileVisibleForCamera(tile: HDGroundTileInput, camera: HDCameraInput): boolean {
+        return tile.level <= camera.maxLevel &&
+            tile.x >= camera.minTileX &&
+            tile.z >= camera.minTileZ &&
+            tile.x < camera.maxTileX &&
+            tile.z < camera.maxTileZ;
+    }
+
+    private static pushGroundTile(landFloats: number[], waterFloats: number[], tile: HDGroundTileInput): void {
+        const ground = this.getGround(tile);
+
+        for (let i = 0; i < ground.faceVertexA.length; i++) {
+            const face = this.groundFace(tile, ground, i);
+            if (face.skip) {
+                continue;
+            }
+
+            const { pa, pb, pc, colourA, colourB, colourC, material, texture, waterSource } = face;
+            this.countTexture(texture);
+            this.countMaterial(material);
+
+            const faceNormal = this.triangleNormal(pa, pb, pc);
+            // Skip near-vertical terrain faces. The RS terrain mesh has tiles where one
+            // corner is at cliff height and the rest at ground level; from a ground-level
+            // HD camera these render as tall spiked triangles that never appeared in the
+            // fixed-overhead 2D view.
+            // faceNormal[1] < 0 = sky-facing (RS Y-down).
+            if (faceNormal[1] > -0.15 || this.isSpikeSheetTerrainFace(faceNormal, colourA, colourB, colourC)) {
+                continue;
+            }
+            const normalA = material === HDMaterial.Water
+                ? faceNormal
+                : (this.smoothNormalCache.get(this.normalKey(tile.level, pa[0], pa[2])) ?? faceNormal);
+            const normalB = material === HDMaterial.Water
+                ? faceNormal
+                : (this.smoothNormalCache.get(this.normalKey(tile.level, pb[0], pb[2])) ?? faceNormal);
+            const normalC = material === HDMaterial.Water
+                ? faceNormal
+                : (this.smoothNormalCache.get(this.normalKey(tile.level, pc[0], pc[2])) ?? faceNormal);
+
+            if (material === HDMaterial.Water) {
+                // Water surface → water buffer (drawn in second pass with blending).
+                this.pushTriangle(
+                    waterFloats,
+                    pa, pb, pc,
+                    colourA, colourB, colourC,
+                    material, texture,
+                    this.tileUv(pa, tile.x, tile.z), this.tileUv(pb, tile.x, tile.z), this.tileUv(pc, tile.x, tile.z),
+                    1,
+                    normalA, normalB, normalC,
+                    waterSource
+                );
+
+                // Seabed → land buffer at original terrain heights.
+                // v_alpha carries normalised water depth so the fragment shader can
+                // apply depth-based blue tinting (0 = at surface, 1 = max depth).
+                const { seabedYa, seabedYb, seabedYc, waterSurfaceY } = face;
+                const sbPa: [number, number, number] = [pa[0], seabedYa, pa[2]];
+                const sbPb: [number, number, number] = [pb[0], seabedYb, pb[2]];
+                const sbPc: [number, number, number] = [pc[0], seabedYc, pc[2]];
+                const sbNormal = this.triangleNormal(sbPa, sbPb, sbPc);
+
+                if (sbNormal[1] <= -0.15) {
+                    const depthA = Math.min(1, Math.max(0, waterSurfaceY - seabedYa) / WATER_SURFACE_MAX_HEIGHT_DELTA);
+                    const depthB = Math.min(1, Math.max(0, waterSurfaceY - seabedYb) / WATER_SURFACE_MAX_HEIGHT_DELTA);
+                    const depthC = Math.min(1, Math.max(0, waterSurfaceY - seabedYc) / WATER_SURFACE_MAX_HEIGHT_DELTA);
+                    const avgDepth = (depthA + depthB + depthC) / 3;
+
+                    this.countMaterial(HDMaterial.Seabed);
+                    this.pushTriangle(
+                        landFloats,
+                        sbPa, sbPb, sbPc,
+                        colourA, colourB, colourC,
+                        HDMaterial.Seabed, -1,
+                        this.tileUv(sbPa, tile.x, tile.z), this.tileUv(sbPb, tile.x, tile.z), this.tileUv(sbPc, tile.x, tile.z),
+                        avgDepth,
+                        sbNormal, sbNormal, sbNormal,
+                        HDWaterSource.None
+                    );
+                }
+            } else {
+                this.pushTriangle(
+                    landFloats,
+                    pa, pb, pc,
+                    colourA, colourB, colourC,
+                    material, texture,
+                    this.tileUv(pa, tile.x, tile.z), this.tileUv(pb, tile.x, tile.z), this.tileUv(pc, tile.x, tile.z),
+                    1,
+                    normalA, normalB, normalC,
+                    waterSource
+                );
+            }
+        }
+    }
+
+    private static groundFace(tile: HDGroundTileInput, ground: Ground, faceIndex: number): {
+        pa: [number, number, number];
+        pb: [number, number, number];
+        pc: [number, number, number];
+        colourA: readonly [number, number, number];
+        colourB: readonly [number, number, number];
+        colourC: readonly [number, number, number];
+        material: number;
+        texture: number;
+        waterSource: HDWaterSource;
+        skip: boolean;
+        seabedYa: number;
+        seabedYb: number;
+        seabedYc: number;
+        waterSurfaceY: number;
+    } {
+        const a = ground.faceVertexA[faceIndex];
+        const b = ground.faceVertexB[faceIndex];
+        const c = ground.faceVertexC[faceIndex];
+        const pa: [number, number, number] = [ground.vertexX[a], ground.vertexY[a], ground.vertexZ[a]];
+        const pb: [number, number, number] = [ground.vertexX[b], ground.vertexY[b], ground.vertexZ[b]];
+        const pc: [number, number, number] = [ground.vertexX[c], ground.vertexY[c], ground.vertexZ[c]];
+        const textureCandidate = ground.faceTexture && ground.faceTexture[faceIndex] >= 0 ? ground.faceTexture[faceIndex] : -1;
+        let texture = this.isValid254Texture(textureCandidate) ? textureCandidate : -1;
+        const colourA = this.colourIndexToRgb(ground.faceColourA[faceIndex]);
+        const colourB = this.colourIndexToRgb(ground.faceColourB[faceIndex]);
+        const colourC = this.colourIndexToRgb(ground.faceColourC[faceIndex]);
+        const avg = this.averageColour(colourA, colourB, colourC);
+
+        const texturedOverlayFace = ground.faceTexture !== null && ground.faceTexture[faceIndex] >= 0;
+        const isOverlayFace = texturedOverlayFace || this.isColourOverlayFace(tile, avg);
+        const material = this.isValid254Texture(texture)
+            ? this.materialForTexture(texture, avg)
+            : this.materialForFloor(tile, avg, isOverlayFace);
+
+        if (material === HDMaterial.Water && texture === -1) {
+            texture = 1;
+        }
+
+        let skip = false;
+        let seabedYa = pa[1];
+        let seabedYb = pb[1];
+        let seabedYc = pc[1];
+        let waterSurfaceY = pa[1];
+
+        if (material === HDMaterial.Water) {
+            // Skip faces where the terrain itself slopes steeply. Cliff-edge shaped
+            // water can otherwise flatten one high corner into a huge triangular plane.
+            if (this.faceHeightDelta(pa, pb, pc) > WATER_SURFACE_MAX_HEIGHT_DELTA) {
+                skip = true;
+            } else {
+                seabedYa = pa[1];
+                seabedYb = pb[1];
+                seabedYc = pc[1];
+                // Match RLHD: use actual terrain vertex heights for the water surface
+                // so fishing spots (NPCs placed at the bilinear-interpolated tile height)
+                // sit exactly on the water surface. waterSurfaceY (max) is kept only for
+                // the seabed depth gradient — it is not used to flatten the surface triangles.
+                waterSurfaceY = Math.max(pa[1], pb[1], pc[1]);
+            }
+        }
+
+        const waterSource = material === HDMaterial.Water
+            ? this.waterSourceForTerrainFace(tile, textureCandidate)
+            : HDWaterSource.None;
+
+        return { pa, pb, pc, colourA, colourB, colourC, material, texture, waterSource, skip, seabedYa, seabedYb, seabedYc, waterSurfaceY };
+    }
+
+    private static waterSourceForTerrainFace(tile: HDGroundTileInput, textureCandidate: number): HDWaterSource {
+        const textured = this.isValid254Texture(textureCandidate);
+        if (tile.shape === PLAIN_TERRAIN_SHAPE) {
+            return textured ? HDWaterSource.PlainTerrain : HDWaterSource.PlainTerrainColour;
+        }
+
+        return textured ? HDWaterSource.ShapedTerrain : HDWaterSource.ShapedTerrainColour;
+    }
+
+    private static faceHeightDelta(
+        a: readonly [number, number, number],
+        b: readonly [number, number, number],
+        c: readonly [number, number, number]
+    ): number {
+        const minY = Math.min(a[1], b[1], c[1]);
+        const maxY = Math.max(a[1], b[1], c[1]);
+        return maxY - minY;
+    }
+
+    private static isColourOverlayFace(tile: HDGroundTileInput, faceColour: readonly [number, number, number]): boolean {
+        if (tile.overlayId < 0 || tile.texture >= 0) {
+            return false;
+        }
+
+        const underlay = this.averageTileColour(tile.colours);
+        const overlay = this.averageTileColour(tile.secondaryColours);
+        return this.colourDistanceSq(faceColour, overlay) < this.colourDistanceSq(faceColour, underlay);
+    }
+
+    private static averageTileColour(colours: readonly [number, number, number, number]): readonly [number, number, number] {
+        const a = this.colourIndexToRgb(colours[0]);
+        const b = this.colourIndexToRgb(colours[1]);
+        const c = this.colourIndexToRgb(colours[2]);
+        const d = this.colourIndexToRgb(colours[3]);
+        return [
+            (a[0] + b[0] + c[0] + d[0]) / 4,
+            (a[1] + b[1] + c[1] + d[1]) / 4,
+            (a[2] + b[2] + c[2] + d[2]) / 4
+        ];
+    }
+
+    private static colourDistanceSq(a: readonly [number, number, number], b: readonly [number, number, number]): number {
+        const dr = a[0] - b[0];
+        const dg = a[1] - b[1];
+        const db = a[2] - b[2];
+        return dr * dr + dg * dg + db * db;
+    }
+
+    private static waterPlaneY(tile: HDGroundTileInput): number {
+        return Math.min(tile.heights[0], tile.heights[1], tile.heights[2], tile.heights[3]);
+    }
+
+    private static pushTriangle(
+        floats: number[],
+        a: readonly [number, number, number],
+        b: readonly [number, number, number],
+        c: readonly [number, number, number],
+        colourA: readonly [number, number, number],
+        colourB: readonly [number, number, number],
+        colourC: readonly [number, number, number],
+        material: number,
+        texture: number,
+        uvA: readonly [number, number],
+        uvB: readonly [number, number],
+        uvC: readonly [number, number],
+        alpha: number = 1,
+        normalA?: readonly [number, number, number],
+        normalB?: readonly [number, number, number],
+        normalC?: readonly [number, number, number],
+        waterSource: HDWaterSource = HDWaterSource.None
+    ): void {
+        const face = this.triangleNormal(a, b, c);
+        this.pushVertex(floats, a, normalA ?? face, colourA, material, texture, uvA, alpha, waterSource);
+        this.pushVertex(floats, b, normalB ?? face, colourB, material, texture, uvB, alpha, waterSource);
+        this.pushVertex(floats, c, normalC ?? face, colourC, material, texture, uvC, alpha, waterSource);
+    }
+
+    private static pushVertex(
+        floats: number[],
+        position: readonly [number, number, number],
+        normal: readonly [number, number, number],
+        colour: readonly [number, number, number],
+        material: number,
+        texture: number,
+        uv: readonly [number, number],
+        alpha: number,
+        waterSource: HDWaterSource
+    ): void {
+        floats.push(
+            position[0], position[1], position[2],
+            normal[0], normal[1], normal[2],
+            colour[0], colour[1], colour[2],
+            material,
+            uv[0], uv[1],
+            texture,
+            alpha,
+            waterSource
+        );
+    }
+
+    private static pushClippedTriangle(
+        floats: number[],
+        a: HDClipVertex,
+        b: HDClipVertex,
+        c: HDClipVertex,
+        material: number,
+        texture: number,
+        alpha: number,
+        waterSource: HDWaterSource
+    ): void {
+        this.pushTriangle(
+            floats,
+            a.position, b.position, c.position,
+            a.colour, b.colour, c.colour,
+            material,
+            texture,
+            a.uv, b.uv, c.uv,
+            alpha,
+            undefined, undefined, undefined,
+            waterSource
+        );
+    }
+
+    private static triangleNormal(
+        a: readonly [number, number, number],
+        b: readonly [number, number, number],
+        c: readonly [number, number, number]
+    ): readonly [number, number, number] {
+        const abx = b[0] - a[0];
+        const aby = b[1] - a[1];
+        const abz = b[2] - a[2];
+        const acx = c[0] - a[0];
+        const acy = c[1] - a[1];
+        const acz = c[2] - a[2];
+
+        const nx = aby * acz - abz * acy;
+        const ny = abz * acx - abx * acz;
+        const nz = abx * acy - aby * acx;
+        const len = Math.hypot(nx, ny, nz) || 1;
+
+        return [nx / len, ny / len, nz / len];
+    }
+
+    private static tileUv(position: readonly [number, number, number], tileX: number, tileZ: number): readonly [number, number] {
+        return [(position[0] - tileX * 128) / 128, (position[2] - tileZ * 128) / 128];
+    }
+
+    private static textureBasisUvs(
+        a: readonly [number, number, number],
+        b: readonly [number, number, number],
+        c: readonly [number, number, number],
+        origin: readonly [number, number, number],
+        uPoint: readonly [number, number, number],
+        vPoint: readonly [number, number, number]
+    ): readonly [readonly [number, number], readonly [number, number], readonly [number, number]] {
+        const ux = uPoint[0] - origin[0];
+        const uy = uPoint[1] - origin[1];
+        const uz = uPoint[2] - origin[2];
+        const vx = vPoint[0] - origin[0];
+        const vy = vPoint[1] - origin[1];
+        const vz = vPoint[2] - origin[2];
+        const nx = uy * vz - uz * vy;
+        const ny = uz * vx - ux * vz;
+        const nz = ux * vy - uy * vx;
+        const ax = Math.abs(nx);
+        const ay = Math.abs(ny);
+        const az = Math.abs(nz);
+
+        if (ax >= ay && ax >= az) {
+            return [
+                this.projectUv2d(a[1], a[2], origin[1], origin[2], uPoint[1], uPoint[2], vPoint[1], vPoint[2]),
+                this.projectUv2d(b[1], b[2], origin[1], origin[2], uPoint[1], uPoint[2], vPoint[1], vPoint[2]),
+                this.projectUv2d(c[1], c[2], origin[1], origin[2], uPoint[1], uPoint[2], vPoint[1], vPoint[2])
+            ];
+        }
+
+        if (ay >= az) {
+            return [
+                this.projectUv2d(a[0], a[2], origin[0], origin[2], uPoint[0], uPoint[2], vPoint[0], vPoint[2]),
+                this.projectUv2d(b[0], b[2], origin[0], origin[2], uPoint[0], uPoint[2], vPoint[0], vPoint[2]),
+                this.projectUv2d(c[0], c[2], origin[0], origin[2], uPoint[0], uPoint[2], vPoint[0], vPoint[2])
+            ];
+        }
+
+        return [
+            this.projectUv2d(a[0], a[1], origin[0], origin[1], uPoint[0], uPoint[1], vPoint[0], vPoint[1]),
+            this.projectUv2d(b[0], b[1], origin[0], origin[1], uPoint[0], uPoint[1], vPoint[0], vPoint[1]),
+            this.projectUv2d(c[0], c[1], origin[0], origin[1], uPoint[0], uPoint[1], vPoint[0], vPoint[1])
+        ];
+    }
+
+    private static projectUv2d(px: number, py: number, ox: number, oy: number, ux: number, uy: number, vx: number, vy: number): readonly [number, number] {
+        const uAxisX = ux - ox;
+        const uAxisY = uy - oy;
+        const vAxisX = vx - ox;
+        const vAxisY = vy - oy;
+        const det = uAxisX * vAxisY - uAxisY * vAxisX;
+
+        if (Math.abs(det) < 0.001) {
+            return [0, 0];
+        }
+
+        const dx = px - ox;
+        const dy = py - oy;
+        const u = (dx * vAxisY - dy * vAxisX) / det;
+        const v = (uAxisX * dy - uAxisY * dx) / det;
+        return [u, v];
+    }
+
+    private static clipPolygonToNear(vertices: HDClipVertex[]): HDClipVertex[] {
+        const clipped: HDClipVertex[] = [];
+
+        for (let i = 0; i < vertices.length; i++) {
+            const current = vertices[i];
+            const previous = vertices[(i + vertices.length - 1) % vertices.length];
+            const currentInside = current.depth >= 50;
+            const previousInside = previous.depth >= 50;
+
+            if (currentInside !== previousInside) {
+                clipped.push(this.interpolateClipVertex(previous, current, (50 - previous.depth) / (current.depth - previous.depth)));
+                this.clippedTriangleCount++;
+            }
+
+            if (currentInside) {
+                clipped.push(current);
+            }
+        }
+
+        return clipped;
+    }
+
+    private static interpolateClipVertex(a: HDClipVertex, b: HDClipVertex, t: number): HDClipVertex {
+        return {
+            position: [
+                a.position[0] + (b.position[0] - a.position[0]) * t,
+                a.position[1] + (b.position[1] - a.position[1]) * t,
+                a.position[2] + (b.position[2] - a.position[2]) * t
+            ],
+            colour: [
+                a.colour[0] + (b.colour[0] - a.colour[0]) * t,
+                a.colour[1] + (b.colour[1] - a.colour[1]) * t,
+                a.colour[2] + (b.colour[2] - a.colour[2]) * t
+            ],
+            uv: [
+                a.uv[0] + (b.uv[0] - a.uv[0]) * t,
+                a.uv[1] + (b.uv[1] - a.uv[1]) * t
+            ],
+            depth: 50
+        };
+    }
+
+    private static isBackface(a: HDClipVertex, b: HDClipVertex, c: HDClipVertex): boolean {
+        const screenA = this.projectScreen(a.position);
+        const screenB = this.projectScreen(b.position);
+        const screenC = this.projectScreen(c.position);
+
+        if (!screenA || !screenB || !screenC) {
+            return false;
+        }
+
+        const dxAB = screenA[0] - screenB[0];
+        const dyAB = screenA[1] - screenB[1];
+        const dxCB = screenC[0] - screenB[0];
+        const dyCB = screenC[1] - screenB[1];
+        return dxAB * dyCB - dyAB * dxCB <= 0;
+    }
+
+    private static projectScreen(position: readonly [number, number, number]): readonly [number, number] | null {
+        if (!this.camera) {
+            return null;
+        }
+
+        const relativeX = position[0] - this.camera.eyeX;
+        const relativeY = position[1] - this.camera.eyeY;
+        const relativeZ = position[2] - this.camera.eyeZ;
+        const sinEyePitch = this.camera.sinEyePitch / 65536;
+        const cosEyePitch = this.camera.cosEyePitch / 65536;
+        const sinEyeYaw = this.camera.sinEyeYaw / 65536;
+        const cosEyeYaw = this.camera.cosEyeYaw / 65536;
+        const zPrime = relativeZ * cosEyeYaw - relativeX * sinEyeYaw;
+        const viewX = relativeZ * sinEyeYaw + relativeX * cosEyeYaw;
+        const viewY = relativeY * cosEyePitch - zPrime * sinEyePitch;
+        const viewZ = relativeY * sinEyePitch + zPrime * cosEyePitch;
+
+        if (viewZ < 50) {
+            return null;
+        }
+
+        return [
+            VIEWPORT_WIDTH / 2 + (viewX * 512) / viewZ,
+            VIEWPORT_HEIGHT / 2 + (viewY * 512) / viewZ
+        ];
+    }
+
+    private static alphaForFace(alpha: number): number {
+        if (alpha <= 0) {
+            return 1;
+        }
+
+        return Math.max(0.05, Math.min(1, 1 - alpha / 255));
+    }
+
+    private static prioritySortGroup(priority: number): number {
+        if (priority === 10) {
+            return 1;
+        }
+        if (priority === 11) {
+            return 2;
+        }
+        return priority + 3;
+    }
+
+    private static faceVertexDepth(position: readonly [number, number, number]): number {
+        if (!this.camera) {
+            return 0;
+        }
+
+        return this.viewDepth(position[0] - this.camera.eyeX, position[1] - this.camera.eyeY, position[2] - this.camera.eyeZ);
+    }
+
+    private static faceDepth(a: readonly [number, number, number], b: readonly [number, number, number], c: readonly [number, number, number]): number {
+        if (!this.camera) {
+            return 0;
+        }
+
+        return (
+            this.viewDepth(a[0] - this.camera.eyeX, a[1] - this.camera.eyeY, a[2] - this.camera.eyeZ) +
+            this.viewDepth(b[0] - this.camera.eyeX, b[1] - this.camera.eyeY, b[2] - this.camera.eyeZ) +
+            this.viewDepth(c[0] - this.camera.eyeX, c[1] - this.camera.eyeY, c[2] - this.camera.eyeZ)
+        ) / 3;
+    }
+
+    private static viewDepth(relativeX: number, relativeY: number, relativeZ: number): number {
+        if (!this.camera) {
+            return 0;
+        }
+
+        const sinEyePitch = this.camera.sinEyePitch / 65536;
+        const cosEyePitch = this.camera.cosEyePitch / 65536;
+        const sinEyeYaw = this.camera.sinEyeYaw / 65536;
+        const cosEyeYaw = this.camera.cosEyeYaw / 65536;
+        const zPrime = relativeZ * cosEyeYaw - relativeX * sinEyeYaw;
+        return relativeY * sinEyePitch + zPrime * cosEyePitch;
+    }
+
+    private static hslToRgb(hsl: number): readonly [number, number, number] {
+        if (hsl < 0) {
+            return [0, 0, 0];
+        }
+
+        const hue = ((hsl >> 10) & 0x3f) / 64;
+        const saturation = ((hsl >> 7) & 0x7) / 8;
+        const lightness = (hsl & 0x7f) / 128;
+
+        if (saturation === 0) {
+            return [lightness, lightness, lightness];
+        }
+
+        const q = lightness < 0.5
+            ? lightness * (1 + saturation)
+            : lightness + saturation - lightness * saturation;
+        const p = 2 * lightness - q;
+
+        return [
+            this.hueToRgb(p, q, hue + 1 / 3),
+            this.hueToRgb(p, q, hue),
+            this.hueToRgb(p, q, hue - 1 / 3)
+        ];
+    }
+
+    private static colourIndexToRgb(index: number): readonly [number, number, number] {
+        if (index < 0) {
+            return [0, 0, 0];
+        }
+
+        const rgb = Pix3D.colourTable[index & 0xffff];
+        if (rgb === 0) {
+            return this.hslToRgb(index);
+        }
+
+        return [
+            ((rgb >> 16) & 0xff) / 255,
+            ((rgb >> 8) & 0xff) / 255,
+            (rgb & 0xff) / 255
+        ];
+    }
+
+    private static hueToRgb(p: number, q: number, t: number): number {
+        if (t < 0) {
+            t += 1;
+        } else if (t > 1) {
+            t -= 1;
+        }
+
+        if (t < 1 / 6) {
+            return p + (q - p) * 6 * t;
+        }
+        if (t < 1 / 2) {
+            return q;
+        }
+        if (t < 2 / 3) {
+            return p + (q - p) * (2 / 3 - t) * 6;
+        }
+        return p;
+    }
+
+    private static averageColour(
+        a: readonly [number, number, number],
+        b: readonly [number, number, number],
+        c: readonly [number, number, number]
+    ): readonly [number, number, number] {
+        return [
+            (a[0] + b[0] + c[0]) / 3,
+            (a[1] + b[1] + c[1]) / 3,
+            (a[2] + b[2] + c[2]) / 3
+        ];
+    }
+
+    // ── Zero-allocation in-place variants used by queueModel() ───────────────
+
+    private static colourIndexToRgbInto(index: number, out: [number, number, number]): void {
+        if (index < 0) { out[0] = out[1] = out[2] = 0; return; }
+        const rgb = Pix3D.colourTable[index & 0xffff];
+        if (rgb === 0) {
+            const c = this.hslToRgb(index);
+            out[0] = c[0]; out[1] = c[1]; out[2] = c[2];
+            return;
+        }
+        out[0] = ((rgb >> 16) & 0xff) / 255;
+        out[1] = ((rgb >> 8) & 0xff) / 255;
+        out[2] = (rgb & 0xff) / 255;
+    }
+
+    private static averageColourInto(
+        a: [number, number, number],
+        b: [number, number, number],
+        c: [number, number, number],
+        out: [number, number, number]
+    ): void {
+        out[0] = (a[0] + b[0] + c[0]) / 3;
+        out[1] = (a[1] + b[1] + c[1]) / 3;
+        out[2] = (a[2] + b[2] + c[2]) / 3;
+    }
+
+    private static triangleNormalInto(
+        a: [number, number, number],
+        b: [number, number, number],
+        c: [number, number, number],
+        out: [number, number, number]
+    ): void {
+        const abx = b[0] - a[0], aby = b[1] - a[1], abz = b[2] - a[2];
+        const acx = c[0] - a[0], acy = c[1] - a[1], acz = c[2] - a[2];
+        const nx = aby * acz - abz * acy;
+        const ny = abz * acx - abx * acz;
+        const nz = abx * acy - aby * acx;
+        const len = Math.hypot(nx, ny, nz) || 1;
+        out[0] = nx / len; out[1] = ny / len; out[2] = nz / len;
+    }
+
+    private static projectUv2dInto(px: number, py: number, ox: number, oy: number, ux: number, uy: number, vx: number, vy: number, out: [number, number]): void {
+        const uAxisX = ux - ox, uAxisY = uy - oy;
+        const vAxisX = vx - ox, vAxisY = vy - oy;
+        const det = uAxisX * vAxisY - uAxisY * vAxisX;
+        if (Math.abs(det) < 0.001) { out[0] = 0; out[1] = 0; return; }
+        const dx = px - ox, dy = py - oy;
+        out[0] = (dx * vAxisY - dy * vAxisX) / det;
+        out[1] = (uAxisX * dy - uAxisY * dx) / det;
+    }
+
+    private static textureBasisUvsInto(
+        a: [number, number, number], b: [number, number, number], c: [number, number, number],
+        origin: [number, number, number], uPoint: [number, number, number], vPoint: [number, number, number],
+        outA: [number, number], outB: [number, number], outC: [number, number]
+    ): void {
+        const ux = uPoint[0] - origin[0], uy = uPoint[1] - origin[1], uz = uPoint[2] - origin[2];
+        const vx = vPoint[0] - origin[0], vy = vPoint[1] - origin[1], vz = vPoint[2] - origin[2];
+        const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+        const ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
+        if (ax >= ay && ax >= az) {
+            this.projectUv2dInto(a[1], a[2], origin[1], origin[2], uPoint[1], uPoint[2], vPoint[1], vPoint[2], outA);
+            this.projectUv2dInto(b[1], b[2], origin[1], origin[2], uPoint[1], uPoint[2], vPoint[1], vPoint[2], outB);
+            this.projectUv2dInto(c[1], c[2], origin[1], origin[2], uPoint[1], uPoint[2], vPoint[1], vPoint[2], outC);
+        } else if (ay >= az) {
+            this.projectUv2dInto(a[0], a[2], origin[0], origin[2], uPoint[0], uPoint[2], vPoint[0], vPoint[2], outA);
+            this.projectUv2dInto(b[0], b[2], origin[0], origin[2], uPoint[0], uPoint[2], vPoint[0], vPoint[2], outB);
+            this.projectUv2dInto(c[0], c[2], origin[0], origin[2], uPoint[0], uPoint[2], vPoint[0], vPoint[2], outC);
+        } else {
+            this.projectUv2dInto(a[0], a[1], origin[0], origin[1], uPoint[0], uPoint[1], vPoint[0], vPoint[1], outA);
+            this.projectUv2dInto(b[0], b[1], origin[0], origin[1], uPoint[0], uPoint[1], vPoint[0], vPoint[1], outB);
+            this.projectUv2dInto(c[0], c[1], origin[0], origin[1], uPoint[0], uPoint[1], vPoint[0], vPoint[1], outC);
+        }
+    }
+
+    private static interpolateClipVertexInto(a: HDClipVertex, b: HDClipVertex, t: number, out: HDClipVertex): void {
+        const ap = a.position, bp = b.position;
+        out.position[0] = ap[0] + (bp[0] - ap[0]) * t;
+        out.position[1] = ap[1] + (bp[1] - ap[1]) * t;
+        out.position[2] = ap[2] + (bp[2] - ap[2]) * t;
+        const ac = a.colour, bc = b.colour;
+        out.colour[0] = ac[0] + (bc[0] - ac[0]) * t;
+        out.colour[1] = ac[1] + (bc[1] - ac[1]) * t;
+        out.colour[2] = ac[2] + (bc[2] - ac[2]) * t;
+        const au = a.uv, bu = b.uv;
+        out.uv[0] = au[0] + (bu[0] - au[0]) * t;
+        out.uv[1] = au[1] + (bu[1] - au[1]) * t;
+        out.depth = 50;
+    }
+
+    /** Clips the 3 vertices in _fvIn[0..2] against the near plane.
+     *  Results are written into _fvOut; _fvOutLen is set to the output count. */
+    private static clipPolygonToNearInto(inLen: number): void {
+        this._fvOutLen = 0;
+        for (let i = 0; i < inLen; i++) {
+            const current = this._fvIn[i];
+            const previous = this._fvIn[(i + inLen - 1) % inLen];
+            const currentInside = current.depth >= 50;
+            const previousInside = previous.depth >= 50;
+            if (currentInside !== previousInside) {
+                const t = (50 - previous.depth) / (current.depth - previous.depth);
+                this.interpolateClipVertexInto(previous, current, t, this._fvOut[this._fvOutLen++]);
+                this.clippedTriangleCount++;
+            }
+            if (currentInside) {
+                const out = this._fvOut[this._fvOutLen++];
+                const cp = current.position, co = current.colour, cu = current.uv;
+                out.position[0] = cp[0]; out.position[1] = cp[1]; out.position[2] = cp[2];
+                out.colour[0] = co[0]; out.colour[1] = co[1]; out.colour[2] = co[2];
+                out.uv[0] = cu[0]; out.uv[1] = cu[1];
+                out.depth = current.depth;
+            }
+        }
+    }
+
+    private static textureDebugModeName(): string {
+        const g = globalThis as unknown as { HD_TEXTURE_DEBUG_MODE?: string; window?: { HD_TEXTURE_DEBUG_MODE?: string } };
+        const fromWindow = typeof window !== 'undefined'
+            ? (window as unknown as { HD_TEXTURE_DEBUG_MODE?: string }).HD_TEXTURE_DEBUG_MODE
+            : undefined;
+        return String(g.HD_TEXTURE_DEBUG_MODE ?? fromWindow ?? 'normal').toLowerCase();
+    }
+
+    private static textureDebugMode(): number {
+        const value = this.textureDebugModeName();
+        switch (value) {
+            case 'flat':
+            case 'off':
+            case 'no-textures':
+                return 1;
+            case 'id':
+            case 'ids':
+            case 'id-colour':
+            case 'id-colours':
+            case 'id-colors':
+                return 2;
+            case 'single':
+            case 'single-texture':
+            case 'force-zero':
+                return 3;
+            case 'uv':
+            case 'uvs':
+                return 4;
+            case 'texture':
+            case 'textures':
+            case 'texture-only':
+            case 'raw-texture':
+            case 'raw-textures':
+                return 5;
+            case 'water':
+            case 'water-source':
+            case 'water-sources':
+            case 'water-debug':
+                return 6;
+            case 'rlhd':
+            case 'rlhd-only':
+            case '117':
+            case '117-only':
+            case 'hd-atlas':
+                return 7;
+            case 'shader-test':
+            case 'pink':
+            case 'magenta':
+                return 9;
+            case 'normal':
+            default:
+                return 0;
+        }
+    }
+
+    private static setTextureDebugMode(mode: string): void {
+        const normalised = mode.toLowerCase();
+        (globalThis as unknown as { HD_TEXTURE_DEBUG_MODE?: string }).HD_TEXTURE_DEBUG_MODE = normalised;
+        if (typeof window !== 'undefined') {
+            (window as unknown as { HD_TEXTURE_DEBUG_MODE?: string }).HD_TEXTURE_DEBUG_MODE = normalised;
+        }
+        this.showTextureDebugOverlay(normalised);
+        // Force cached scene data to be rebuilt on the next render for modes that
+        // also affect CPU-side batches in older builds.
+        this.sceneDirty = true;
+        this.modelBatches.clear();
+        this.dynamicModelBatches.clear();
+        this.dynamicTransparentBatches.length = 0;
+        this.lastGoodDynamicModelBatches.clear();
+        this.lastGoodDynamicTransparentBatches.length = 0;
+        this.dynamicModelVaos.forEach((vao) => {
+            if (this.gl && vao) {
+                this.gl.deleteVertexArray(vao);
+            }
+        });
+        this.dynamicModelVaos.clear();
+        this.dynamicModelBuffers.forEach((buffer) => {
+            if (this.gl && buffer) {
+                this.gl.deleteBuffer(buffer);
+            }
+        });
+        this.dynamicModelBuffers.clear();
+        this.modelVaos.forEach((vao) => {
+            if (this.gl && vao) {
+                this.gl.deleteVertexArray(vao);
+            }
+        });
+        this.modelVaos.clear();
+        this.modelBuffers.forEach((buffer) => {
+            if (this.gl && buffer) {
+                this.gl.deleteBuffer(buffer);
+            }
+        });
+        this.modelBuffers.clear();
+        this.transparentBatches = [];
+        this.clearStaticFarScene();
+    }
+
+    private static installTextureDebugHotkeys(): void {
+        if (this.debugHotkeysInstalled || typeof window === 'undefined') {
+            return;
+        }
+        this.debugHotkeysInstalled = true;
+
+        const modes = ['normal', 'flat', 'id-colours', 'single-texture', 'uv', 'texture-only', 'rlhd-only', 'water-source'];
+        window.addEventListener('keydown', (event: KeyboardEvent) => {
+            const key = event.key.toLowerCase();
+            if (event.ctrlKey && event.shiftKey && key === 'd') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.showTextureDiagnosticsOverlay();
+            } else if (event.ctrlKey && event.shiftKey && key === 'a') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.showTextureAtlasPreview();
+            } else if (event.key === 'F6') {
+                event.preventDefault();
+                event.stopPropagation();
+                const current = this.textureDebugModeName();
+                const index = Math.max(0, modes.indexOf(current));
+                const delta = event.shiftKey ? -1 : 1;
+                const next = modes[(index + delta + modes.length) % modes.length];
+                this.setTextureDebugMode(next);
+            } else if (event.key === 'F7') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.setTextureDebugMode('normal');
+            } else if (event.key === 'F8') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.setTextureDebugMode('shader-test');
+            } else if (event.key === 'F9') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.setTextureDebugMode('flat');
+            } else if (event.key === 'F10') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.showTextureDiagnosticsOverlay();
+            } else if (event.key === 'F11') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.showTextureAtlasPreview();
+            }
+        }, true);
+
+        this.showTextureDebugOverlay(this.textureDebugModeName());
+    }
+
+    private static showTextureDebugOverlay(mode: string): void {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        if (!this.debugOverlay) {
+            const overlay = document.createElement('div');
+            overlay.id = 'hd-texture-debug-overlay';
+            overlay.style.position = 'fixed';
+            overlay.style.left = '8px';
+            overlay.style.top = '8px';
+            overlay.style.zIndex = '999999';
+            overlay.style.pointerEvents = 'none';
+            overlay.style.padding = '4px 6px';
+            overlay.style.background = 'rgba(0, 0, 0, 0.75)';
+            overlay.style.color = '#ffff00';
+            overlay.style.font = '12px monospace';
+            overlay.style.border = '1px solid rgba(255, 255, 0, 0.8)';
+            document.body.appendChild(overlay);
+            this.debugOverlay = overlay;
+        }
+        this.debugOverlay.textContent = `HD ${HD_RENDERER_BUILD} | texture debug: DIAG-BUILD-2026-05-29 | ${mode}  |  F6 cycle, Shift+F6 back, F7 normal, F8 pink, F9 flat, F10/Ctrl+Shift+D diag, F11/Ctrl+Shift+A atlas, mode: rlhd-only | water: blue plain, yellow shaped, magenta model, cyan/orange inferred`;
+        this.debugOverlay.style.display = this.enabled ? 'block' : 'none';
+    }
+
+    private static isValid254Texture(texture: number): boolean {
+        return Number.isInteger(texture) && texture >= 0 && texture < CACHE_TEXTURE_COUNT;
+    }
+
+    private static materialForTexture(texture: number, colour: readonly [number, number, number] = [0.5, 0.5, 0.5]): number {
+        const material = SERVER_TEXTURE_MATERIALS[texture];
+        if (material !== undefined && material !== HDMaterial.Default) {
+            return material;
+        }
+
+        return this.materialForColour(colour, HDMaterial.Default);
+    }
+
+    private static materialForModelTexture(texture: number, colour: readonly [number, number, number] = [0.5, 0.5, 0.5]): number {
+        const material = this.materialForTexture(texture, colour);
+        if (material === HDMaterial.Water || material === HDMaterial.Lava) {
+            return HDMaterial.Model;
+        }
+
+        return material;
+    }
+
+    private static materialForModelColour(colour: readonly [number, number, number]): number {
+        const material = this.materialForColour(colour, HDMaterial.Model);
+        return material === HDMaterial.Water || material === HDMaterial.Lava
+            ? HDMaterial.Model
+            : material;
+    }
+
+    private static isSpikeSheetTerrainFace(
+        normal: readonly [number, number, number],
+        colourA: readonly [number, number, number],
+        colourB: readonly [number, number, number],
+        colourC: readonly [number, number, number]
+    ): boolean {
+        if (normal[1] <= -0.65) {
+            return false;
+        }
+
+        const [r, g, b] = this.averageColour(colourA, colourB, colourC);
+        const brightness = (r + g + b) / 3;
+        return brightness > 0.32 && g > r * 1.03 && b > r * 0.78;
+    }
+
+    private static materialForColour(colour: readonly [number, number, number], fallback: number = HDMaterial.Default): number {
+        const [r, g, b] = colour;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const saturation = max - min;
+        const brightness = (r + g + b) / 3;
+
+        if (b > r * 1.15 && b > g * 1.1 && saturation > 0.08) {
+            return HDMaterial.Water;
+        }
+
+        if (r > 0.50 && r > g * 1.8 && b < g * 0.6 && brightness > 0.35) {
+            return HDMaterial.Lava;
+        }
+
+        if (g > r * 1.08 && g > b * 1.08 && saturation > 0.08) {
+            return brightness < 0.42 ? HDMaterial.Moss : HDMaterial.Foliage;
+        }
+
+        if (r > 0.34 && g < 0.3 && b < 0.25) {
+            return HDMaterial.Roof;
+        }
+
+        if (r > g * 1.08 && g > b * 1.05 && brightness < 0.58) {
+            return HDMaterial.Wood;
+        }
+
+        if (saturation < 0.08 && brightness > 0.56) {
+            return HDMaterial.Marble;
+        }
+
+        if (saturation < 0.12 && brightness > 0.36) {
+            return HDMaterial.Metal;
+        }
+
+        if (saturation < 0.14) {
+            return HDMaterial.Stone;
+        }
+
+        return fallback;
+    }
+
+    private static materialForTerrainColour(colour: readonly [number, number, number]): number {
+        const [r, g, b] = colour;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const saturation = max - min;
+        const brightness = (r + g + b) / 3;
+
+        if (b > r * 1.15 && b > g * 1.1 && saturation > 0.08) {
+            return HDMaterial.Water;
+        }
+
+        if (r > 0.50 && r > g * 1.8 && b < g * 0.6 && brightness > 0.35) {
+            return HDMaterial.Lava;
+        }
+
+        if (g > r * 1.04 && g > b * 1.04 && saturation > 0.05) {
+            return brightness < 0.42 ? HDMaterial.Moss : HDMaterial.Foliage;
+        }
+
+        if (r > g * 1.03 && g >= b * 0.9 && brightness < 0.62) {
+            return HDMaterial.Earth;
+        }
+
+        if (saturation < 0.16) {
+            return brightness > 0.52 ? HDMaterial.Stone : HDMaterial.Earth;
+        }
+
+        return this.materialForColour(colour, HDMaterial.Earth);
+    }
+
+    private static materialForFloor(_tile: HDGroundTileInput, _colour: readonly [number, number, number], _isOverlayFace: boolean = true): number {
+        // Original 254 client uses texture=-1 for untextured terrain (grass, roads, earth).
+        // Render these with vertex colours only — no HD procedural noise overlay.
+        return HDMaterial.Default;
+    }
+
+    private static countMaterial(material: number): void {
+        const index = Math.max(0, Math.min(this.materialCounts.length - 1, material | 0));
+        this.materialCounts[index] = (this.materialCounts[index] ?? 0) + 1;
+    }
+
+    private static countTexture(texture: number): void {
+        if (!this.isValid254Texture(texture)) {
+            if (texture === -1) {
+                this.untexturedTriangleCount++;
+            } else {
+                this.invalidTextureCount++;
+            }
+            return;
+        }
+
+        this.textureUseCounts[texture] = (this.textureUseCounts[texture] ?? 0) + 1;
+    }
+
+    private static materialName(material: number): string {
+        switch (material) {
+            case HDMaterial.Default:
+                return 'Default';
+            case HDMaterial.Water:
+                return 'Water';
+            case HDMaterial.Lava:
+                return 'Lava';
+            case HDMaterial.Model:
+                return 'Model';
+            case HDMaterial.Stone:
+                return 'Stone';
+            case HDMaterial.Wood:
+                return 'Wood';
+            case HDMaterial.Marble:
+                return 'Marble';
+            case HDMaterial.Moss:
+                return 'Moss';
+            case HDMaterial.Pebble:
+                return 'Pebble';
+            case HDMaterial.Foliage:
+                return 'Foliage';
+            case HDMaterial.Metal:
+                return 'Metal';
+            case HDMaterial.Roof:
+                return 'Roof';
+            case HDMaterial.Unlit:
+                return 'Unlit';
+            case HDMaterial.Earth:
+                return 'Earth';
+            default:
+                return String(material);
+        }
+    }
+
+    private static keyedTextureAlpha(rgb: number, hasTransparency: boolean): number {
+        if (!hasTransparency) {
+            return 255;
+        }
+
+        const r = (rgb >> 16) & 0xff;
+        const g = (rgb >> 8) & 0xff;
+        const b = rgb & 0xff;
+        return r < 16 && g < 16 && b < 16 ? 0 : 255;
+    }
+
+    private static textureDiagnostics(limit: number = 12): HDTextureDiagnostics {
+        const topTextures = this.textureUseCounts
+            .map((count, id) => ({ id, count }))
+            .filter(entry => entry.count > 0)
+            .sort((a, b) => b.count - a.count)
+            .slice(0, limit)
+            .map(({ id, count }) => {
+                const texture = Pix3D.textures[id];
+                const material = this.materialForTexture(id);
+                const serverName = SERVER_TEXTURE_NAMES[id] ?? `texture_${id}`;
+                const osrsName = OSRS_TEXTURE_NAMES[id] ?? `TEXTURE_${id}`;
+                return {
+                    id,
+                    name: `${serverName} / ${osrsName}`,
+                    serverName,
+                    osrsName,
+                    count,
+                    loaded: texture !== null && texture !== undefined,
+                    hasPalette: Pix3D.texPal[id] !== null && Pix3D.texPal[id] !== undefined,
+                    width: texture?.wi ?? 0,
+                    height: texture?.hi ?? 0,
+                    material: this.materialName(material),
+                    transparent: SERVER_TRANSPARENT_TEXTURE_IDS.has(id)
+                };
+            });
+
+        const textureIdMap = Array.from({ length: CACHE_TEXTURE_COUNT }, (_, id) => {
+            const material = this.materialForTexture(id);
+            return {
+                id,
+                serverName: SERVER_TEXTURE_NAMES[id] ?? `texture_${id}`,
+                osrsName: OSRS_TEXTURE_NAMES[id] ?? `TEXTURE_${id}`,
+                material: this.materialName(material),
+                transparent: SERVER_TRANSPARENT_TEXTURE_IDS.has(id)
+            };
+        });
+
+        return {
+            mode: this.textureDebugModeName(),
+            atlasReady: this.textureAtlasReady,
+            atlasLoadedCount: this.textureAtlasLoadedCount,
+            hdAtlasExpectedCount: HD_TEXTURE_FOR_SLOT.filter(filename => filename !== null).length,
+            hdAtlasLoadedCount: this.hdAtlasLoadedCount,
+            hdAtlasFailedCount: this.hdAtlasFailedCount,
+            hdAtlasPendingCount: this.hdAtlasPendingImages.length,
+            hdAtlasLoadResults: this.hdAtlasLoadResults.slice(-50),
+            hdGroundMapsReady: this.hdGroundMapsReady,
+            waterMapsReady: this.waterMapsReady,
+            untexturedTriangleCount: this.untexturedTriangleCount,
+            invalidTextureCount: this.invalidTextureCount,
+            textureIdMap,
+            topTextures
+        };
+    }
+
+private static showTextureAtlasPreview(): string | null {
+    if (typeof document === 'undefined') {
+        return null;
+    }
+
+    const existingAtlasPreview = document.getElementById('hd-texture-atlas-preview');
+    if (existingAtlasPreview) {
+        existingAtlasPreview.remove();
+        return null;
+    }
+
+    const scale = 2;
+    const canvas = document.createElement('canvas');
+        canvas.width = ATLAS_COLS * TEXTURE_SIZE;
+        canvas.height = ATLAS_ROWS * TEXTURE_SIZE;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            return null;
+        }
+
+        const image = ctx.createImageData(canvas.width, canvas.height);
+        for (let id = 0; id < CACHE_TEXTURE_COUNT; id++) {
+            const texture = Pix3D.textures[id];
+            const palette = Pix3D.texPal[id] ?? texture?.bpal ?? null;
+            if (!texture || !palette) {
+                continue;
+            }
+
+            const col = id % ATLAS_COLS;
+            const row = (id / ATLAS_COLS) | 0;
+            const hasTransparency = SERVER_TRANSPARENT_TEXTURE_IDS.has(id);
+
+            for (let y = 0; y < TEXTURE_SIZE; y++) {
+                const srcY = Math.min(texture.hi - 1, Math.floor((y * texture.hi) / TEXTURE_SIZE));
+                for (let x = 0; x < TEXTURE_SIZE; x++) {
+                    const srcX = Math.min(texture.wi - 1, Math.floor((x * texture.wi) / TEXTURE_SIZE));
+                    const paletteIndex = texture.data[srcX + srcY * texture.wi] & 0xff;
+                    const rgb = (palette[paletteIndex] ?? 0) & 0xf8f8ff;
+                    const off = ((col * TEXTURE_SIZE + x) + (row * TEXTURE_SIZE + y) * canvas.width) * 4;
+                    image.data[off] = (rgb >> 16) & 0xff;
+                    image.data[off + 1] = (rgb >> 8) & 0xff;
+                    image.data[off + 2] = rgb & 0xff;
+                    image.data[off + 3] = this.keyedTextureAlpha(rgb, hasTransparency);
+                }
+            }
+        }
+        ctx.putImageData(image, 0, 0);
+
+        let preview = document.getElementById('hd-texture-atlas-preview') as HTMLDivElement | null;
+        if (!preview) {
+            preview = document.createElement('div');
+            preview.id = 'hd-texture-atlas-preview';
+            preview.style.position = 'fixed';
+            preview.style.right = '8px';
+            preview.style.bottom = '8px';
+            preview.style.zIndex = '999999';
+            preview.style.background = 'rgba(0, 0, 0, 0.82)';
+            preview.style.border = '1px solid #ffff00';
+            preview.style.padding = '6px';
+            preview.style.color = '#ffff00';
+            preview.style.font = '12px monospace';
+            document.body.appendChild(preview);
+        }
+
+        preview.textContent = '';
+        const label = document.createElement('div');
+        label.textContent = `HD texture atlas: ${this.textureAtlasLoadedCount}/${CACHE_TEXTURE_COUNT} loaded`;
+        const view = canvas.cloneNode(false) as HTMLCanvasElement;
+        view.width = canvas.width;
+        view.height = canvas.height;
+        view.style.width = `${canvas.width / scale}px`;
+        view.style.height = `${canvas.height / scale}px`;
+        view.style.imageRendering = 'pixelated';
+        view.getContext('2d')?.drawImage(canvas, 0, 0);
+        preview.appendChild(label);
+        preview.appendChild(view);
+
+        return canvas.toDataURL('image/png');
+    }
+
+    private static showTextureDiagnosticsOverlay(): void {
+        if (typeof document === 'undefined') {
+            return;
+        }
+
+        if (!this.diagnosticsOverlay) {
+            const overlay = document.createElement('pre');
+            overlay.id = 'hd-texture-diagnostics-overlay';
+            overlay.style.position = 'fixed';
+            overlay.style.left = '8px';
+            overlay.style.bottom = '8px';
+            overlay.style.zIndex = '999999';
+            overlay.style.maxWidth = '760px';
+            overlay.style.maxHeight = '70vh';
+            overlay.style.overflow = 'auto';
+            overlay.style.pointerEvents = 'auto';
+            overlay.style.whiteSpace = 'pre-wrap';
+            overlay.style.padding = '8px 10px';
+            overlay.style.margin = '0';
+            overlay.style.background = 'rgba(0, 0, 0, 0.88)';
+            overlay.style.color = '#ffff00';
+            overlay.style.font = '12px Consolas, monospace';
+            overlay.style.border = '1px solid rgba(255, 255, 0, 0.8)';
+            document.body.appendChild(overlay);
+            this.diagnosticsOverlay = overlay;
+        }
+
+        const diagnostics = this.textureDiagnostics(20);
+        this.diagnosticsOverlay.textContent = [
+            'HD texture diagnostics',
+            'F10 refresh, click this box to hide, F11 atlas preview',
+            '',
+            JSON.stringify(diagnostics, null, 2)
+        ].join('\n');
+        this.diagnosticsOverlay.style.display = 'block';
+        this.diagnosticsOverlay.onclick = () => {
+            if (this.diagnosticsOverlay) {
+                this.diagnosticsOverlay.style.display = 'none';
+            }
+        };
+    }
+
+    private static publishStatus(): void {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const target = window as unknown as {
+            HD_RENDERER_STATUS?: HDRendererStatus;
+            HD_TEXTURE_DIAGNOSTICS?: () => HDTextureDiagnostics;
+            HD_TEXTURE_ATLAS_PREVIEW?: () => string | null;
+        };
+        target.HD_RENDERER_STATUS = this.status(false);
+        target.HD_TEXTURE_DIAGNOSTICS = () => this.textureDiagnostics();
+        target.HD_TEXTURE_ATLAS_PREVIEW = () => this.showTextureAtlasPreview();
+    }
+
+    private static initSkybox(gl: WebGL2RenderingContext): void {
+        if (this.skyboxProgram) {
+            return;
+        }
+
+        const program = this.createProgram(gl, skyboxShader);
+        if (!program) {
+            return;
+        }
+        this.skyboxProgram = program;
+
+        this.skyboxUniSinPitch  = gl.getUniformLocation(program, 'u_sinEyePitch');
+        this.skyboxUniCosPitch  = gl.getUniformLocation(program, 'u_cosEyePitch');
+        this.skyboxUniSinYaw    = gl.getUniformLocation(program, 'u_sinEyeYaw');
+        this.skyboxUniCosYaw    = gl.getUniformLocation(program, 'u_cosEyeYaw');
+        this.skyboxUniProjScale = gl.getUniformLocation(program, 'u_projectionScale');
+        this.skyboxUniZenith    = gl.getUniformLocation(program, 'u_skyZenith');
+        this.skyboxUniHorizon   = gl.getUniformLocation(program, 'u_skyHorizon');
+        this.skyboxUniSunDir    = gl.getUniformLocation(program, 'u_sunDirection');
+
+        // Fullscreen quad in NDC [-1,1] x [-1,1]
+        const verts = new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]);
+        const buf = gl.createBuffer()!;
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+
+        const vao = gl.createVertexArray()!;
+        gl.bindVertexArray(vao);
+        gl.enableVertexAttribArray(0);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+        gl.bindVertexArray(null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+        this.skyboxBuffer = buf;
+        this.skyboxVao = vao;
+    }
+
+    private static renderSkybox(): void {
+        const gl = this.gl;
+        const camera = this.camera;
+        if (!gl || !this.skyboxProgram || !this.skyboxVao || !camera) {
+            return;
+        }
+
+        gl.useProgram(this.skyboxProgram);
+
+        // Camera rotation uniforms (same scaling as setCameraUniforms)
+        gl.uniform1f(this.skyboxUniSinPitch,  camera.sinEyePitch / 65536);
+        gl.uniform1f(this.skyboxUniCosPitch,  camera.cosEyePitch / 65536);
+        gl.uniform1f(this.skyboxUniSinYaw,    camera.sinEyeYaw   / 65536);
+        gl.uniform1f(this.skyboxUniCosYaw,    camera.cosEyeYaw   / 65536);
+
+        const focalLength = 512;
+        gl.uniform2f(this.skyboxUniProjScale,
+            (2 * focalLength) / VIEWPORT_WIDTH,
+            (2 * focalLength) / VIEWPORT_HEIGHT);
+
+        // Sky gradient colours — horizon matches fog colour for seamless distance fade.
+        const skyHorizonR = Number.isFinite(Number((globalThis as any).HD_SKY_HORIZON_R)) ? Number((globalThis as any).HD_SKY_HORIZON_R) : 0.64;
+        const skyHorizonG = Number.isFinite(Number((globalThis as any).HD_SKY_HORIZON_G)) ? Number((globalThis as any).HD_SKY_HORIZON_G) : 0.78;
+        const skyHorizonB = Number.isFinite(Number((globalThis as any).HD_SKY_HORIZON_B)) ? Number((globalThis as any).HD_SKY_HORIZON_B) : 0.92;
+        const skyZenithR  = Number.isFinite(Number((globalThis as any).HD_SKY_ZENITH_R))  ? Number((globalThis as any).HD_SKY_ZENITH_R)  : 0.28;
+        const skyZenithG  = Number.isFinite(Number((globalThis as any).HD_SKY_ZENITH_G))  ? Number((globalThis as any).HD_SKY_ZENITH_G)  : 0.52;
+        const skyZenithB  = Number.isFinite(Number((globalThis as any).HD_SKY_ZENITH_B))  ? Number((globalThis as any).HD_SKY_ZENITH_B)  : 0.82;
+
+        gl.uniform3f(this.skyboxUniHorizon, skyHorizonR, skyHorizonG, skyHorizonB);
+        gl.uniform3f(this.skyboxUniZenith,  skyZenithR,  skyZenithG,  skyZenithB);
+        gl.uniform3f(this.skyboxUniSunDir, -0.45, 0.8, -0.35);
+
+        gl.bindVertexArray(this.skyboxVao);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        gl.bindVertexArray(null);
+    }
+
+    private static initShadowMap(): void {
+        const gl = this.gl;
+        if (!gl || this.shadowFbo) {
+            return;
+        }
+
+        const program = this.createProgram(gl, shadowShader);
+        if (!program) {
+            return;
+        }
+        this.shadowProgram = program;
+        this.shadowUniformMatrix = gl.getUniformLocation(program, 'u_lightSpaceMatrix');
+
+        const size = SHADOW_MAP_SIZE;
+        this.shadowDepthTexture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, this.shadowDepthTexture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT32F, size, size, 0, gl.DEPTH_COMPONENT, gl.FLOAT, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+
+        this.shadowFbo = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.shadowFbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, this.shadowDepthTexture, 0);
+        gl.drawBuffers([gl.NONE]);
+        gl.readBuffer(gl.NONE);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
+    private static initNormalAtlas(gl: WebGL2RenderingContext): void {
+        if (this.normalAtlas) {
+            return;
+        }
+
+        // Fill the entire atlas with a flat tangent-space normal: (0.5, 0.5, 1.0) → rgb (128,128,255).
+        // A flat normal produces TBN * (0,0,1) = geometric normal, so surface lighting is unchanged
+        // until real normal map images are asynchronously uploaded into their slots.
+        const width = ATLAS_COLS * TEXTURE_SIZE;
+        const height = ATLAS_ROWS * TEXTURE_SIZE;
+        const data = new Uint8Array(width * height * 4);
+        for (let i = 0; i < width * height; i++) {
+            data[i * 4 + 0] = 128;
+            data[i * 4 + 1] = 128;
+            data[i * 4 + 2] = 255;
+            data[i * 4 + 3] = 255;
+        }
+
+        const texture = gl.createTexture();
+        if (!texture) {
+            return;
+        }
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        this.normalAtlas = texture;
+
+        this.startNormalAtlasLoads();
+    }
+
+    private static startNormalAtlasLoads(): void {
+        const loads: [number, string][] = [];
+
+        for (let id = 0; id < NORMAL_MAP_FOR_TEXTURE.length; id++) {
+            const file = NORMAL_MAP_FOR_TEXTURE[id];
+            if (file) {
+                loads.push([id, file]);
+            }
+        }
+
+        for (let m = 0; m < NORMAL_MAP_FOR_MATERIAL.length; m++) {
+            const file = NORMAL_MAP_FOR_MATERIAL[m];
+            if (file) {
+                loads.push([NORMAL_ATLAS_MATERIAL_SLOT_OFFSET + m, file]);
+            }
+        }
+
+        for (const [slot, file] of loads) {
+            fetch(`/hd/textures/${file}`)
+                .then(r => r.ok ? r.blob() : Promise.reject(`${r.status} /hd/textures/${file}`))
+                .then(blob => createImageBitmap(blob))
+                .then(bitmap => {
+                    const tmp = new OffscreenCanvas(TEXTURE_SIZE, TEXTURE_SIZE);
+                    const ctx = tmp.getContext('2d')!;
+                    ctx.drawImage(bitmap, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+                    bitmap.close();
+                    const imageData = ctx.getImageData(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+                    this.normalAtlasPendingImages.push({ slot, data: imageData.data });
+                })
+                .catch(() => {
+                    // Missing file — slot stays flat, no normal perturbation for this texture
+                });
+        }
+    }
+
+    private static initWaterMaps(gl: WebGL2RenderingContext): void {
+        if (this.waterNormalMap && this.waterFlowMap && this.waterFoamMap) {
+            return;
+        }
+
+        const makeFallback = (kind: 'normal' | 'flow' | 'foam'): WebGLTexture | null => {
+            const size = 128;
+            const data = new Uint8Array(size * size * 4);
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const i = (x + y * size) * 4;
+                    const n = ((Math.sin(x * 0.19 + y * 0.07) + Math.sin(x * 0.05 - y * 0.17)) * 0.25 + 0.5);
+                    if (kind === 'normal') {
+                        data[i + 0] = 128 + Math.round((n - 0.5) * 46);
+                        data[i + 1] = 128 + Math.round((0.5 - n) * 46);
+                        data[i + 2] = 255;
+                    } else if (kind === 'flow') {
+                        data[i + 0] = 128 + Math.round(Math.sin(y * 0.09) * 48);
+                        data[i + 1] = 128 + Math.round(Math.cos(x * 0.08) * 48);
+                        data[i + 2] = 128;
+                    } else {
+                        const edge = Math.min(Math.min(x, size - 1 - x), Math.min(y, size - 1 - y)) / size;
+                        data[i + 0] = edge < 0.08 && n > 0.45 ? 235 : Math.round(Math.max(0, n - 0.72) * 255);
+                        data[i + 1] = data[i + 0];
+                        data[i + 2] = data[i + 0];
+                    }
+                    data[i + 3] = 255;
+                }
+            }
+            const tex = gl.createTexture();
+            if (!tex) {
+                return null;
+            }
+            gl.bindTexture(gl.TEXTURE_2D, tex);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+            gl.generateMipmap(gl.TEXTURE_2D);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+            return tex;
+        };
+
+        this.waterNormalMap = makeFallback('normal');
+        this.waterFlowMap = makeFallback('flow');
+        this.waterFoamMap = makeFallback('foam');
+
+        const load = (url: string, assign: (tex: WebGLTexture) => void): void => {
+            fetch(url)
+                .then(r => r.ok ? r.blob() : Promise.reject(url))
+                .then(blob => createImageBitmap(blob))
+                .then(bitmap => {
+                    const tex = gl.createTexture();
+                    if (!tex) {
+                        bitmap.close();
+                        return;
+                    }
+                    gl.bindTexture(gl.TEXTURE_2D, tex);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
+                    bitmap.close();
+                    gl.generateMipmap(gl.TEXTURE_2D);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+                    gl.bindTexture(gl.TEXTURE_2D, null);
+                    assign(tex);
+                    this.waterMapsReady = Boolean(this.waterNormalMap && this.waterFlowMap && this.waterFoamMap);
+                })
+                .catch(() => {
+                    // Keep procedural/fallback map alive. Missing PNGs should never break HD mode.
+                });
+        };
+
+        load('/hd/textures/water_normal.png', tex => { this.waterNormalMap = tex; });
+        load('/hd/textures/water_flow.png', tex => { this.waterFlowMap = tex; });
+        load('/hd/textures/water_foam.png', tex => { this.waterFoamMap = tex; });
+        this.waterMapsReady = false;
+    }
+
+    private static initHdGroundAtlas(gl: WebGL2RenderingContext): void {
+        if (this.hdGroundAtlas) {
+            return;
+        }
+
+        const makeFallback = (): WebGLTexture | null => {
+            const size = 128;
+            const cols = 4;
+            const rows = 2;
+            const data = new Uint8Array(size * size * cols * rows * 4);
+            const palette: [number, number, number][] = [
+                [58, 112, 34],   // grass
+                [52, 82, 36],    // moss
+                [124, 105, 78],  // path
+                [142, 128, 84],  // sand
+                [104, 103, 94],  // gravel
+                [122, 121, 112], // stone
+                [102, 84, 64],   // dirt
+                [118, 116, 110]  // rock
+            ];
+            const width = size * cols;
+            const height = size * rows;
+            for (let slot = 0; slot < cols * rows; slot++) {
+                const [r, g, b] = palette[slot];
+                const ox = (slot % cols) * size;
+                const oy = ((slot / cols) | 0) * size;
+                for (let y = 0; y < size; y++) {
+                    for (let x = 0; x < size; x++) {
+                        const n = (Math.sin((x + slot * 17) * 0.17) + Math.sin((y - slot * 11) * 0.13)) * 0.5 +
+                                  (Math.sin((x + y) * 0.043) * 0.5);
+                        const v = Math.max(-0.22, Math.min(0.22, n * 0.10));
+                        const i = ((ox + x) + (oy + y) * width) * 4;
+                        data[i + 0] = Math.max(0, Math.min(255, Math.round(r * (1 + v))));
+                        data[i + 1] = Math.max(0, Math.min(255, Math.round(g * (1 + v))));
+                        data[i + 2] = Math.max(0, Math.min(255, Math.round(b * (1 + v))));
+                        data[i + 3] = 255;
+                    }
+                }
+            }
+            const tex = gl.createTexture();
+            if (!tex) {
+                return null;
+            }
+            gl.bindTexture(gl.TEXTURE_2D, tex);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+            gl.generateMipmap(gl.TEXTURE_2D);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+            return tex;
+        };
+
+        this.hdGroundAtlas = makeFallback();
+        this.hdGroundMapsReady = false;
+
+        fetch('/hd/terrain/osrs_ground_atlas.png')
+            .then(r => r.ok ? r.blob() : Promise.reject('/hd/terrain/osrs_ground_atlas.png'))
+            .then(blob => createImageBitmap(blob))
+            .then(bitmap => {
+                const tex = gl.createTexture();
+                if (!tex) {
+                    bitmap.close();
+                    return;
+                }
+                gl.bindTexture(gl.TEXTURE_2D, tex);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
+                bitmap.close();
+                gl.generateMipmap(gl.TEXTURE_2D);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+                const anisotropicExt = gl.getExtension('EXT_texture_filter_anisotropic');
+                if (anisotropicExt) {
+                    gl.texParameterf(gl.TEXTURE_2D, anisotropicExt.TEXTURE_MAX_ANISOTROPY_EXT, gl.getParameter(anisotropicExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT));
+                }
+                gl.bindTexture(gl.TEXTURE_2D, null);
+                this.hdGroundAtlas = tex;
+                this.hdGroundMapsReady = true;
+            })
+            .catch(() => {
+                // Keep fallback/procedural ground material path alive. Missing atlas should never break HD mode.
+            });
+    }
+
+    private static renderShadowPass(): void {
+        const gl = this.gl;
+        if (!gl || !this.shadowProgram || !this.shadowFbo || this.terrainVertexCount === 0 || !this.terrainVao) {
+            return;
+        }
+
+        const size = SHADOW_MAP_SIZE;
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.shadowFbo);
+        gl.viewport(0, 0, size, size);
+        gl.disable(gl.SCISSOR_TEST);
+        gl.enable(gl.DEPTH_TEST);
+        gl.depthFunc(gl.LEQUAL);
+        gl.depthMask(true);
+        gl.clear(gl.DEPTH_BUFFER_BIT);
+        gl.colorMask(false, false, false, false);
+
+        gl.useProgram(this.shadowProgram);
+        gl.uniformMatrix4fv(this.shadowUniformMatrix, false, this.lightSpaceMatrix);
+        this.drawBuffer(this.terrainVao, this.terrainVertexCount);
+
+        for (const [texture, vertices] of this.modelBatches) {
+            if (vertices.length === 0) {
+                continue;
+            }
+            const vao = this.modelVaos.get(texture);
+            if (vao) {
+                this.drawBuffer(vao, vertices.length / VERTEX_FLOATS);
+            }
+        }
+
+        gl.colorMask(true, true, true, true);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
+    private static buildLightSpaceMatrix(camera: HDCameraInput): void {
+        // u_sunDirection = (-0.45, 0.8, -0.35) is the light-ray direction (sun → scene).
+        // In OSRS, -Y is up. The sun is above the scene at +X, -Y, +Z from the camera.
+        // sunDir (from surface toward sun) = (0.45, -0.8, 0.35). lightEye = camera + sunDir * dist.
+        const rx = 0.45, ry = 0.8, rz = 0.35;
+        const len = Math.hypot(rx, ry, rz);
+        const dist = 5000;
+        const lightEye: [number, number, number] = [
+            camera.eyeX + (rx / len) * dist,
+            camera.eyeY - (ry / len) * dist,
+            camera.eyeZ + (rz / len) * dist
+        ];
+        const center: [number, number, number] = [camera.eyeX, camera.eyeY, camera.eyeZ];
+        const up: [number, number, number] = [0, 0, 1];
+
+        const view = this.mat4LookAt(lightEye, center, up);
+        const half = 6000;
+        const ortho = this.mat4Ortho(-half, half, -half, half, 1, 14000);
+        const vp = this.mat4Multiply(ortho, view);
+
+        // Shadow map stabilization: snap the world origin's projected position to
+        // the nearest shadow-map texel to prevent sub-texel shimmer when the camera
+        // rotates. For ortho projection vp*[0,0,0,1] = column 3 = vp[12], vp[13].
+        const halfTexels = SHADOW_MAP_SIZE * 0.5;
+        const snapX = (Math.round(vp[12] * halfTexels) - vp[12] * halfTexels) / halfTexels;
+        const snapY = (Math.round(vp[13] * halfTexels) - vp[13] * halfTexels) / halfTexels;
+        vp[12] += snapX;
+        vp[13] += snapY;
+
+        this.lightSpaceMatrix.set(vp);
+    }
+
+    private static mat4LookAt(
+        eye: [number, number, number],
+        center: [number, number, number],
+        up: [number, number, number]
+    ): Float32Array {
+        const fx = center[0] - eye[0], fy = center[1] - eye[1], fz = center[2] - eye[2];
+        const flen = Math.hypot(fx, fy, fz) || 1;
+        const f = [fx / flen, fy / flen, fz / flen];
+
+        const rx = f[1] * up[2] - f[2] * up[1];
+        const ry = f[2] * up[0] - f[0] * up[2];
+        const rz = f[0] * up[1] - f[1] * up[0];
+        const rlen = Math.hypot(rx, ry, rz) || 1;
+        const r = [rx / rlen, ry / rlen, rz / rlen];
+
+        const u = [
+            r[1] * f[2] - r[2] * f[1],
+            r[2] * f[0] - r[0] * f[2],
+            r[0] * f[1] - r[1] * f[0]
+        ];
+
+        const m = new Float32Array(16);
+        m[0] = r[0];  m[4] = r[1];  m[8]  = r[2];  m[12] = -(r[0] * eye[0] + r[1] * eye[1] + r[2] * eye[2]);
+        m[1] = u[0];  m[5] = u[1];  m[9]  = u[2];  m[13] = -(u[0] * eye[0] + u[1] * eye[1] + u[2] * eye[2]);
+        m[2] = -f[0]; m[6] = -f[1]; m[10] = -f[2]; m[14] =   f[0] * eye[0] + f[1] * eye[1] + f[2] * eye[2];
+        m[3] = 0;     m[7] = 0;     m[11] = 0;     m[15] = 1;
+        return m;
+    }
+
+    private static mat4Ortho(l: number, r: number, b: number, t: number, n: number, f: number): Float32Array {
+        const m = new Float32Array(16);
+        m[0]  = 2 / (r - l);
+        m[5]  = 2 / (t - b);
+        m[10] = -2 / (f - n);
+        m[12] = -(r + l) / (r - l);
+        m[13] = -(t + b) / (t - b);
+        m[14] = -(f + n) / (f - n);
+        m[15] = 1;
+        return m;
+    }
+
+    private static mat4Multiply(a: Float32Array, b: Float32Array): Float32Array {
+        const m = new Float32Array(16);
+        for (let i = 0; i < 4; i++) {
+            for (let j = 0; j < 4; j++) {
+                let sum = 0;
+                for (let k = 0; k < 4; k++) {
+                    sum += a[k * 4 + i] * b[j * 4 + k];
+                }
+                m[j * 4 + i] = sum;
+            }
+        }
+        return m;
+    }
+
+    private static init(): void {
+        this.installTextureDebugHotkeys();
+        if (this.gl && this.terrainProgram) {
+            return;
+        }
+
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl2', {
+            alpha: true,
+            antialias: true,
+            depth: true,
+            powerPreference: 'high-performance',
+            premultipliedAlpha: false,
+            preserveDrawingBuffer: true
+        });
+
+        if (!gl) {
+            this.reason = 'WebGL2 is not available';
+            return;
+        }
+
+        const program = this.createProgram(gl, terrainShader);
+        if (!program) {
+            this.reason = 'HD terrain shader failed to compile';
+            return;
+        }
+
+        this.canvas = canvas;
+        this.gl = gl;
+        this.terrainProgram = program;
+        this.cacheUniforms();
+        this.initShadowMap();
+        this.initSkybox(gl);
+        this.initNormalAtlas(gl);
+        this.initWaterMaps(gl);
+        this.initHdGroundAtlas(gl);
+        this.reason = 'ready';
+    }
+
+    private static cacheUniforms(): void {
+        if (!this.gl || !this.terrainProgram) {
+            return;
+        }
+
+        const gl = this.gl;
+        const p = this.terrainProgram;
+        this.uniformCache.clear();
+
+        for (const name of [
+            'u_cameraPosition', 'u_projectionScale', 'u_sinEyePitch', 'u_cosEyePitch',
+            'u_sinEyeYaw', 'u_cosEyeYaw', 'u_nearPlane', 'u_farPlane',
+            'u_sunDirection', 'u_skyColour', 'u_ambient', 'u_diffuseStrength',
+            'u_fogStart', 'u_fogDistance', 'u_time', 'u_textureAtlas',
+            'u_textureDebugMode', 'u_cacheTextureCount',
+            'u_lightSpaceMatrix', 'u_shadowMap', 'u_shadowStrength', 'u_normalAtlas',
+            'u_waterTextureDiffuse', 'u_waterFresnelStrength', 'u_waterSpecularStrength', 'u_waterFoamStrength',
+            'u_waterNormalMap', 'u_waterFlowMap', 'u_waterFoamMap', 'u_waterMapsReady',
+            'u_hdAmbientColour', 'u_hdSunColour', 'u_hdFogColour',
+            'u_hdSkyStrength', 'u_hdExposure', 'u_hdContrast', 'u_hdSaturation',
+            'u_gammaCorrection', 'u_groundFogStart', 'u_groundFogEnd', 'u_groundFogOpacity',
+            'u_hdGroundTextureStrength', 'u_hdGroundNormalStrength',
+            'u_hdGroundTextureScale', 'u_hdGroundMacroStrength',
+            'u_hdGroundAtlas', 'u_hdGroundMapsReady',
+            'u_hdTextureAtlas', 'u_hdAtlasReady'
+        ]) {
+            this.uniformCache.set(name, gl.getUniformLocation(p, name));
+        }
+
+        this.atlasRectLocations = [];
+        for (let i = 0; i < ATLAS_SIZE; i++) {
+            this.atlasRectLocations[i] = gl.getUniformLocation(p, `u_atlasRects[${i}]`);
+        }
+
+        this.hdAtlasRectLocations = [];
+        for (let i = 0; i < CACHE_TEXTURE_COUNT; i++) {
+            this.hdAtlasRectLocations[i] = gl.getUniformLocation(p, `u_hdAtlasRects[${i}]`);
+        }
+    }
+
+    private static setSoftwareCanvasHidden(_hidden: boolean): void {
+        const gameCanvas = document.getElementById('canvas') as HTMLCanvasElement | null;
+        if (!gameCanvas) {
+            return;
+        }
+
+        // Reverted WebGL UI presentation: the original 254/Pix2D canvas must stay
+        // visible because it owns chat, menus, click crosses, fonts, sprites, etc.
+        gameCanvas.style.opacity = '';
+        gameCanvas.style.pointerEvents = '';
+    }
+
+    private static attachCanvas(): void {
+        // Reverted WebGL UI presentation: keep the WebGL canvas off-DOM so it
+        // cannot cover the software Pix2D UI. renderFrame() composites only the
+        // 3D viewport into #canvas, then the normal client can draw UI on top.
+        if (!this.canvas) {
+            return;
+        }
+
+        this.canvas.id = 'hd-canvas';
+        this.canvas.setAttribute('aria-hidden', 'true');
+        if (this.canvas.isConnected) {
+            this.canvas.remove();
+        }
+    }
+
+    private static resizeCanvasToCss(): void {
+        const gameCanvas = document.getElementById('canvas') as HTMLCanvasElement | null;
+        if (!this.canvas || !gameCanvas) {
+            return;
+        }
+
+        const rect = gameCanvas.getBoundingClientRect();
+        const scale = Math.min(window.devicePixelRatio || 1, 2.5);
+        const width = Math.max(1, Math.round(rect.width * scale));
+        const height = Math.max(1, Math.round(rect.height * scale));
+
+        if (this.canvas.width !== width) {
+            this.canvas.width = width;
+        }
+        if (this.canvas.height !== height) {
+            this.canvas.height = height;
+        }
+
+        this.setSoftwareCanvasHidden(false);
+    }
+
+    private static viewportRect(canvas: HTMLCanvasElement): { x: number; y: number; width: number; height: number } {
+        const x = Math.round((VIEWPORT_X / 765) * canvas.width);
+        const width = Math.round((VIEWPORT_WIDTH / 765) * canvas.width);
+        const height = Math.round((VIEWPORT_HEIGHT / 503) * canvas.height);
+        const top = Math.round((VIEWPORT_Y / 503) * canvas.height);
+        return {
+            x,
+            y: canvas.height - top - height,
+            width,
+            height
+        };
+    }
+
+    private static setCameraUniforms(_viewportWidth: number, _viewportHeight: number): void {
+        if (!this.gl || !this.camera) {
+            return;
+        }
+
+        const gl = this.gl;
+        const u = (name: string): WebGLUniformLocation | null => this.uniformCache.get(name) ?? null;
+        const focalLength = 512;
+
+        gl.uniform3f(u('u_cameraPosition'), this.camera.eyeX, this.camera.eyeY, this.camera.eyeZ);
+        gl.uniform2f(u('u_projectionScale'), (2 * focalLength) / VIEWPORT_WIDTH, (2 * focalLength) / VIEWPORT_HEIGHT);
+        gl.uniform1f(u('u_sinEyePitch'), this.camera.sinEyePitch / 65536);
+        gl.uniform1f(u('u_cosEyePitch'), this.camera.cosEyePitch / 65536);
+        gl.uniform1f(u('u_sinEyeYaw'), this.camera.sinEyeYaw / 65536);
+        gl.uniform1f(u('u_cosEyeYaw'), this.camera.cosEyeYaw / 65536);
+        gl.uniform1f(u('u_nearPlane'), 50);
+        gl.uniform1f(u('u_farPlane'), HD_FAR_PLANE);
+        gl.uniform3f(u('u_sunDirection'), -0.45, 0.8, -0.35);
+        gl.uniform3f(u('u_skyColour'), HD_SKY_COLOUR[0], HD_SKY_COLOUR[1], HD_SKY_COLOUR[2]);
+
+        // RLHD-style environment lighting controls. These are intentionally simple
+        // globals so Wails builds can tune lighting without needing browser DevTools.
+        const hdEnvAmbientR = Number.isFinite(Number((globalThis as any).HD_ENV_AMBIENT_R)) ? Number((globalThis as any).HD_ENV_AMBIENT_R) : 0.78;
+        const hdEnvAmbientG = Number.isFinite(Number((globalThis as any).HD_ENV_AMBIENT_G)) ? Number((globalThis as any).HD_ENV_AMBIENT_G) : 0.82;
+        const hdEnvAmbientB = Number.isFinite(Number((globalThis as any).HD_ENV_AMBIENT_B)) ? Number((globalThis as any).HD_ENV_AMBIENT_B) : 0.92;
+        const hdEnvSunR = Number.isFinite(Number((globalThis as any).HD_ENV_SUN_R)) ? Number((globalThis as any).HD_ENV_SUN_R) : 1.00;
+        const hdEnvSunG = Number.isFinite(Number((globalThis as any).HD_ENV_SUN_G)) ? Number((globalThis as any).HD_ENV_SUN_G) : 0.95;
+        const hdEnvSunB = Number.isFinite(Number((globalThis as any).HD_ENV_SUN_B)) ? Number((globalThis as any).HD_ENV_SUN_B) : 0.82;
+        // Fog colour matches the sky horizon for a seamless distance fade.
+        const hdEnvFogR = Number.isFinite(Number((globalThis as any).HD_ENV_FOG_R)) ? Number((globalThis as any).HD_ENV_FOG_R) : 0.58;
+        const hdEnvFogG = Number.isFinite(Number((globalThis as any).HD_ENV_FOG_G)) ? Number((globalThis as any).HD_ENV_FOG_G) : 0.74;
+        const hdEnvFogB = Number.isFinite(Number((globalThis as any).HD_ENV_FOG_B)) ? Number((globalThis as any).HD_ENV_FOG_B) : 0.90;
+        const hdEnvSkyStrength = Number.isFinite(Number((globalThis as any).HD_ENV_SKY_STRENGTH)) ? Number((globalThis as any).HD_ENV_SKY_STRENGTH) : 0.28;
+        const hdEnvExposure = Number.isFinite(Number((globalThis as any).HD_ENV_EXPOSURE)) ? Number((globalThis as any).HD_ENV_EXPOSURE) : 1.20;
+        const hdEnvContrast = Number.isFinite(Number((globalThis as any).HD_ENV_CONTRAST)) ? Number((globalThis as any).HD_ENV_CONTRAST) : 1.08;
+        gl.uniform3f(u('u_hdAmbientColour'), hdEnvAmbientR, hdEnvAmbientG, hdEnvAmbientB);
+        gl.uniform3f(u('u_hdSunColour'), hdEnvSunR, hdEnvSunG, hdEnvSunB);
+        gl.uniform3f(u('u_hdFogColour'), hdEnvFogR, hdEnvFogG, hdEnvFogB);
+        gl.uniform1f(u('u_hdSkyStrength'), hdEnvSkyStrength);
+        gl.uniform1f(u('u_hdExposure'), hdEnvExposure);
+        gl.uniform1f(u('u_hdContrast'), hdEnvContrast);
+
+        const hdEnvSaturation = Number.isFinite(Number((globalThis as any).HD_ENV_SATURATION)) ? Number((globalThis as any).HD_ENV_SATURATION) : 1.12;
+        const hdGammaCorrection = Number.isFinite(Number((globalThis as any).HD_GAMMA_CORRECTION)) ? Number((globalThis as any).HD_GAMMA_CORRECTION) : 1.0;
+        const hdGroundFogStart = Number.isFinite(Number((globalThis as any).HD_GROUND_FOG_START)) ? Number((globalThis as any).HD_GROUND_FOG_START) : 0.0;
+        const hdGroundFogEnd = Number.isFinite(Number((globalThis as any).HD_GROUND_FOG_END)) ? Number((globalThis as any).HD_GROUND_FOG_END) : -200.0;
+        const hdGroundFogOpacity = Number.isFinite(Number((globalThis as any).HD_GROUND_FOG_OPACITY)) ? Number((globalThis as any).HD_GROUND_FOG_OPACITY) : 0.0;
+        gl.uniform1f(u('u_hdSaturation'), hdEnvSaturation);
+        gl.uniform1f(u('u_gammaCorrection'), hdGammaCorrection);
+        gl.uniform1f(u('u_groundFogStart'), hdGroundFogStart);
+        gl.uniform1f(u('u_groundFogEnd'), hdGroundFogEnd);
+        gl.uniform1f(u('u_groundFogOpacity'), hdGroundFogOpacity);
+
+        const hdGroundTextureStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_TEXTURE_STRENGTH)) ? Number((globalThis as any).HD_GROUND_TEXTURE_STRENGTH) : 0.42;
+        const hdGroundNormalStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_NORMAL_STRENGTH)) ? Number((globalThis as any).HD_GROUND_NORMAL_STRENGTH) : 0.45;
+        const hdGroundTextureScale = Number.isFinite(Number((globalThis as any).HD_GROUND_TEXTURE_SCALE)) ? Number((globalThis as any).HD_GROUND_TEXTURE_SCALE) : 384.0;
+        const hdGroundMacroStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_MACRO_STRENGTH)) ? Number((globalThis as any).HD_GROUND_MACRO_STRENGTH) : 0.10;
+        gl.uniform1f(u('u_hdGroundTextureStrength'), hdGroundTextureStrength);
+        gl.uniform1f(u('u_hdGroundNormalStrength'), hdGroundNormalStrength);
+        gl.uniform1f(u('u_hdGroundTextureScale'), hdGroundTextureScale);
+        gl.uniform1f(u('u_hdGroundMacroStrength'), hdGroundMacroStrength);
+        gl.uniform1f(u('u_hdGroundMapsReady'), this.hdGroundMapsReady ? 1.0 : 0.0);
+
+        const hdAmbient = Number.isFinite(Number((globalThis as any).HD_AMBIENT)) ? Number((globalThis as any).HD_AMBIENT) : 1.00;
+        const hdDiffuse = Number.isFinite(Number((globalThis as any).HD_DIFFUSE)) ? Number((globalThis as any).HD_DIFFUSE) : 0.82;
+        const hdFogStart = Number.isFinite(Number((globalThis as any).HD_FOG_START)) ? Number((globalThis as any).HD_FOG_START) : HD_FOG_START;
+        const hdFogEnd = Number.isFinite(Number((globalThis as any).HD_FOG_END)) ? Number((globalThis as any).HD_FOG_END) : HD_FOG_END;
+        gl.uniform1f(u('u_ambient'), hdAmbient);
+        gl.uniform1f(u('u_diffuseStrength'), hdDiffuse);
+        gl.uniform1f(u('u_fogStart'), hdFogStart);
+        gl.uniform1f(u('u_fogDistance'), hdFogEnd);
+        gl.uniform1f(u('u_time'), performance.now() / 1000);
+        // Texture diffuse: controls how much the RS water texture shows through the
+        // procedural surface.  Tweak live with: window.HD_WATER_TEXTURE_DIFFUSE = 0.3
+        const hdWaterTextureDiffuse = Number.isFinite(Number((globalThis as any).HD_WATER_TEXTURE_DIFFUSE)) ? Number((globalThis as any).HD_WATER_TEXTURE_DIFFUSE) : 0.25;
+        const hdWaterFresnelStrength = Number.isFinite(Number((globalThis as any).HD_WATER_FRESNEL_STRENGTH)) ? Number((globalThis as any).HD_WATER_FRESNEL_STRENGTH) : 1.0;
+        const hdWaterSpecularStrength = Number.isFinite(Number((globalThis as any).HD_WATER_SPECULAR_STRENGTH)) ? Number((globalThis as any).HD_WATER_SPECULAR_STRENGTH) : 1.0;
+        const hdWaterFoamStrength = Number.isFinite(Number((globalThis as any).HD_WATER_FOAM_STRENGTH)) ? Number((globalThis as any).HD_WATER_FOAM_STRENGTH) : 1.0;
+        gl.uniform1f(u('u_waterTextureDiffuse'), hdWaterTextureDiffuse);
+        gl.uniform1f(u('u_waterFresnelStrength'), hdWaterFresnelStrength);
+        gl.uniform1f(u('u_waterSpecularStrength'), hdWaterSpecularStrength);
+        gl.uniform1f(u('u_waterFoamStrength'), hdWaterFoamStrength);
+        gl.uniform1f(u('u_waterMapsReady'), this.waterMapsReady ? 1.0 : 0.0);
+        gl.uniform1i(u('u_textureDebugMode'), this.textureDebugMode());
+        gl.uniform1i(u('u_cacheTextureCount'), CACHE_TEXTURE_COUNT);
+
+        gl.uniformMatrix4fv(u('u_lightSpaceMatrix'), false, this.lightSpaceMatrix);
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, this.shadowDepthTexture ?? this.textureAtlas);
+        gl.uniform1i(u('u_shadowMap'), 2);
+        gl.uniform1f(u('u_shadowStrength'), ((globalThis as any).ENABLE_HD_SHADOWS !== false && this.shadowFbo) ? 1.0 : 0.0);
+    }
+
+    private static setupVao(buffer: WebGLBuffer): WebGLVertexArrayObject | null {
+        if (!this.gl) {
+            return null;
+        }
+
+        const gl = this.gl;
+        const vao = gl.createVertexArray();
+        if (!vao) {
+            return null;
+        }
+
+        const stride = VERTEX_FLOATS * 4;
+        gl.bindVertexArray(vao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.enableVertexAttribArray(0);
+        gl.enableVertexAttribArray(1);
+        gl.enableVertexAttribArray(2);
+        gl.enableVertexAttribArray(3);
+        gl.enableVertexAttribArray(4);
+        gl.enableVertexAttribArray(5);
+        gl.enableVertexAttribArray(6);
+        gl.enableVertexAttribArray(7);
+        gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride, 0);
+        gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 3 * 4);
+        gl.vertexAttribPointer(2, 3, gl.FLOAT, false, stride, 6 * 4);
+        gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 9 * 4);
+        gl.vertexAttribPointer(4, 2, gl.FLOAT, false, stride, 10 * 4);
+        gl.vertexAttribPointer(5, 1, gl.FLOAT, false, stride, 12 * 4);
+        gl.vertexAttribPointer(6, 1, gl.FLOAT, false, stride, 13 * 4);
+        gl.vertexAttribPointer(7, 1, gl.FLOAT, false, stride, 14 * 4);
+        gl.bindVertexArray(null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        return vao;
+    }
+
+    private static drawBuffer(vao: WebGLVertexArrayObject, vertexCount: number): void {
+        if (!this.gl) {
+            return;
+        }
+
+        const gl = this.gl;
+        gl.bindVertexArray(vao);
+        gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
+        gl.bindVertexArray(null);
+    }
+
+    private static compositeViewportToGameCanvas(viewport: { x: number; y: number; width: number; height: number }): void {
+        if (!this.gl || !this.canvas || viewport.width <= 0 || viewport.height <= 0) {
+            return;
+        }
+
+        const gameCanvas = document.getElementById('canvas') as HTMLCanvasElement | null;
+        const gameCtx = gameCanvas?.getContext('2d');
+        if (!gameCanvas || !gameCtx) {
+            return;
+        }
+
+        // Convert viewport from OpenGL coords (Y from bottom) to canvas image coords (Y from top).
+        const srcX = viewport.x;
+        const srcY = this.canvas.height - viewport.y - viewport.height;
+        gameCtx.drawImage(this.canvas, srcX, srcY, viewport.width, viewport.height, VIEWPORT_X, VIEWPORT_Y, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    }
+
+    private static uploadModelBuffers(): void {
+        const gl = this.gl;
+        this.modelUsedKeys.clear();
+        if (!gl) {
+            return;
+        }
+
+        for (const [texture, vertices] of this.modelBatches) {
+            if (vertices.length === 0) {
+                continue;
+            }
+
+            this.modelUsedKeys.add(texture);
+
+            let buffer = this.modelBuffers.get(texture);
+            if (!buffer) {
+                buffer = gl.createBuffer();
+                if (!buffer) {
+                    continue;
+                }
+                this.modelBuffers.set(texture, buffer);
+            }
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            // Use pre-allocated upload buffer (grow by doubling if needed, avoids per-flush allocation).
+            const n = vertices.length;
+            if (n > this._uploadBuf.length) {
+                this._uploadBuf = new Float32Array(n * 2);
+            }
+            this._uploadBuf.set(vertices, 0);
+            gl.bufferData(gl.ARRAY_BUFFER, this._uploadBuf.subarray(0, n), gl.DYNAMIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+            if (!this.modelVaos.has(texture)) {
+                const vao = this.setupVao(buffer);
+                if (vao) {
+                    this.modelVaos.set(texture, vao);
+                }
+            }
+        }
+    }
+
+    private static uploadDynamicModelBuffers(): void {
+        const gl = this.gl;
+        if (!gl) {
+            return;
+        }
+
+        for (const [texture, vertices] of this.dynamicModelBatches) {
+            if (vertices.length === 0) {
+                continue;
+            }
+
+            let buffer = this.dynamicModelBuffers.get(texture);
+            if (!buffer) {
+                buffer = gl.createBuffer();
+                if (!buffer) {
+                    continue;
+                }
+                this.dynamicModelBuffers.set(texture, buffer);
+            }
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            const n = vertices.length;
+            if (n > this._uploadBuf.length) {
+                this._uploadBuf = new Float32Array(n * 2);
+            }
+            this._uploadBuf.set(vertices, 0);
+            gl.bufferData(gl.ARRAY_BUFFER, this._uploadBuf.subarray(0, n), gl.DYNAMIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+            if (!this.dynamicModelVaos.has(texture)) {
+                const vao = this.setupVao(buffer);
+                if (vao) {
+                    this.dynamicModelVaos.set(texture, vao);
+                }
+            }
+        }
+    }
+
+    private static uploadStaticFarModelBuffers(): void {
+        const gl = this.gl;
+        if (!gl || !this.staticFarGpuDirty) {
+            return;
+        }
+
+        const liveKeys = new Set<number>();
+        for (const [texture, vertices] of this.staticFarModelBatches) {
+            if (vertices.length === 0) {
+                continue;
+            }
+            liveKeys.add(texture);
+
+            let buffer = this.staticFarModelBuffers.get(texture);
+            if (!buffer) {
+                buffer = gl.createBuffer();
+                if (!buffer) {
+                    continue;
+                }
+                this.staticFarModelBuffers.set(texture, buffer);
+            }
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+            const n = vertices.length;
+            if (n > this._uploadBuf.length) {
+                this._uploadBuf = new Float32Array(n * 2);
+            }
+            this._uploadBuf.set(vertices, 0);
+            gl.bufferData(gl.ARRAY_BUFFER, this._uploadBuf.subarray(0, n), gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+            if (!this.staticFarModelVaos.has(texture)) {
+                const vao = this.setupVao(buffer);
+                if (vao) {
+                    this.staticFarModelVaos.set(texture, vao);
+                }
+            }
+        }
+
+        for (const [texture, vao] of this.staticFarModelVaos) {
+            if (!liveKeys.has(texture)) {
+                if (vao) {
+                    gl.deleteVertexArray(vao);
+                }
+                this.staticFarModelVaos.delete(texture);
+            }
+        }
+        for (const [texture, buffer] of this.staticFarModelBuffers) {
+            if (!liveKeys.has(texture)) {
+                if (buffer) {
+                    gl.deleteBuffer(buffer);
+                }
+                this.staticFarModelBuffers.delete(texture);
+            }
+        }
+
+        this.staticFarGpuDirty = false;
+    }
+
+    private static drawStaticFarModels(): void {
+        const gl = this.gl;
+        if (!gl) {
+            return;
+        }
+
+        for (const [texture, vertices] of this.staticFarModelBatches) {
+            if (vertices.length === 0) {
+                continue;
+            }
+            const vao = this.staticFarModelVaos.get(texture);
+            if (vao) {
+                this.drawBuffer(vao, vertices.length / VERTEX_FLOATS);
+            }
+        }
+
+        // Static far-scene foliage, nets, rails and some scenery use transparent
+        // faces. These are cached with the static scene too, so draw them here;
+        // otherwise they only appear from the old per-frame/software-visible path
+        // and flicker on/off when the camera rotates.
+        if (this.staticFarTransparentBatches.length > 0) {
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            gl.depthMask(false);
+            this.staticFarTransparentBatches.sort((a, b) => {
+                const ap = this.prioritySortGroup(a.priority);
+                const bp = this.prioritySortGroup(b.priority);
+                if (ap !== bp) {
+                    return ap - bp;
+                }
+                return b.depth - a.depth;
+            });
+
+            for (const batch of this.staticFarTransparentBatches) {
+                if (batch.vertices.length === 0) {
+                    continue;
+                }
+
+                // Use dedicated far-scene transparent buffers so dynamic models
+                // (uploadAndDrawModels) cannot overwrite the same GPU buffer for
+                // the same texture key, which would cause fences/foliage to flicker.
+                let buffer = this.staticFarTransparentBuffers.get(batch.texture);
+                if (!buffer) {
+                    buffer = gl.createBuffer();
+                    if (!buffer) {
+                        continue;
+                    }
+                    this.staticFarTransparentBuffers.set(batch.texture, buffer);
+                }
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+                if (batch.vertices.length > this._uploadBuf.length) {
+                    this._uploadBuf = new Float32Array(batch.vertices.length * 2);
+                }
+                this._uploadBuf.set(batch.vertices, 0);
+                gl.bufferData(gl.ARRAY_BUFFER, this._uploadBuf.subarray(0, batch.vertices.length), gl.DYNAMIC_DRAW);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+                let vao = this.staticFarTransparentVaos.get(batch.texture);
+                if (!vao) {
+                    const created = this.setupVao(buffer);
+                    if (!created) {
+                        continue;
+                    }
+                    vao = created;
+                    this.staticFarTransparentVaos.set(batch.texture, vao);
+                }
+
+                this.drawBuffer(vao, batch.vertices.length / VERTEX_FLOATS);
+            }
+
+            gl.depthMask(true);
+            gl.disable(gl.BLEND);
+        }
+    }
+
+    private static uploadAndDrawModels(): void {
+        const gl = this.gl;
+        if (!gl || (this.modelBatches.size === 0 && this.transparentBatches.length === 0)) {
+            this.pruneModelGpuObjects(gl, new Set());
+            return;
+        }
+
+        // Opaque models: buffers already uploaded by uploadModelBuffers() — just draw.
+        for (const [texture, vertices] of this.modelBatches) {
+            if (vertices.length === 0) {
+                continue;
+            }
+            const vao = this.modelVaos.get(texture);
+            if (vao) {
+                this.drawBuffer(vao, vertices.length / VERTEX_FLOATS);
+            }
+        }
+
+        // Transparent models: upload and draw each batch inline (depth-sorted, per-batch buffer).
+        if (this.transparentBatches.length > 0) {
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            gl.depthMask(false);
+            this.transparentBatches.sort((a, b) => {
+                const ap = this.prioritySortGroup(a.priority);
+                const bp = this.prioritySortGroup(b.priority);
+                if (ap !== bp) {
+                    return ap - bp;
+                }
+                return b.depth - a.depth;
+            });
+
+            for (const batch of this.transparentBatches) {
+                if (batch.vertices.length === 0) {
+                    continue;
+                }
+
+                this.modelUsedKeys.add(batch.texture);
+
+                let buffer = this.modelBuffers.get(batch.texture);
+                if (!buffer) {
+                    buffer = gl.createBuffer();
+                    if (!buffer) {
+                        continue;
+                    }
+                    this.modelBuffers.set(batch.texture, buffer);
+                }
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(batch.vertices), gl.DYNAMIC_DRAW);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+                let vao = this.modelVaos.get(batch.texture);
+                if (!vao) {
+                    const created = this.setupVao(buffer);
+                    if (!created) {
+                        continue;
+                    }
+                    vao = created;
+                    this.modelVaos.set(batch.texture, vao);
+                }
+
+                this.drawBuffer(vao, batch.vertices.length / VERTEX_FLOATS);
+            }
+
+            gl.depthMask(true);
+            gl.disable(gl.BLEND);
+        }
+
+        this.pruneModelGpuObjects(gl, this.modelUsedKeys);
+    }
+
+    private static uploadAndDrawDynamicModels(): void {
+        const gl = this.gl;
+        if (!gl) {
+            return;
+        }
+
+        const liveKeys = new Set<number>();
+        for (const [texture, vertices] of this.dynamicModelBatches) {
+            if (vertices.length === 0) {
+                continue;
+            }
+            liveKeys.add(texture);
+            const vao = this.dynamicModelVaos.get(texture);
+            if (vao) {
+                this.drawBuffer(vao, vertices.length / VERTEX_FLOATS);
+            }
+        }
+
+        if (this.dynamicTransparentBatches.length > 0) {
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            gl.depthMask(false);
+            this.dynamicTransparentBatches.sort((a, b) => b.depth - a.depth);
+
+            for (const batch of this.dynamicTransparentBatches) {
+                if (batch.vertices.length === 0) {
+                    continue;
+                }
+                liveKeys.add(batch.texture);
+
+                let buffer = this.dynamicModelBuffers.get(batch.texture);
+                if (!buffer) {
+                    buffer = gl.createBuffer();
+                    if (!buffer) {
+                        continue;
+                    }
+                    this.dynamicModelBuffers.set(batch.texture, buffer);
+                }
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+                const n = batch.vertices.length;
+                if (n > this._uploadBuf.length) {
+                    this._uploadBuf = new Float32Array(n * 2);
+                }
+                this._uploadBuf.set(batch.vertices, 0);
+                gl.bufferData(gl.ARRAY_BUFFER, this._uploadBuf.subarray(0, n), gl.DYNAMIC_DRAW);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+                let vao = this.dynamicModelVaos.get(batch.texture);
+                if (!vao) {
+                    const created = this.setupVao(buffer);
+                    if (!created) {
+                        continue;
+                    }
+                    vao = created;
+                    this.dynamicModelVaos.set(batch.texture, vao);
+                }
+
+                this.drawBuffer(vao, batch.vertices.length / VERTEX_FLOATS);
+            }
+
+            gl.depthMask(true);
+            gl.disable(gl.BLEND);
+        }
+
+        for (const [texture, vao] of this.dynamicModelVaos) {
+            if (!liveKeys.has(texture)) {
+                if (vao) {
+                    gl.deleteVertexArray(vao);
+                }
+                this.dynamicModelVaos.delete(texture);
+            }
+        }
+        for (const [texture, buffer] of this.dynamicModelBuffers) {
+            if (!liveKeys.has(texture)) {
+                gl.deleteBuffer(buffer);
+                this.dynamicModelBuffers.delete(texture);
+            }
+        }
+    }
+
+    private static pruneModelGpuObjects(gl: WebGL2RenderingContext | null, activeKeys: Set<number>): void {
+        if (!gl) {
+            return;
+        }
+        for (const [key, buffer] of this.modelBuffers) {
+            if (!activeKeys.has(key)) {
+                gl.deleteBuffer(buffer);
+                this.modelBuffers.delete(key);
+                const vao = this.modelVaos.get(key);
+                if (vao) {
+                    gl.deleteVertexArray(vao);
+                    this.modelVaos.delete(key);
+                }
+            }
+        }
+    }
+
+    private static ensureTextureAtlas(): void {
+        if (!this.gl || this.textureAtlasReady) {
+            return;
+        }
+
+        const gl = this.gl;
+        const width = ATLAS_COLS * TEXTURE_SIZE;
+        const height = ATLAS_ROWS * TEXTURE_SIZE;
+        const atlas = new Uint8Array(width * height * 4);
+        this.textureRects = [];
+        let loadedCount = 0;
+
+        for (let id = 0; id < ATLAS_SIZE; id++) {
+            const texture = id < CACHE_TEXTURE_COUNT ? Pix3D.textures[id] : null;
+            const palette = Pix3D.texPal[id] ?? texture?.bpal ?? null;
+            const col = id % ATLAS_COLS;
+            const row = (id / ATLAS_COLS) | 0;
+            const rect: TextureAtlasRect = {
+                u0: (col * TEXTURE_SIZE + 0.5) / width,
+                v0: (row * TEXTURE_SIZE + 0.5) / height,
+                u1: ((col + 1) * TEXTURE_SIZE - 0.5) / width,
+                v1: ((row + 1) * TEXTURE_SIZE - 0.5) / height
+            };
+            this.textureRects[id] = rect;
+
+            if (!texture || !palette) {
+                continue;
+            }
+
+            loadedCount++;
+            const hasTransparency = SERVER_TRANSPARENT_TEXTURE_IDS.has(id);
+            for (let y = 0; y < TEXTURE_SIZE; y++) {
+                const srcY = Math.min(texture.hi - 1, Math.floor((y * texture.hi) / TEXTURE_SIZE));
+                for (let x = 0; x < TEXTURE_SIZE; x++) {
+                    const srcX = Math.min(texture.wi - 1, Math.floor((x * texture.wi) / TEXTURE_SIZE));
+                    const paletteIndex = texture.data[srcX + srcY * texture.wi] & 0xff;
+                    const rgb = (palette[paletteIndex] ?? 0) & 0xf8f8ff;
+                    const off = ((col * TEXTURE_SIZE + x) + (row * TEXTURE_SIZE + y) * width) * 4;
+                    atlas[off] = (rgb >> 16) & 0xff;
+                    atlas[off + 1] = (rgb >> 8) & 0xff;
+                    atlas[off + 2] = rgb & 0xff;
+                    atlas[off + 3] = this.keyedTextureAlpha(rgb, hasTransparency);
+                }
+            }
+        }
+
+        this.textureAtlasLoadedCount = loadedCount;
+
+        // Wait for the full 254/cache texture set before creating the WebGL atlas.
+        // A partial atlas is the classic cause of "correct for one second, then bad"
+        // because early frames can bake blank/wrong slots and then never rebuild them.
+        if (loadedCount < CACHE_TEXTURE_COUNT) {
+            return;
+        }
+
+        this.textureAtlas = gl.createTexture();
+        if (!this.textureAtlas) {
+            return;
+        }
+
+        gl.bindTexture(gl.TEXTURE_2D, this.textureAtlas);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        const anisotropicExt = gl.getExtension('EXT_texture_filter_anisotropic');
+        if (anisotropicExt) {
+            gl.texParameterf(gl.TEXTURE_2D, anisotropicExt.TEXTURE_MAX_ANISOTROPY_EXT, gl.getParameter(anisotropicExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT));
+        }
+        gl.bindTexture(gl.TEXTURE_2D, null);
+
+        this.textureAtlasReady = true;
+
+        // Disabled by default: these async PNG overrides were replacing the correct
+        // 254/cache texture atlas after login, causing textures to flash correct
+        // for a moment and then revert to the wrong-looking versions.
+        if ((globalThis as any).ENABLE_HD_COLOR_TEXTURE_OVERRIDES === true) {
+            this.startColorAtlasLoads();
+        }
+        this.ensureHdTextureAtlas();
+    }
+
+    private static ensureHdTextureAtlas(): void {
+        if (!this.gl || this.hdTextureAtlas || this.hdAtlasLoadingStarted) {
+            return;
+        }
+
+        const gl = this.gl;
+        const width = HD_ATLAS_COLS * HD_ATLAS_TILE;
+        const height = HD_ATLAS_ROWS * HD_ATLAS_TILE;
+        const atlas = new Uint8Array(width * height * 4); // all zeros = alpha=0 (no HD data)
+
+        const texture = gl.createTexture();
+        if (!texture) {
+            return;
+        }
+
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, atlas);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        const anisotropicExt = gl.getExtension('EXT_texture_filter_anisotropic');
+        if (anisotropicExt) {
+            gl.texParameterf(gl.TEXTURE_2D, anisotropicExt.TEXTURE_MAX_ANISOTROPY_EXT, gl.getParameter(anisotropicExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT));
+        }
+        gl.bindTexture(gl.TEXTURE_2D, null);
+
+        this.hdTextureAtlas = texture;
+
+        for (let id = 0; id < CACHE_TEXTURE_COUNT; id++) {
+            const col = id % HD_ATLAS_COLS;
+            const row = (id / HD_ATLAS_COLS) | 0;
+            this.hdAtlasRects[id] = {
+                u0: (col * HD_ATLAS_TILE + 0.5) / width,
+                v0: (row * HD_ATLAS_TILE + 0.5) / height,
+                u1: ((col + 1) * HD_ATLAS_TILE - 0.5) / width,
+                v1: ((row + 1) * HD_ATLAS_TILE - 0.5) / height
+            };
+        }
+
+        this.hdAtlasLoadingStarted = true;
+        this.startHdAtlasLoads();
+    }
+
+    private static startHdAtlasLoads(): void {
+        this.hdAtlasFailedCount = 0;
+        this.hdAtlasLoadResults.length = 0;
+
+        for (let id = 0; id < CACHE_TEXTURE_COUNT; id++) {
+            const filename = HD_TEXTURE_FOR_SLOT[id];
+            if (!filename) {
+                continue;
+            }
+
+            const slot = id;
+            const url = filename.startsWith('/') ? filename : `/hd/textures/rlhd/${filename}`;
+            fetch(url)
+                .then(r => {
+                    if (!r.ok) {
+                        return Promise.reject(new Error(`HTTP ${r.status}`));
+                    }
+                    return r.blob();
+                })
+                .then(blob => createImageBitmap(blob))
+                .then(bitmap => {
+                    const tmp = new OffscreenCanvas(HD_ATLAS_TILE, HD_ATLAS_TILE);
+                    const ctx = tmp.getContext('2d')!;
+                    ctx.drawImage(bitmap, 0, 0, HD_ATLAS_TILE, HD_ATLAS_TILE);
+                    bitmap.close();
+                    const imageData = ctx.getImageData(0, 0, HD_ATLAS_TILE, HD_ATLAS_TILE);
+                    const d = imageData.data;
+                    // Mark all pixels as fully opaque (HD textures are JPEGs with no alpha key).
+                    // alpha=0 in the atlas means "no HD data for this slot" — so we must set 255.
+                    for (let i = 3; i < d.length; i += 4) {
+                        d[i] = 255;
+                    }
+                    this.hdAtlasPendingImages.push({ slot, data: d });
+                    this.hdAtlasLoadResults.push(`OK ${slot}: ${url}`);
+                })
+                .catch(error => {
+                    this.hdAtlasFailedCount++;
+                    const message = error instanceof Error ? error.message : String(error);
+                    this.hdAtlasLoadResults.push(`FAIL ${slot}: ${url} (${message})`);
+                });
+        }
+    }
+
+    private static startColorAtlasLoads(): void {
+        for (let id = 0; id < CACHE_TEXTURE_COUNT; id++) {
+            const slot = id;
+            const hasTransparency = SERVER_TRANSPARENT_TEXTURE_IDS.has(id);
+            fetch(`/hd/terrain/textures/${id}.png`)
+                .then(r => r.ok ? r.blob() : Promise.reject())
+                .then(blob => createImageBitmap(blob))
+                .then(bitmap => {
+                    const tmp = new OffscreenCanvas(TEXTURE_SIZE, TEXTURE_SIZE);
+                    const ctx = tmp.getContext('2d')!;
+                    ctx.drawImage(bitmap, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+                    bitmap.close();
+                    const imageData = ctx.getImageData(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+                    const d = imageData.data;
+                    // Source PNGs use magenta (0xFF00FF) as the transparency key.
+                    // Convert to alpha=0 so the atlas renders correctly.
+                    for (let i = 0; i < d.length; i += 4) {
+                        if (d[i] > 240 && d[i + 1] < 16 && d[i + 2] > 240) {
+                            d[i + 3] = 0;
+                        } else if (!hasTransparency) {
+                            d[i + 3] = 255;
+                        }
+                    }
+                    this.colorAtlasPendingImages.push({ slot, data: d });
+                })
+                .catch(() => {});
+        }
+    }
+
+    private static bindTextureAtlas(): void {
+        if (!this.gl || !this.textureAtlas) {
+            return;
+        }
+
+        const gl = this.gl;
+
+        // Upload any normal map images that finished loading since the last frame.
+        if (this.normalAtlas && this.normalAtlasPendingImages.length > 0) {
+            gl.bindTexture(gl.TEXTURE_2D, this.normalAtlas);
+            for (const { slot, data } of this.normalAtlasPendingImages) {
+                const col = slot % ATLAS_COLS;
+                const row = (slot / ATLAS_COLS) | 0;
+                gl.texSubImage2D(
+                    gl.TEXTURE_2D, 0,
+                    col * TEXTURE_SIZE, row * TEXTURE_SIZE,
+                    TEXTURE_SIZE, TEXTURE_SIZE,
+                    gl.RGBA, gl.UNSIGNED_BYTE, data
+                );
+            }
+            this.normalAtlasPendingImages.length = 0;
+            gl.bindTexture(gl.TEXTURE_2D, null);
+        }
+
+        // Upload any OSRS PNG texture overrides that finished loading since the last frame.
+        if (this.textureAtlas && this.colorAtlasPendingImages.length > 0) {
+            gl.bindTexture(gl.TEXTURE_2D, this.textureAtlas);
+            for (const { slot, data } of this.colorAtlasPendingImages) {
+                const col = slot % ATLAS_COLS;
+                const row = (slot / ATLAS_COLS) | 0;
+                gl.texSubImage2D(
+                    gl.TEXTURE_2D, 0,
+                    col * TEXTURE_SIZE, row * TEXTURE_SIZE,
+                    TEXTURE_SIZE, TEXTURE_SIZE,
+                    gl.RGBA, gl.UNSIGNED_BYTE, data
+                );
+            }
+            this.colorAtlasPendingImages.length = 0;
+            gl.generateMipmap(gl.TEXTURE_2D);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+        }
+
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, this.textureAtlas);
+        gl.uniform1i(this.uniformCache.get('u_textureAtlas') ?? null, 0);
+
+        if (this.normalAtlas) {
+            gl.activeTexture(gl.TEXTURE3);
+            gl.bindTexture(gl.TEXTURE_2D, this.normalAtlas);
+            gl.uniform1i(this.uniformCache.get('u_normalAtlas') ?? null, 3);
+        }
+
+        if (this.waterNormalMap) {
+            gl.activeTexture(gl.TEXTURE4);
+            gl.bindTexture(gl.TEXTURE_2D, this.waterNormalMap);
+            gl.uniform1i(this.uniformCache.get('u_waterNormalMap') ?? null, 4);
+        }
+        if (this.waterFlowMap) {
+            gl.activeTexture(gl.TEXTURE5);
+            gl.bindTexture(gl.TEXTURE_2D, this.waterFlowMap);
+            gl.uniform1i(this.uniformCache.get('u_waterFlowMap') ?? null, 5);
+        }
+        if (this.waterFoamMap) {
+            gl.activeTexture(gl.TEXTURE6);
+            gl.bindTexture(gl.TEXTURE_2D, this.waterFoamMap);
+            gl.uniform1i(this.uniformCache.get('u_waterFoamMap') ?? null, 6);
+        }
+        if (this.hdGroundAtlas) {
+            gl.activeTexture(gl.TEXTURE7);
+            gl.bindTexture(gl.TEXTURE_2D, this.hdGroundAtlas);
+            gl.uniform1i(this.uniformCache.get('u_hdGroundAtlas') ?? null, 7);
+        }
+
+        // Upload any RLHD HD textures that finished loading since the last frame.
+        if (this.hdTextureAtlas && this.hdAtlasPendingImages.length > 0) {
+            gl.bindTexture(gl.TEXTURE_2D, this.hdTextureAtlas);
+            for (const { slot, data } of this.hdAtlasPendingImages) {
+                const col = slot % HD_ATLAS_COLS;
+                const row = (slot / HD_ATLAS_COLS) | 0;
+                gl.texSubImage2D(
+                    gl.TEXTURE_2D, 0,
+                    col * HD_ATLAS_TILE, row * HD_ATLAS_TILE,
+                    HD_ATLAS_TILE, HD_ATLAS_TILE,
+                    gl.RGBA, gl.UNSIGNED_BYTE, data
+                );
+                this.hdAtlasLoadedCount++;
+            }
+            this.hdAtlasPendingImages.length = 0;
+            gl.generateMipmap(gl.TEXTURE_2D);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+        }
+
+        if (this.hdTextureAtlas) {
+            gl.activeTexture(gl.TEXTURE8);
+            gl.bindTexture(gl.TEXTURE_2D, this.hdTextureAtlas);
+            gl.uniform1i(this.uniformCache.get('u_hdTextureAtlas') ?? null, 8);
+            gl.uniform1f(this.uniformCache.get('u_hdAtlasReady') ?? null, this.hdAtlasLoadedCount > 0 ? 1.0 : 0.0);
+        }
+
+        for (let id = 0; id < ATLAS_SIZE; id++) {
+            const rect = this.textureRects[id] ?? { u0: 0, v0: 0, u1: 1, v1: 1 };
+            gl.uniform4f(this.atlasRectLocations[id] ?? null, rect.u0, rect.v0, rect.u1, rect.v1);
+        }
+
+        for (let id = 0; id < CACHE_TEXTURE_COUNT; id++) {
+            const rect = this.hdAtlasRects[id] ?? { u0: 0, v0: 0, u1: 0, v1: 0 };
+            gl.uniform4f(this.hdAtlasRectLocations[id] ?? null, rect.u0, rect.v0, rect.u1, rect.v1);
+        }
+    }
+
+    private static ensureUiRenderer(): void {
+        if (!this.gl) {
+            return;
+        }
+        if (this.uiProgram && this.uiVao && this.uiBuffer && this.uiTexture) {
+            return;
+        }
+
+        const gl = this.gl;
+        const program = this.createProgram(gl, uiShader);
+        if (!program) {
+            this.reason = 'HD UI shader failed to compile';
+            return;
+        }
+
+        const buffer = gl.createBuffer();
+        const vao = gl.createVertexArray();
+        const texture = gl.createTexture();
+        if (!buffer || !vao || !texture) {
+            this.reason = 'HD UI resource allocation failed';
+            return;
+        }
+
+        gl.bindVertexArray(vao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.enableVertexAttribArray(0);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 16, 0);
+        gl.enableVertexAttribArray(1);
+        gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
+        gl.bindVertexArray(null);
+
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+
+        this.uiProgram = program;
+        this.uiBuffer = buffer;
+        this.uiVao = vao;
+        this.uiTexture = texture;
+        this.uiUniformCanvasSize = gl.getUniformLocation(program, 'u_canvasSize');
+        this.uiUniformTexture = gl.getUniformLocation(program, 'u_uiTexture');
+        this.uiUniformKeyed = gl.getUniformLocation(program, 'u_keyed');
+    }
+	
+	private static readonly HD_ALWAYS_VISIBLE_TERRAIN_TILES: Set<string> = new Set([
+    '0:3240:3226',
+    '0:3241:3226',
+    '0:3242:3226',
+    '0:3243:3226',
+    '0:3244:3226',
+    '0:3245:3226',
+    '0:3246:3226',
+    '0:3247:3226',
+    '0:3248:3226',
+    '0:3249:3226',
+    '0:3250:3226',
+
+    '0:3240:3225',
+    '0:3241:3225',
+    '0:3242:3225',
+    '0:3243:3225',
+    '0:3244:3225',
+    '0:3245:3225',
+    '0:3246:3225',
+    '0:3247:3225',
+    '0:3248:3225',
+    '0:3249:3225',
+    '0:3250:3225',
+]);
+
+static isAlwaysVisibleTerrainTile(level: number, x: number, z: number): boolean {
+    return this.HD_ALWAYS_VISIBLE_TERRAIN_TILES.has(`${level}:${x}:${z}`);
+}
+
+    private static fixedSin(angle: number): number {
+        return Math.round(Math.sin((angle & 0x7ff) * Math.PI / 1024) * 65536);
+    }
+
+    private static fixedCos(angle: number): number {
+        return Math.round(Math.cos((angle & 0x7ff) * Math.PI / 1024) * 65536);
+    }
+
+    private static groundKey(level: number, x: number, z: number): string {
+        return `${level}:${x}:${z}`;
+    }
+
+    private static createProgram(gl: WebGL2RenderingContext, source: ShaderSource): WebGLProgram | null {
+        const vertex = this.compileShader(gl, gl.VERTEX_SHADER, source.vertex);
+        const fragment = this.compileShader(gl, gl.FRAGMENT_SHADER, source.fragment);
+
+        if (!vertex || !fragment) {
+            return null;
+        }
+
+        const program = gl.createProgram();
+        if (!program) {
+            return null;
+        }
+
+        gl.attachShader(program, vertex);
+        gl.attachShader(program, fragment);
+        gl.linkProgram(program);
+
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            this.reason = gl.getProgramInfoLog(program) || 'program link failed';
+            gl.deleteProgram(program);
+            return null;
+        }
+
+        return program;
+    }
+
+    private static compileShader(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader | null {
+        const shader = gl.createShader(type);
+        if (!shader) {
+            return null;
+        }
+
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            this.reason = gl.getShaderInfoLog(shader) || 'shader compile failed';
+            gl.deleteShader(shader);
+            return null;
+        }
+
+        return shader;
+    }
+}

@@ -1,4 +1,4 @@
-import { canvas, canvas2d } from '#/graphics/Canvas.js';
+import { canvas, canvas2d } from '#/dash3d/graphics/Canvas.js';
 
 // ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!"£$%^&*()-_=+[{]};:\'@#~,<.>/?\\| 
 // ^ Allowed characters in client

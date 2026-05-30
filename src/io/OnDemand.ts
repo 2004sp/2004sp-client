@@ -696,14 +696,20 @@ export default class OnDemand extends OnDemandProvider {
         }
     }
 
+    lastZipError: string = '';
+
     async downloadZip() {
-        while (!this.zip) {
-            try {
-                this.zip = unzipSync(await downloadUrl('/ondemand.zip'));
-                break;
-            } catch (_) {
-                await sleep(1000);
-            }
+        if (this.zip) {
+            return;
+        }
+        try {
+            const data = await downloadUrl('/ondemand.zip');
+            this.zip = unzipSync(data);
+            this.lastZipError = '';
+        } catch (e) {
+            // Don't retry here — let the caller retry on the next tick
+            // so the game loop is not blocked for 1000ms per attempt.
+            this.lastZipError = String(e);
         }
     }
 

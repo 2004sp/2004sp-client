@@ -9,10 +9,12 @@
 
             html, body {
                 background: #000;
-                overflow: hidden;
+                /* Use auto so a scrollbar appears instead of silently clipping content
+                   when the window is smaller than the minimum game + toolbar size. */
+                overflow: auto;
                 font-family: Arial, sans-serif;
-                height: 100vh;
-                width: 100vw;
+                height: 100%;
+                width: 100%;
             }
 
             /* Root flex row: canvas | hiscores panel | xp tracker panel | toolbar */
@@ -20,13 +22,18 @@
                 display: flex;
                 width: 100vw;
                 height: 100vh;
+                /* Prevent the layout from shrinking below the natural game size.
+                   765px = game canvas width, 44px = toolbar. 503px = game canvas height.
+                   Below this size a browser scrollbar appears rather than clipping. */
+                min-width: 809px;
+                min-height: 503px;
             }
 
             /* Canvas grows to fill all remaining space, letterboxes to preserve 765:503 */
             #canvas-wrap {
                 flex: 1 1 0;
                 min-width: 0;
-                overflow: hidden;
+                overflow: auto;
                 background: #000;
                 display: flex;
                 align-items: center;
@@ -34,11 +41,92 @@
             }
 
             #canvas {
+                background: #000;
+                border: none;
                 display: block;
                 width: 100%;
                 height: 100%;
                 max-width: calc(100vh * 765 / 503);
-                max-height: calc(100vw * 503 / 765);
+                /* Subtract the toolbar (44px) so the canvas never grows wider than
+                   canvas-wrap and bleeds over the toolbar column. */
+                max-height: calc((100vw - 44px) * 503 / 765);
+                image-rendering: pixelated;
+                outline: none;
+                box-shadow: none;
+            }
+
+            #canvas.hd-mode-active {
+                image-rendering: auto;
+                transform: translateZ(0);
+                backface-visibility: hidden;
+                will-change: transform;
+            }
+
+            #canvas:focus,
+            #canvas:focus-visible {
+                outline: none;
+                box-shadow: none;
+            }
+
+            #layout.app-fullscreen-fill #canvas-wrap,
+            #layout.app-fullscreen-half #canvas-wrap {
+                overflow: hidden;
+            }
+
+            #layout.app-stretch-aspect #canvas-wrap,
+            #layout.app-stretch-fill #canvas-wrap {
+                overflow: hidden;
+            }
+
+            /* Stretch modes fill whatever window size the user gives — don't force the
+               809 × 503 minimum that windowed letterbox mode needs. */
+            #layout.app-stretch-aspect,
+            #layout.app-stretch-fill {
+                min-width: 0;
+                min-height: 0;
+            }
+
+            /* Fullscreen modes cover the full screen — min-size constraints don't apply. */
+            #layout.app-fullscreen-bars,
+            #layout.app-fullscreen-half,
+            #layout.app-fullscreen-fill {
+                min-width: 0;
+                min-height: 0;
+            }
+
+            #layout.app-stretch-aspect #canvas {
+                /* Contain: scale to fill whichever axis is the binding constraint,
+                   black bars on the other axis.  Neither width nor height drives
+                   alone — both are computed with min() so resizing in any direction
+                   never distorts the 765:503 ratio.
+                     width  = min(canvas-wrap-width,  canvas-wrap-height × 765/503)
+                     height = min(canvas-wrap-height, canvas-wrap-width  × 503/765)
+                   canvas-wrap is (100vw − 44px toolbar) × 100vh. */
+                width:  min(calc(100vw - 44px), calc(100vh * 765 / 503)) !important;
+                height: min(100vh, calc((100vw - 44px) * 503 / 765))     !important;
+                max-width:  100% !important;
+                max-height: 100% !important;
+            }
+
+            #layout.app-stretch-fill #canvas {
+                width: 100% !important;
+                height: 100% !important;
+                max-width: none !important;
+                max-height: none !important;
+            }
+
+            #layout.app-fullscreen-fill #canvas {
+                width: 100% !important;
+                height: 100% !important;
+                max-width: none !important;
+                max-height: none !important;
+            }
+
+            #layout.app-fullscreen-half #canvas {
+                width: auto !important;
+                height: 100% !important;
+                max-width: none !important;
+                max-height: none !important;
             }
 
             /* ── Shared side panel base ── */
@@ -76,7 +164,12 @@
                 flex-direction: column;
                 align-items: center;
                 padding-top: 8px;
+                padding-bottom: 8px;
                 gap: 4px;
+            }
+
+            #btn-settings {
+                margin-top: auto;
             }
 
             .tool-btn {
@@ -343,8 +436,8 @@
             }
 
             /* LostHQ wiki panel */
-            #losthq-panel { width: 400px; }
-            #losthq-panel.open { max-width: 400px; }
+            #losthq-panel { width: 860px; }
+            #losthq-panel.open { max-width: 860px; }
             #losthq-panel.maximized {
                 position: fixed;
                 top: 0; left: 0; right: 0; bottom: 0;
@@ -493,6 +586,44 @@
 
             .st-select:focus { outline: none; border-color: #555; }
 
+            .st-field {
+                margin-bottom: 10px;
+            }
+
+            .st-field:last-child {
+                margin-bottom: 0;
+            }
+
+            .st-field-label {
+                display: block;
+                margin-bottom: 4px;
+                font-size: 10px;
+                color: #666;
+                text-transform: uppercase;
+                letter-spacing: 0.6px;
+            }
+
+            .st-action-btn {
+                width: 100%;
+                height: 30px;
+                margin: 10px 0 0;
+                padding: 0 10px;
+                background: #1a1a1a;
+                border: 1px solid #2e2e2e;
+                border-radius: 4px;
+                color: #aaa;
+                cursor: pointer;
+                font-size: 11px;
+                text-align: left;
+                transition: background 0.12s, color 0.12s, border-color 0.12s;
+            }
+
+            .st-action-btn:hover {
+                background: #222;
+                border-color: #444;
+                color: #ccc;
+            }
+
             .st-check-row {
                 display: flex;
                 align-items: center;
@@ -632,6 +763,37 @@
                         <div class="st-section-title">Discord</div>
                         <label class="st-check-row"><input type="checkbox" id="discord-rpc"> Discord Rich Presence</label>
                     </div>
+                    <div class="st-section">
+                        <div class="st-section-title">Client Settings</div>
+                        <div class="st-field">
+                            <label class="st-field-label" for="canvas-filter-select">Scaling</label>
+                            <select id="canvas-filter-select" class="st-select">
+                                <option value="auto">Auto Scaling</option>
+                                <option value="pixelated">Pixel Scaling</option>
+                            </select>
+                        </div>
+                        <div class="st-field">
+                            <label class="st-field-label" for="canvas-size-select">Scale</label>
+                            <select id="canvas-size-select" class="st-select">
+                                <option value="1">1x</option>
+                                <option value="1.5">1.5x</option>
+                                <option value="2">2x</option>
+                            </select>
+                        </div>
+                        <label class="st-check-row"><input type="checkbox" id="low-memory-mode"> Low Memory Mode</label>
+                        <label class="st-check-row"><input type="checkbox" id="hd-mode"> HD Mode</label>
+                        <div class="st-field">
+                            <label class="st-field-label" for="stretch-mode-select">Stretch Mode</label>
+                            <select id="stretch-mode-select" class="st-select">
+                                <option value="none">None</option>
+                                <option value="aspect">Aspect Ratio</option>
+                                <option value="fill">Fill Window</option>
+                            </select>
+                        </div>
+                        <button type="button" id="fullscreen-bars" class="st-action-btn">Fullscreen (Bars)</button>
+                        <button type="button" id="fullscreen-half" class="st-action-btn">Fullscreen (Half-Fill)</button>
+                        <button type="button" id="fullscreen-fill" class="st-action-btn">Fullscreen (Fill)</button>
+                    </div>
                 </div>
             </div>
 
@@ -650,8 +812,9 @@
                 <div class="tool-btn" id="btn-xpdrops" title="XP Drops">XP</div>
                 <div class="tool-btn" id="btn-xptracker" title="XP Tracker">&#128200;</div>
                 <div class="tool-btn" id="btn-worldmap" title="World Map">&#128506;</div>
-                <div class="tool-btn" id="btn-settings" title="Settings">&#9881;</div>
                 <div class="tool-btn" id="btn-losthq" title="LostHQ Wiki">&#128212;</div>
+                <div class="tool-btn" id="btn-settings" title="Settings">&#9881;</div>
+                
             </div>
         </div>
 
@@ -676,7 +839,9 @@
                     if (e.key === '`') el.classList.toggle('visible');
                 });
             })();
+        </script>
 
+        <script>
             // Hiscores
             (function () {
                 // IDs are hiscore.type = PlayerStat enum index + 1 (server uses stat + 1)
@@ -844,6 +1009,15 @@
                 var btn    = document.getElementById('btn-settings');
                 var panel  = document.getElementById('settings-panel');
                 var afkSel = document.getElementById('afk-select');
+                var filterSel = document.getElementById('canvas-filter-select');
+                var sizeSel = document.getElementById('canvas-size-select');
+                var lowMemoryChk = document.getElementById('low-memory-mode');
+                var hdModeChk = document.getElementById('hd-mode');
+                var fullscreenBarsBtn = document.getElementById('fullscreen-bars');
+                var fullscreenHalfBtn = document.getElementById('fullscreen-half');
+                var fullscreenFillBtn = document.getElementById('fullscreen-fill');
+                var stretchModeSel = document.getElementById('stretch-mode-select');
+                var canvas = document.getElementById('canvas');
                 var isOpen = false;
 
                 var SC_IDS = ['drop', 'take', 'attack', 'pickpocket', 'bank', 'usequickly', 'examine'];
@@ -868,6 +1042,19 @@
                     var discordEnabled = localStorage.getItem('discordRpcEnabled') === 'true';
                     window.DISCORD_RPC_ENABLED = discordEnabled;
                     if (discordChk) discordChk.checked = discordEnabled;
+
+                    var savedCanvasSize = localStorage.getItem('canvasSize');
+                    if (localStorage.getItem('canvasSizeDefaultVersion') !== '2') {
+                        if (savedCanvasSize === null || savedCanvasSize === '1.5') {
+                            savedCanvasSize = '2';
+                        }
+                        localStorage.setItem('canvasSizeDefaultVersion', '2');
+                    }
+                    applyCanvasSize(savedCanvasSize === '1' || savedCanvasSize === '1.5' ? savedCanvasSize : '2');
+                    applyCanvasFilter(localStorage.getItem('filtering') === 'false' ? 'auto' : (localStorage.getItem('canvasFilter') || 'pixelated'));
+                    applyLowMemoryMode(localStorage.getItem('clientLowMemoryMode') === 'true');
+                    applyHdMode(localStorage.getItem('clientHdMode') === 'true');
+                    applyStretchMode(localStorage.getItem('stretchMode') || 'none');
                 }
 
                 function applyShiftPrefs(prefs) {
@@ -882,6 +1069,225 @@
                     });
                     localStorage.setItem('shiftClickPrefs', JSON.stringify(prefs));
                     applyShiftPrefs(prefs);
+                }
+
+                function applyCanvasSize(size) {
+                    if (!canvas) return;
+                    if (size !== '1' && size !== '1.5' && size !== '2') {
+                        size = '2';
+                    }
+                    var scale = parseFloat(size);
+
+                    canvas.style.width = (765 * scale) + 'px';
+                    canvas.style.height = (503 * scale) + 'px';
+                    canvas.style.maxWidth = 'none';
+                    canvas.style.maxHeight = 'none';
+                    if (sizeSel) sizeSel.value = size;
+                    localStorage.setItem('canvasSize', size);
+                }
+
+                function applyCanvasFilter(filter) {
+                    if (filter !== 'auto' && filter !== 'pixelated') {
+                        filter = 'pixelated';
+                    }
+                    if (canvas) canvas.style.imageRendering = filter;
+                    if (filterSel) filterSel.value = filter;
+                    localStorage.setItem('canvasFilter', filter);
+                    localStorage.setItem('filtering', filter === 'pixelated' ? 'true' : 'false');
+                }
+
+                function applyStretchMode(mode) {
+                    var layout = document.getElementById('layout');
+                    if (!layout) return;
+                    layout.classList.remove('app-stretch-aspect', 'app-stretch-fill');
+                    if (mode === 'aspect') {
+                        layout.classList.add('app-stretch-aspect');
+                    } else if (mode === 'fill') {
+                        layout.classList.add('app-stretch-fill');
+                    }
+                    if (stretchModeSel) stretchModeSel.value = mode || 'none';
+                    localStorage.setItem('stretchMode', mode || 'none');
+                    if (sizeSel) sizeSel.disabled = (mode !== 'none');
+                }
+
+                function applyLowMemoryMode(enabled) {
+                    if (enabled && hdModeChk) {
+                        hdModeChk.checked = false;
+                        window.CLIENT_HD_MODE = false;
+                        localStorage.setItem('clientHdMode', 'false');
+                        if (typeof window.setClientHdMode === 'function') {
+                            window.setClientHdMode(false);
+                        }
+                    }
+
+                    window.CLIENT_LOW_MEMORY = !!enabled;
+                    if (lowMemoryChk) lowMemoryChk.checked = !!enabled;
+                    localStorage.setItem('clientLowMemoryMode', enabled ? 'true' : 'false');
+
+                    if (typeof window.setClientLowMemoryMode === 'function') {
+                        window.setClientLowMemoryMode(!!enabled);
+                    }
+                }
+
+                function applyHdMode(enabled) {
+                    window.CLIENT_HD_MODE = !!enabled;
+                    if (hdModeChk) hdModeChk.checked = !!enabled;
+                    localStorage.setItem('clientHdMode', enabled ? 'true' : 'false');
+                    if (canvas) canvas.classList.toggle('hd-mode-active', !!enabled);
+
+                    if (enabled) {
+                        applyLowMemoryMode(false);
+                        applyCanvasFilter('auto');
+                        applyCanvasSize('2');
+                    }
+
+                    if (typeof window.setClientHdMode === 'function') {
+                        window.setClientHdMode(!!enabled);
+                    }
+                }
+
+                function fullscreenElement() {
+                    return document.fullscreenElement ||
+                        document.webkitFullscreenElement ||
+                        document.mozFullScreenElement ||
+                        document.msFullscreenElement;
+                }
+
+                async function callWailsWindow(method) {
+                    var response = await fetch('/wails/runtime', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-wails-client-id': (window._wails && window._wails.clientId) || 'client-settings'
+                        },
+                        body: JSON.stringify({
+                            object: 6,
+                            method: method
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(await response.text());
+                    }
+
+                    var contentType = response.headers.get('Content-Type') || '';
+                    return contentType.indexOf('application/json') !== -1 ? response.json() : response.text();
+                }
+
+                async function fullscreenActive() {
+                    var nativeFullscreen = false;
+                    try {
+                        nativeFullscreen = await callWailsWindow(13);
+                    } catch (_e) {
+                        nativeFullscreen = false;
+                    }
+
+                    return nativeFullscreen || fullscreenElement();
+                }
+
+                async function updateFullscreenButtons() {
+                    if (!fullscreenBarsBtn && !fullscreenHalfBtn && !fullscreenFillBtn) return;
+
+                    var layout = document.getElementById('layout');
+                    var active = await fullscreenActive();
+                    var halfActive = !!(active && layout && layout.classList.contains('app-fullscreen-half'));
+                    var fillActive = !!(active && layout && layout.classList.contains('app-fullscreen-fill'));
+
+                    if (!active && layout) {
+                        layout.classList.remove('app-fullscreen-half', 'app-fullscreen-fill');
+                    }
+                    if (fullscreenBarsBtn) {
+                        fullscreenBarsBtn.textContent = active && !halfActive && !fillActive ? 'Exit Fullscreen (Bars)' : 'Fullscreen (Bars)';
+                    }
+                    if (fullscreenHalfBtn) {
+                        fullscreenHalfBtn.textContent = halfActive ? 'Exit Fullscreen (Half-Fill)' : 'Fullscreen (Half-Fill)';
+                    }
+                    if (fullscreenFillBtn) {
+                        fullscreenFillBtn.textContent = fillActive ? 'Exit Fullscreen (Fill)' : 'Fullscreen (Fill)';
+                    }
+                }
+
+                async function exitLayoutFullscreen() {
+                    var layout = document.getElementById('layout');
+                    if (layout) layout.classList.remove('app-fullscreen-half', 'app-fullscreen-fill');
+
+                    try {
+                        if (await fullscreenActive()) {
+                            await callWailsWindow(38);
+                        }
+                        updateFullscreenButtons();
+                        return;
+                    } catch (_e) {
+                        // Browser previews do not expose the native Wails window runtime.
+                    }
+
+                    if (fullscreenElement()) {
+                        if (document.exitFullscreen) {
+                            await document.exitFullscreen();
+                        } else if (document.webkitExitFullscreen) {
+                            document.webkitExitFullscreen();
+                        } else if (document.mozCancelFullScreen) {
+                            document.mozCancelFullScreen();
+                        } else if (document.msExitFullscreen) {
+                            document.msExitFullscreen();
+                        }
+                    }
+                    updateFullscreenButtons();
+                }
+
+                async function toggleLayoutFullscreen(mode) {
+                    var layout = document.getElementById('layout');
+                    var halfMode = mode === 'half';
+                    var fillMode = mode === 'fill';
+                    var active = await fullscreenActive();
+
+                    if (active) {
+                        var activeMode = 'bars';
+                        if (layout && layout.classList.contains('app-fullscreen-half')) {
+                            activeMode = 'half';
+                        } else if (layout && layout.classList.contains('app-fullscreen-fill')) {
+                            activeMode = 'fill';
+                        }
+                        if (activeMode === mode) {
+                            await exitLayoutFullscreen();
+                            return;
+                        }
+                        if (layout) {
+                            layout.classList.toggle('app-fullscreen-half', halfMode);
+                            layout.classList.toggle('app-fullscreen-fill', fillMode);
+                        }
+                        updateFullscreenButtons();
+                        return;
+                    }
+
+                    if (layout) {
+                        layout.classList.toggle('app-fullscreen-half', halfMode);
+                        layout.classList.toggle('app-fullscreen-fill', fillMode);
+                    }
+
+                    try {
+                        await callWailsWindow(38);
+                        updateFullscreenButtons();
+                        return;
+                    } catch (_e) {
+                        // Browser previews do not expose the native Wails window runtime.
+                    }
+
+                    if (!layout) {
+                        updateFullscreenButtons();
+                        return;
+                    }
+
+                    if (layout.requestFullscreen) {
+                        await layout.requestFullscreen();
+                    } else if (layout.webkitRequestFullscreen) {
+                        layout.webkitRequestFullscreen();
+                    } else if (layout.mozRequestFullScreen) {
+                        layout.mozRequestFullScreen();
+                    } else if (layout.msRequestFullscreen) {
+                        layout.msRequestFullscreen();
+                    }
+                    updateFullscreenButtons();
                 }
 
                 afkSel.addEventListener('change', function () {
@@ -900,12 +1306,67 @@
                         window.DISCORD_RPC_ENABLED = discordChk.checked;
                         localStorage.setItem('discordRpcEnabled', discordChk.checked ? 'true' : 'false');
                         if (discordChk.checked) {
-                            // Connect immediately if already in-game
+                            // Connect immediately if already in-game.
                             fetch('/api/discord/connect').catch(function () {});
                         } else {
                             fetch('/api/discord/disconnect').catch(function () {});
                         }
                     });
+                }
+
+                if (filterSel) {
+                    filterSel.addEventListener('change', function () {
+                        applyCanvasFilter(filterSel.value);
+                    });
+                }
+
+                if (sizeSel) {
+                    sizeSel.addEventListener('change', function () {
+                        applyCanvasSize(sizeSel.value);
+                    });
+                }
+
+                if (stretchModeSel) {
+                    stretchModeSel.addEventListener('change', function () {
+                        applyStretchMode(stretchModeSel.value);
+                    });
+                }
+
+                if (lowMemoryChk) {
+                    lowMemoryChk.addEventListener('change', function () {
+                        applyLowMemoryMode(lowMemoryChk.checked);
+                    });
+                }
+
+                if (hdModeChk) {
+                    hdModeChk.addEventListener('change', function () {
+                        applyHdMode(hdModeChk.checked);
+                    });
+                }
+
+                if (fullscreenBarsBtn) {
+                    fullscreenBarsBtn.addEventListener('click', function () {
+                        toggleLayoutFullscreen('bars');
+                    });
+                }
+
+                if (fullscreenHalfBtn) {
+                    fullscreenHalfBtn.addEventListener('click', function () {
+                        toggleLayoutFullscreen('half');
+                    });
+                }
+
+                if (fullscreenFillBtn) {
+                    fullscreenFillBtn.addEventListener('click', function () {
+                        toggleLayoutFullscreen('fill');
+                    });
+                }
+
+                if (fullscreenBarsBtn || fullscreenHalfBtn || fullscreenFillBtn) {
+                    document.addEventListener('fullscreenchange', updateFullscreenButtons);
+                    document.addEventListener('webkitfullscreenchange', updateFullscreenButtons);
+                    document.addEventListener('mozfullscreenchange', updateFullscreenButtons);
+                    document.addEventListener('MSFullscreenChange', updateFullscreenButtons);
                 }
 
                 btn.addEventListener('click', function () {

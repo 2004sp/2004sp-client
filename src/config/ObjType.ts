@@ -3,11 +3,11 @@ import LruCache from '#/datastruct/LruCache.js';
 import Jagfile from '#/io/Jagfile.js';
 import Packet from '#/io/Packet.js';
 
-import { Colour } from '#/graphics/Colour.js';
-import Pix2D from '#/graphics/Pix2D.js';
+import { Colour } from '#/dash3d/graphics/Colour.js';
+import Pix2D from '#/dash3d/graphics/Pix2D.js';
 import Pix3D from '#/dash3d/Pix3D.js';
 import Model from '#/dash3d/Model.js';
-import Pix32 from '#/graphics/Pix32.js';
+import Pix32 from '#/dash3d/graphics/Pix32.js';
 
 import { TypedArray1d } from '#/util/Arrays.js';
 
@@ -507,7 +507,7 @@ export default class ObjType {
         Pix3D.originX = _cx;
         Pix3D.originY = _cy;
         Pix3D.scanline = _loff;
-        Pix3D.lowDetail = true;
+        Pix3D.lowDetail = !Pix3D.highDetail;
 
         if (obj.stackable) {
             icon.owi = 33;

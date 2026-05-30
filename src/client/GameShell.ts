@@ -1,9 +1,9 @@
 import InputTracking from '#/client/InputTracking.js';
 import { CanvasEnabledKeys, KeyCodes } from '#/client/KeyCodes.js';
 
-import { canvas, canvas2d } from '#/graphics/Canvas.js';
+import { canvas, canvas2d } from '#/dash3d/graphics/Canvas.js';
 import Pix3D from '#/dash3d/Pix3D.js';
-import PixMap from '#/graphics/PixMap.js';
+import PixMap from '#/dash3d/graphics/PixMap.js';
 
 import { sleep } from '#/util/JsUtil.js';
 
@@ -39,7 +39,21 @@ export default abstract class GameShell {
 
     /// custom
     protected resizeToFit: boolean = false;
-    protected tfps: number = 50;
+    protected tfps: number = 60;
+
+    /**
+     * Fraction of the current 20ms game tick that has elapsed.
+     * Game logic remains fixed at 50 TPS; render-only code uses this for 60 FPS smoothing.
+     */
+    protected tickAlpha: number = 0;
+
+    protected tps: number = 0;
+    protected renderFps: number = 0;
+
+    private tickAccumulator: number = 0;
+    private lastTickLoopTime: number = 0;
+    private lastTickTime: number = 0;
+    private tickRunning: boolean = false;
 
     protected async maininit() { }
     protected async mainloop() { }
@@ -90,7 +104,7 @@ export default abstract class GameShell {
 
         canvas.onkeydown = this.onkeydown.bind(this);
         canvas.onkeyup = this.onkeyup.bind(this);
-	canvas.onwheel = this.onwheel.bind(this);
+        canvas.onwheel = this.onwheel.bind(this);
         canvas.onmousedown = this.onmousedown.bind(this);
         canvas.onpointerdown = this.onpointerdown.bind(this);
         canvas.onmouseup = this.onmouseup.bind(this);
@@ -111,8 +125,6 @@ export default abstract class GameShell {
             }
         }
 
-        // Preventing mouse events from bubbling up to the context menu in the browser for our canvas.
-        // This may need to be hooked up to our own context menu in the future.
         canvas.oncontextmenu = (e: MouseEvent): void => {
             e.preventDefault();
         };
@@ -124,110 +136,165 @@ export default abstract class GameShell {
         await this.messageBox('Loading...', 0);
         await this.maininit();
 
-        let ntime: number = 0;
-        let opos: number = 0;
-        let ratio: number = 256;
-        let delta: number = 1;
-        let count: number = 0;
+        this.lastTickLoopTime = performance.now();
+        this.lastTickTime = this.lastTickLoopTime;
+        this.tickAccumulator = 0;
 
-        for (let i: number = 0; i < 10; i++) {
-            this.otim[i] = performance.now();
-        }
+        this.startTickLoop();
+        this.startRenderLoop();
+    }
 
-        while (this.state >= 0) {
-            if (this.state > 0) {
-                this.state--;
+    /**
+     * Fixed-step game loop. This intentionally runs mainloop at the authentic 50 TPS
+     * while renderLoop is free to draw at 60 FPS / display refresh rate.
+     */
+    protected startTickLoop(): void {
+        const maxCatchupTicks = 5;
+        let tickCounter = 0;
+        let lastTpsUpdate = performance.now();
 
-                if (this.state === 0) {
-                    this.shutdown();
+        const tickLoop = async (): Promise<void> => {
+            try {
+                if (this.state < 0) {
+                    if (this.state === -1) {
+                        this.shutdown();
+                    }
                     return;
                 }
+
+                const now = performance.now();
+                let delta = now - this.lastTickLoopTime;
+                if (delta > 250) {
+                    delta = 250;
+                }
+
+                this.lastTickLoopTime = now;
+                this.tickAccumulator += delta;
+
+                let updates = 0;
+                while (this.tickAccumulator >= this.deltime && updates < maxCatchupTicks && !this.tickRunning) {
+                    if (this.state > 0) {
+                        this.state--;
+                        if (this.state === 0) {
+                            this.shutdown();
+                            return;
+                        }
+                    }
+
+                    this.tickRunning = true;
+
+                    try {
+                        this.mouseClickButton = this.nextMouseClickButton;
+                        this.mouseClickX = this.nextMouseClickX;
+                        this.mouseClickY = this.nextMouseClickY;
+                        this.mouseClickTime = this.nextMouseClickTime;
+                        this.nextMouseClickButton = 0;
+
+                        this.lastTickTime = performance.now();
+                        await this.mainloop();
+                    } catch (e) {
+                        console.error('[GameShell] mainloop failed:', e);
+                        fetch('/debug-log', { method: 'POST', body: '[GameShell] mainloop failed: ' + String(e).substring(0, 500) }).catch(() => {});
+                    } finally {
+                        this.tickRunning = false;
+                    }
+
+                    this.tickAccumulator -= this.deltime;
+                    updates++;
+                    tickCounter++;
+                }
+
+                // If the client fell badly behind, drop excess backlog instead of spiral-catching up.
+                if (updates >= maxCatchupTicks && this.tickAccumulator >= this.deltime) {
+                    this.tickAccumulator = 0;
+                }
+
+                if (now - lastTpsUpdate >= 1000) {
+                    this.tps = Math.min(tickCounter, Math.round(1000 / this.deltime));
+                    tickCounter = 0;
+                    lastTpsUpdate = now;
+                }
+            } catch (e) {
+                console.error('[GameShell] tickLoop failed:', e);
+                fetch('/debug-log', { method: 'POST', body: '[GameShell] tickLoop failed: ' + String(e).substring(0, 500) }).catch(() => {});
+            } finally {
+                if (this.state >= 0) {
+                    requestAnimationFrame(tickLoop);
+                }
             }
+        };
 
-            const lastRatio: number = ratio;
-            const lastDelta: number = delta;
+        requestAnimationFrame(tickLoop);
+    }
 
-            ratio = 300;
-            delta = 1;
+    /**
+     * Render loop. Draws independently from the fixed 50 TPS game loop and exposes
+     * tickAlpha to camera/entity/model rendering for smooth 60 FPS visuals.
+     */
+    protected startRenderLoop(): void {
+        let lastRenderTime = performance.now();
+        let renderCounter = 0;
+        let lastRenderFpsUpdate = performance.now();
 
-            ntime = performance.now();
+        const renderLoop = async (timestamp: number): Promise<void> => {
+            try {
+                if (this.state < 0) {
+                    return;
+                }
 
-            const otim: number = this.otim[opos];
-            if (otim === 0) {
-                ratio = lastRatio;
-                delta = lastDelta;
-            } else if (ntime > otim) {
-                ratio = ((this.deltime * 2560) / (ntime - otim)) | 0;
-            }
+                const now = performance.now();
+                const fpsLimit = (window as any).clientInstance?.maxRenderFps ?? this.tfps;
+                const targetFrameTime = fpsLimit > 0 ? 1000 / fpsLimit : 0;
+                const delta = now - lastRenderTime;
 
-            if (ratio < 25) {
-                ratio = 25;
-            } else if (ratio > 256) {
-                ratio = 256;
-                delta = (this.deltime - (ntime - otim) / 10) | 0;
-            }
+                if (targetFrameTime === 0 || delta >= targetFrameTime) {
+                    if (targetFrameTime > 0) {
+                        lastRenderTime = now - (delta % targetFrameTime);
+                    } else {
+                        lastRenderTime = now;
+                    }
 
-            this.otim[opos] = ntime;
-            opos = (opos + 1) % 10;
+                    this.tickAlpha = Math.max(0, Math.min(1, this.tickAccumulator / this.deltime));
 
-            if (delta > 1) {
-                for (let i: number = 0; i < 10; i++) {
-                    if (this.otim[i] !== 0) {
-                        this.otim[i] += delta;
+                    try {
+                        await this.maindraw();
+                    } catch (e) {
+                        console.error('[GameShell] maindraw failed:', e);
+                        fetch('/debug-log', { method: 'POST', body: '[GameShell] maindraw failed: ' + String(e).substring(0, 500) }).catch(() => {});
+                    }
+
+                    renderCounter++;
+                    if (now - lastRenderFpsUpdate >= 1000) {
+                        this.renderFps = renderCounter;
+                        this.fps = this.renderFps;
+                        renderCounter = 0;
+                        lastRenderFpsUpdate = now;
+                    }
+
+                    if (this.debug) {
+                        console.log('tickAlpha:' + this.tickAlpha.toFixed(3) + ' fps:' + this.renderFps + ' tps:' + this.tps + ' deltime:' + this.deltime);
+                        this.debug = false;
                     }
                 }
-            }
 
-            if (delta < this.mindel) {
-                delta = this.mindel;
-            }
-
-            await sleep(delta);
-
-            while (count < 256) {
-                this.mouseClickButton = this.nextMouseClickButton;
-                this.mouseClickX = this.nextMouseClickX;
-                this.mouseClickY = this.nextMouseClickY;
-                this.mouseClickTime = this.nextMouseClickTime;
-                this.nextMouseClickButton = 0;
-
-                await this.mainloop();
-
-                // this.keyQueueReadPos = this.keyQueueWritePos;
-                count += ratio;
-            }
-            count &= 0xff;
-
-            if (this.deltime > 0) {
-                this.fps = ((ratio * 1000) / (this.deltime * 256)) | 0;
-            }
-
-            await this.maindraw();
-
-            // this is custom for targeting specific fps (on mobile).
-            if (this.tfps < 50) {
-                const tfps: number = 1000 / this.tfps - (performance.now() - ntime);
-                if (tfps > 0) {
-                    await sleep(tfps);
+                // Optional mobile cap support. Normal desktop stays at 60 by default.
+                if (this.tfps > 0 && this.tfps < 60) {
+                    const wait: number = 1000 / this.tfps - (performance.now() - timestamp);
+                    if (wait > 0) {
+                        await sleep(wait);
+                    }
+                }
+            } catch (e) {
+                console.error('[GameShell] renderLoop failed:', e);
+                fetch('/debug-log', { method: 'POST', body: '[GameShell] renderLoop failed: ' + String(e).substring(0, 500) }).catch(() => {});
+            } finally {
+                if (this.state >= 0) {
+                    requestAnimationFrame(renderLoop);
                 }
             }
+        };
 
-            if (this.debug) {
-                console.log('ntime:' + ntime);
-                for (let i = 0; i < 10; i++) {
-                    const o = (opos - i - 1 + 20) % 10;
-                    console.log('otim' + o + ':' + this.otim[o]);
-                }
-                console.log('fps:' + this.fps + ' ratio:' + ratio + ' count:' + count);
-                console.log('del:' + delta + ' deltime:' + this.deltime + ' mindel:' + this.mindel);
-                console.log('opos:' + opos);
-                this.debug = false;
-            }
-        }
-
-        if (this.state === -1) {
-            this.shutdown();
-        }
+        requestAnimationFrame(renderLoop);
     }
 
     protected shutdown() {
@@ -239,7 +306,7 @@ export default abstract class GameShell {
     }
 
     protected setTargetedFramerate(rate: number) {
-        this.tfps = Math.max(Math.min(50, rate | 0), 0);
+        this.tfps = Math.max(Math.min(60, rate | 0), 0);
     }
 
     protected start() {

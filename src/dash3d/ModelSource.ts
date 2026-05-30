@@ -14,6 +14,14 @@ export default class ModelSource extends Linkable2 {
         }
     }
 
+    hdRender(loopCycle: number, yaw: number, relativeX: number, relativeY: number, relativeZ: number): void {
+        const model = this.getTempModel(loopCycle);
+        if (model) {
+            this.minY = model.minY;
+            model.queueHdModel(yaw, relativeX, relativeY, relativeZ);
+        }
+    }
+
     getTempModel(_loopCycle: number): Model | null {
         return null;
     }

@@ -1,14 +1,14 @@
 import GameShell from '#/client/GameShell.js';
-import Pix32 from '#/graphics/Pix32.js';
-import Pix2D from '#/graphics/Pix2D.js';
-import Pix8 from '#/graphics/Pix8.js';
-import PixFont from '#/graphics/PixFont.js';
+import Pix32 from '#/dash3d/graphics/Pix32.js';
+import Pix2D from '#/dash3d/graphics/Pix2D.js';
+import Pix8 from '#/dash3d/graphics/Pix8.js';
+import PixFont from '#/dash3d/graphics/PixFont.js';
 import Jagfile from '#/io/Jagfile.js';
 import Packet from '#/io/Packet.js';
 import { TypedArray1d, TypedArray2d } from '#/util/Arrays.js';
 import { downloadUrl, sleep } from '#/util/JsUtil.js';
-import { canvas, saveDataURL } from '#/graphics/Canvas.js';
-import PixMap from '#/graphics/PixMap.js';
+import { canvas, saveDataURL } from '#/dash3d/graphics/Canvas.js';
+import PixMap from '#/dash3d/graphics/PixMap.js';
 import WorldMapFont from '#/mapview/WorldMapFont.js';
 
 export class MapView extends GameShell {
