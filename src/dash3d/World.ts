@@ -19,7 +19,7 @@ import LinkList from '#/datastruct/LinkList.js';
 import Pix2D from '#/dash3d/graphics/Pix2D.js';
 import Pix3D from '#/dash3d/Pix3D.js';
 import Model from '#/dash3d/Model.js';
-import HDRenderer from '#/hd/HDRenderer.js';
+import HDRenderer from '#/hd/ThreeRenderer.js';
 
 import { Int32Array3d, TypedArray1d, TypedArray2d, TypedArray3d, TypedArray4d } from '#/util/Arrays.js';
 import type ModelSource from '#/dash3d/ModelSource.js';
@@ -2382,7 +2382,6 @@ private shouldLeaveHdLocToSoftwareVisibility(typecode: number, typecode2: number
         }
 
         HDRenderer.queueGroundTile(level, tileX, tileZ);
-
         const px0: number = Pix3D.originX + (((x0 << 9) / z0) | 0);
         const py0: number = Pix3D.originY + (((y0 << 9) / z0) | 0);
         const pz0: number = Pix3D.originX + (((x1 << 9) / z1) | 0);
@@ -2392,15 +2391,23 @@ private shouldLeaveHdLocToSoftwareVisibility(typecode: number, typecode2: number
         const px3: number = Pix3D.originX + (((x3 << 9) / z3) | 0);
         const py3: number = Pix3D.originY + (((y3 << 9) / z3) | 0);
 
+        if (World.click) {
+            if ((py1 - px3) * (px1 - py3) - (pz1 - py3) * (pz0 - px3) > 0 && this.insideTriangle(World.clickX, World.clickY, pz1, py3, px1, py1, px3, pz0)) {
+                World.groundX = tileX;
+                World.groundZ = tileZ;
+            }
+            if ((px0 - pz0) * (py3 - px1) - (py0 - px1) * (px3 - pz0) > 0 && this.insideTriangle(World.clickX, World.clickY, py0, px1, py3, px0, pz0, px3)) {
+                World.groundX = tileX;
+                World.groundZ = tileZ;
+            }
+        }
+
+        if (HDRenderer.isEnabled())
+                return;
         Pix3D.trans = 0;
 
         if ((py1 - px3) * (px1 - py3) - (pz1 - py3) * (pz0 - px3) > 0) {
             Pix3D.hclip = py1 < 0 || px3 < 0 || pz0 < 0 || py1 > Pix2D.sizeX || px3 > Pix2D.sizeX || pz0 > Pix2D.sizeX;
-
-            if (World.click && this.insideTriangle(World.clickX, World.clickY, pz1, py3, px1, py1, px3, pz0)) {
-                World.groundX = tileX;
-                World.groundZ = tileZ;
-            }
 
             if (ground.texture !== -1) {
                 if (!World.lowMem) {
@@ -2448,11 +2455,6 @@ private shouldLeaveHdLocToSoftwareVisibility(typecode: number, typecode2: number
 
         if ((px0 - pz0) * (py3 - px1) - (py0 - px1) * (px3 - pz0) > 0) {
             Pix3D.hclip = px0 < 0 || pz0 < 0 || px3 < 0 || px0 > Pix2D.sizeX || pz0 > Pix2D.sizeX || px3 > Pix2D.sizeX;
-
-            if (World.click && this.insideTriangle(World.clickX, World.clickY, py0, px1, py3, px0, pz0, px3)) {
-                World.groundX = tileX;
-                World.groundZ = tileZ;
-            }
 
             if (ground.texture !== -1) {
                 if (!World.lowMem) {
@@ -2517,7 +2519,26 @@ private shouldLeaveHdLocToSoftwareVisibility(typecode: number, typecode2: number
         }
 
         HDRenderer.queueGroundTile(level, tileX, tileZ);
-
+        if (World.click) {
+            const faceCount: number = ground.faceVertexA.length;
+            for (let v: number = 0; v < faceCount; v++) {
+                const a: number = ground.faceVertexA[v];
+                const b: number = ground.faceVertexB[v];
+                const c: number = ground.faceVertexC[v];
+                const x0: number = Ground.drawVertexX[a];
+                const x1: number = Ground.drawVertexX[b];
+                const x2: number = Ground.drawVertexX[c];
+                const y0: number = Ground.drawVertexY[a];
+                const y1: number = Ground.drawVertexY[b];
+                const y2: number = Ground.drawVertexY[c];
+                if ((x0 - x1) * (y2 - y1) - (y0 - y1) * (x2 - x1) > 0 && this.insideTriangle(World.clickX, World.clickY, y0, y1, y2, x0, x1, x2)) {
+                    World.groundX = tileX;
+                    World.groundZ = tileZ;
+                }
+            }
+        }
+        if (HDRenderer.isEnabled())
+                return;
         Pix3D.trans = 0;
 
         vertexCount = ground.faceVertexA.length;
@@ -2536,11 +2557,6 @@ private shouldLeaveHdLocToSoftwareVisibility(typecode: number, typecode2: number
 
             if ((x0 - x1) * (y2 - y1) - (y0 - y1) * (x2 - x1) > 0) {
                 Pix3D.hclip = x0 < 0 || x1 < 0 || x2 < 0 || x0 > Pix2D.sizeX || x1 > Pix2D.sizeX || x2 > Pix2D.sizeX;
-
-                if (World.click && this.insideTriangle(World.clickX, World.clickY, y0, y1, y2, x0, x1, x2)) {
-                    World.groundX = tileX;
-                    World.groundZ = tileZ;
-                }
 
                 if (ground.faceTexture && ground.faceTexture[v] !== -1) {
                     if (!World.lowMem) {

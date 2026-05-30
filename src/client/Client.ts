@@ -68,7 +68,7 @@ import WordFilter from '#/wordenc/WordFilter.js';
 import WordPack from '#/wordenc/WordPack.js';
 
 import JagFX from '#/sound/JagFX.js';
-import HDRenderer from '#/hd/HDRenderer.js';
+import HDRenderer from '#/hd/ThreeRenderer.js';
 
 const CLIENT_VERSION = 254;
 
