@@ -310,6 +310,39 @@ vec3 hslToSrgb(vec3 hsl){float C=(1.0-abs(2.0*hsl.z-1.0))*hsl.y;float Hp=fract(h
 vec3 srgbToHsv(vec3 rgb){vec3 hsl=srgbToHsl(rgb);float v=hsl.z+hsl.y*min(hsl.z,1.0-hsl.z);float s=abs(v)<0.001?0.0:2.0*(1.0-hsl.z/v);return vec3(hsl.x,s,v);}
 vec3 hsvToSrgb(vec3 hsv){float l=hsv.z*(1.0-hsv.y*0.5);float d=min(l,1.0-l);float s=abs(d)<0.001?0.0:(hsv.z-l)/d;return hslToSrgb(vec3(hsv.x,s,l));}
 
+vec2 hdPlanarUv(vec3 normal, vec3 worldPos) {
+    vec3 an = abs(normal);
+    if (an.y >= an.x && an.y >= an.z) {
+        return worldPos.xz / 128.0;
+    }
+    if (an.x >= an.z) {
+        return worldPos.zy / 128.0;
+    }
+    return worldPos.xy / 128.0;
+}
+
+int hdFallbackSlotForMaterial(float material) {
+    // Most 2004 building wall faces are model-coloured rather than texture-basis faces.
+    // Give those untextured stone/model faces a stable RLHD wall texture instead of
+    // leaving the software/vanilla grey streak texture visible.
+    if (material == 3.0 || material == 4.0 || material == 8.0 || material == 10.0) {
+        return 2;   // hd_brick / wall
+    }
+    if (material == 5.0) {
+        return 3;   // wood/planks
+    }
+    if (material == 11.0) {
+        return 6;   // roof shingles
+    }
+    if (material == 7.0) {
+        return 11;  // mossy/concrete
+    }
+    if (material == 6.0) {
+        return 15;  // marble
+    }
+    return -1;
+}
+
 void main() {
     vec3 normal  = normalize(v_normal);
     vec3 viewDir = normalize(u_cameraPosition - v_worldPos);
@@ -340,6 +373,21 @@ void main() {
         if (u_hdAtlasReady > 0.5 && material != 1.0 && material != 2.0) {
             vec4 hdRect = u_hdAtlasRects[v_texture];
             vec2 hdUv = mix(hdRect.xy, hdRect.zw, fract(v_uv));
+            vec4 hdTexel = texture(u_hdTextureAtlas, hdUv);
+            if (hdTexel.a > 0.1) {
+                baseColour = mix(baseColour, hdTexel.rgb, 0.92);
+            }
+        }
+    }
+
+    // RLHD fallback for model-coloured/untextured building faces.
+    // These faces do not carry a vanilla texture ID, so the normal cache-texture path
+    // above cannot replace them. Project an RLHD material texture in world space.
+    if (u_textureDebugMode == 0 && u_hdAtlasReady > 0.5 && !validCacheTexture && material != 1.0 && material != 2.0 && material != 12.0) {
+        int hdSlot = hdFallbackSlotForMaterial(material);
+        if (hdSlot >= 0) {
+            vec4 hdRect = u_hdAtlasRects[hdSlot];
+            vec2 hdUv = mix(hdRect.xy, hdRect.zw, fract(hdPlanarUv(normal, v_worldPos)));
             vec4 hdTexel = texture(u_hdTextureAtlas, hdUv);
             if (hdTexel.a > 0.1) {
                 baseColour = mix(baseColour, hdTexel.rgb, 0.92);
@@ -1317,9 +1365,11 @@ void main() { fragColor = vec4(0.0); }
         const width = HD_ATLAS_COLS * HD_ATLAS_TILE;
         const height = HD_ATLAS_ROWS * HD_ATLAS_TILE;
         const pixels = new Uint8Array(width * height * 4); // alpha=0 means no HD override for that slot
+
         const scratch = document.createElement('canvas');
         scratch.width = HD_ATLAS_TILE;
         scratch.height = HD_ATLAS_TILE;
+
         const ctx = scratch.getContext('2d');
         if (!ctx) {
             return;
@@ -1334,9 +1384,11 @@ void main() { fragColor = vec4(0.0); }
         tex.needsUpdate = true;
 
         const rects: THREE.Vector4[] = [];
+
         for (let id = 0; id < CACHE_TEXTURE_COUNT; id++) {
             const col = id % HD_ATLAS_COLS;
             const row = (id / HD_ATLAS_COLS) | 0;
+
             rects[id] = new THREE.Vector4(
                 (col * HD_ATLAS_TILE + 0.5) / width,
                 (row * HD_ATLAS_TILE + 0.5) / height,
@@ -1348,45 +1400,71 @@ void main() { fragColor = vec4(0.0); }
         this.hdTextureAtlas = tex;
         this.hdAtlasPixels = pixels;
         this.hdAtlasLoadingStarted = true;
+        this.hdAtlasLoadedCount = 0;
 
         for (const mat of [this.terrainMat, this.waterMesh?.material] as (THREE.RawShaderMaterial | undefined | null)[]) {
-            if (!mat || !(mat instanceof THREE.RawShaderMaterial)) continue;
+            if (!mat || !(mat instanceof THREE.RawShaderMaterial)) {
+                continue;
+            }
+
             mat.uniforms.u_hdTextureAtlas.value = tex;
             mat.uniforms.u_hdAtlasRects.value = rects;
-            mat.uniforms.u_hdAtlasReady.value = 1.0;
+            mat.uniforms.u_hdAtlasReady.value = 0.0;
         }
 
         for (let id = 0; id < CACHE_TEXTURE_COUNT; id++) {
             const filename = HD_TEXTURE_FOR_SLOT[id];
-            if (!filename) continue;
+            if (!filename) {
+                continue;
+            }
 
+            const url = filename.startsWith('/') ? filename : `/hd/textures/rlhd/${filename}`;
             const image = new Image();
+
             image.decoding = 'async';
+
             image.onload = () => {
                 const col = id % HD_ATLAS_COLS;
                 const row = (id / HD_ATLAS_COLS) | 0;
+
                 ctx.clearRect(0, 0, HD_ATLAS_TILE, HD_ATLAS_TILE);
                 ctx.drawImage(image, 0, 0, HD_ATLAS_TILE, HD_ATLAS_TILE);
+
                 const imageData = ctx.getImageData(0, 0, HD_ATLAS_TILE, HD_ATLAS_TILE).data;
+
                 for (let y = 0; y < HD_ATLAS_TILE; y++) {
                     const dst = ((row * HD_ATLAS_TILE + y) * width + col * HD_ATLAS_TILE) * 4;
                     const src = y * HD_ATLAS_TILE * 4;
                     pixels.set(imageData.subarray(src, src + HD_ATLAS_TILE * 4), dst);
                 }
-                for (let a = 3; a < pixels.length; a += 4) {
-                    // keep empty slots transparent; loaded JPEG/PNG slots should be opaque
-                }
+
                 this.hdAtlasLoadedCount++;
                 tex.needsUpdate = true;
+
+                for (const mat of [this.terrainMat, this.waterMesh?.material] as (THREE.RawShaderMaterial | undefined | null)[]) {
+                    if (!mat || !(mat instanceof THREE.RawShaderMaterial)) {
+                        continue;
+                    }
+
+                    mat.uniforms.u_hdAtlasReady.value = this.hdAtlasLoadedCount > 0 ? 1.0 : 0.0;
+                }
+
+                fetch('/debug-log', {
+                    method: 'POST',
+                    body: `[rlhd-atlas] loaded ${id}: ${url} total:${this.hdAtlasLoadedCount}`
+                }).catch(() => {});
             };
+
             image.onerror = () => {
-                fetch('/debug-log', { method: 'POST', body: `[rlhd-atlas] failed ${id}: ${image.src}` }).catch(() => {});
+                fetch('/debug-log', {
+                    method: 'POST',
+                    body: `[rlhd-atlas] FAILED ${id}: ${url}`
+                }).catch(() => {});
             };
-            image.src = filename.startsWith('/') ? filename : `/hd/textures/rlhd/${filename}`;
+
+            image.src = url;
         }
     }
-
-    // ── CPU-side terrain helpers (ported verbatim from HDRenderer) ────────────
 
     private static hueToRgb(p: number, q: number, t: number): number {
         if (t < 0) t += 1; else if (t > 1) t -= 1;
@@ -1865,7 +1943,7 @@ void main() { fragColor = vec4(0.0); }
             available: this.ready,
             reason: this.reason,
             groundTileCount: this.groundTiles.length,
-            terrainVertexCount: 0,
+            terrainVertexCount: this.terrainVertexCount,
             modelDrawCount: this.modelDrawCount,
             modelVertexCount: this.modelVertexCount,
             modelBatchCount: this.modelBatchCount,
@@ -2122,7 +2200,7 @@ void main() { fragColor = vec4(0.0); }
                 ? HDMaterial.Unlit
                 : modelTex
                 ? (texMat !== HDMaterial.Default ? texMat : this.materialForModelColour(avg))
-                : HDMaterial.Model;
+                : this.materialForModelColour(avg);
 
             const norm = this.triangleNormal(pa, pb, pc);
             if (material === HDMaterial.Water && this.faceHeightDelta(pa, pb, pc) > WATER_SURFACE_MAX_HEIGHT_DELTA) continue;
