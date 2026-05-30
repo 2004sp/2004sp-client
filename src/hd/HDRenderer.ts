@@ -67,12 +67,12 @@ const CACHE_TEXTURE_COUNT = 50;
 const HD_ATLAS_TILE = 256;
 const HD_ATLAS_COLS = 16;
 const HD_ATLAS_ROWS = 4;
-const SHADOW_MAP_SIZE = 1024;
+const SHADOW_MAP_SIZE = 2048;
 const WATER_SURFACE_MAX_HEIGHT_DELTA = 48;
 const TRANSPARENT_MODEL_MAX_HEIGHT_DELTA = 192;
 const PLAIN_TERRAIN_SHAPE = 0;
 const HD_RENDERER_BUILD = process.env.BUILD_TIME;
-const HD_SKY_COLOUR = [0.24, 0.28, 0.31] as const;
+const HD_SKY_COLOUR = [0.47, 0.65, 0.85] as const;
 const HD_FOG_START = 2600;
 const HD_FOG_END = 5200;
 const HD_FAR_PLANE = 9000;
@@ -89,6 +89,90 @@ void main() {
     fragment: `#version 300 es
 precision highp float;
 void main() {}
+`
+};
+
+// Full-screen skybox: gradient sky + sun disk, rendered at depth 0.9999 so terrain overwrites it.
+// The sky gradient is derived from the world-space elevation of each fragment's view ray.
+// The 2004 client uses a custom camera rotation (yaw then pitch) instead of a standard matrix,
+// so we reconstruct the world-space view direction manually using the camera rotation uniforms.
+const skyboxShader: ShaderSource = {
+    vertex: `#version 300 es
+precision highp float;
+layout(location = 0) in vec2 a_ndc;
+out vec2 v_ndc;
+void main() {
+    v_ndc = a_ndc;
+    gl_Position = vec4(a_ndc, 0.9999, 1.0);
+}
+`,
+    fragment: `#version 300 es
+precision highp float;
+
+in vec2 v_ndc;
+
+uniform float u_sinEyePitch;
+uniform float u_cosEyePitch;
+uniform float u_sinEyeYaw;
+uniform float u_cosEyeYaw;
+uniform vec2 u_projectionScale;
+uniform vec3 u_skyZenith;
+uniform vec3 u_skyHorizon;
+uniform vec3 u_sunDirection;
+
+out vec4 outColour;
+
+void main() {
+    // Reconstruct view-space ray from NDC + projection scale, then convert to world space.
+    // The 2004 client view transform (from scene_vert):
+    //   viewX = cosYaw*relX + sinYaw*relZ
+    //   viewY = sinYaw*sinPitch*relX + cosPitch*relY - cosYaw*sinPitch*relZ
+    //   viewZ = -sinYaw*cosPitch*relX + sinPitch*relY + cosYaw*cosPitch*relZ
+    // Inverse (rotation transpose):
+    //   worldY = cosPitch*viewY + sinPitch*viewZ
+    vec3 viewRay = normalize(vec3(v_ndc.x / u_projectionScale.x, -v_ndc.y / u_projectionScale.y, 1.0));
+    float sp = u_sinEyePitch, cp = u_cosEyePitch;
+    float sy = u_sinEyeYaw,   cy = u_cosEyeYaw;
+
+    // Only worldY is needed for elevation. In OSRS +Y is down, so up = (0,-1,0).
+    float worldY = cp * viewRay.y + sp * viewRay.z;
+
+    // elevation > 0 means looking upward (worldY < 0 in OSRS Y convention).
+    float elevation = atan(-worldY, sqrt(max(0.0, 1.0 - worldY * worldY)));
+    float t = clamp(elevation / 1.5708, 0.0, 1.0);
+    vec3 sky = mix(u_skyHorizon, u_skyZenith, t * t);
+
+    // Atmospheric haze: blend toward horizon colour near the horizon line.
+    float haze = clamp(1.0 - abs(elevation) / 0.35, 0.0, 1.0);
+    sky = mix(sky, u_skyHorizon * 1.08, haze * haze * 0.35);
+
+    // Sun disk: project the sun world direction through the camera rotation.
+    // u_sunDirection is sun→scene; toward sun = -u_sunDirection.
+    vec3 sunToward = normalize(-u_sunDirection);
+    float szPrime = cy * sunToward.z - sy * sunToward.x;
+    float svx     = sy * sunToward.z + cy * sunToward.x;
+    float svy     = cp * sunToward.y - sp * szPrime;
+    float svz     = sp * sunToward.y + cp * szPrime;
+
+    if (svz > 0.01) {
+        vec2 sunScreen = vec2(svx / svz * u_projectionScale.x, -svy / svz * u_projectionScale.y);
+        float dist = length(v_ndc - sunScreen);
+        // Soft solar glow halo
+        float halo = smoothstep(0.60, 0.0, dist) * 0.32;
+        sky = mix(sky, sky + vec3(1.0, 0.82, 0.42) * halo, 1.0);
+        // Hard sun disk
+        float disk = smoothstep(0.060, 0.022, dist);
+        sky = mix(sky, vec3(1.0, 0.97, 0.82), disk);
+    }
+
+    // Subtle darkening below the visual horizon so the skybox doesn't bleed into terrain gaps.
+    if (elevation < -0.05) {
+        float below = clamp((-elevation - 0.05) * 5.0, 0.0, 1.0);
+        sky = mix(sky, vec3(0.18, 0.22, 0.28), below * 0.70);
+    }
+
+    outColour = vec4(sky, 1.0);
+}
 `
 };
 
@@ -229,17 +313,17 @@ const SERVER_TRANSPARENT_TEXTURE_IDS = new Set([
 // Files are served from /hd/textures/rlhd/ and loaded asynchronously into the HD atlas.
 // Water/lava/unlit textures are left null — they're handled by procedural shading.
 const HD_TEXTURE_FOR_SLOT: readonly (string | null)[] = [
-    'wood_grain.jpg',           // 0  door
+    '/hd/terrain/textures/0.png', // 0  door - wooden door texture, not pale marble grain
     null,                       // 1  water (procedural)
     'hd_brick.jpg',             // 2  wall
     'hd_wood_planks_1.jpg',     // 3  planks
-    'wood_grain_2.jpg',         // 4  elfdoor
+    '/hd/terrain/textures/0.png', // 4  elfdoor - wooden door texture
     'wood_grain_3.jpg',         // 5  darkwood
     'hd_roof_shingles_1.jpg',   // 6  roof
     null,                       // 7  damage (transparent — vanilla alpha needed for silhouette)
-    'leaves_1.jpg',             // 8  leafytree
+    '/hd/terrain/source_moss_455_0.png', // 8  leafytree
     'bark.jpg',                 // 9  treestump
-    'leaves_1.jpg',             // 10 leafybase
+    '/hd/terrain/source_moss_455_0.png', // 10 leafybase
     'hd_concrete.jpg',          // 11 mossy
     'metallic_1.jpg',           // 12 railings
     null,                       // 13 painting1 (unlit)
@@ -258,24 +342,24 @@ const HD_TEXTURE_FOR_SLOT: readonly (string | null)[] = [
     null,                       // 26 web (transparent)
     'hd_roof_shingles_1.jpg',   // 27 elfroof
     'grunge_1.jpg',             // 28 mossydamage
-    'leaves_1.jpg',             // 29 bamboo
-    'leaves_1.jpg',             // 30 willowtex3
+    '/hd/terrain/source_grass_486_0.png', // 29 bamboo
+    '/hd/terrain/source_moss_455_0.png', // 30 willowtex3
     null,                       // 31 lava (procedural)
     'bark.jpg',                 // 32 bark
-    'leaves_1.jpg',             // 33 mapletree
-    'leaves_1.jpg',             // 34 yewtree
+    '/hd/terrain/source_moss_455_0.png', // 33 mapletree
+    '/hd/terrain/source_moss_455_0.png', // 34 yewtree
     'hd_sand_brick.jpg',        // 35 elfbrick
-    'wood_grain_2.jpg',         // 36 elfwall
+    '/hd/terrain/textures/0.png', // 36 elfwall/door texture - wooden door texture
     'metallic_1.jpg',           // 37 chainmail
     'rock_2.jpg',               // 38 mummy
     null,                       // 39 elfpainting (unlit)
-    'leaves_1.jpg',             // 40 jungleleaf4
-    'leaves_1.jpg',             // 41 plant
-    'leaves_1.jpg',             // 42 jungleleaf2
+    '/hd/terrain/source_grass_486_0.png', // 40 jungleleaf4
+    '/hd/terrain/source_grass_486_0.png', // 41 plant
+    '/hd/terrain/source_grass_486_0.png', // 42 jungleleaf2
     'tile_small_1.jpg',         // 43 plant2/clean_tile
     'hd_roof_shingles_2.jpg',   // 44 roof2
-    'wood_grain.jpg',           // 45 door2
-    'gravel.jpg',               // 46 pebblefloor
+    '/hd/terrain/textures/0.png', // 45 door2 - wooden door texture
+    '/hd/terrain/textures/46.png', // 46 pebblefloor/cobblestone
     'rock_1.jpg',               // 47 rockwall
     'hd_stone_pattern.jpg',     // 48 glyphs
     null                        // 49 canvas (unlit fabric)
@@ -533,6 +617,11 @@ uniform vec3 u_hdFogColour;
 uniform float u_hdSkyStrength;
 uniform float u_hdExposure;
 uniform float u_hdContrast;
+uniform float u_hdSaturation;
+uniform float u_gammaCorrection;
+uniform float u_groundFogStart;
+uniform float u_groundFogEnd;
+uniform float u_groundFogOpacity;
 uniform float u_hdGroundTextureStrength;
 uniform float u_hdGroundNormalStrength;
 uniform float u_hdGroundTextureScale;
@@ -609,6 +698,59 @@ float waterFoamMap(vec2 uv) {
     return texture(u_waterFoamMap, fract(uv)).r;
 }
 
+// sRGB/linear color space conversion — ported from RLHD utils/color_utils.glsl.
+// Lighting math must happen in linear light space; vertex colours and texture
+// samples are gamma-encoded (sRGB), so we convert before and after.
+vec3 srgbToLinear(vec3 srgb) {
+    return mix(srgb / 12.92,
+               pow(max((srgb + vec3(0.055)) / vec3(1.055), vec3(0.0)), vec3(2.4)),
+               step(vec3(0.04045), srgb));
+}
+vec3 linearToSrgb(vec3 rgb) {
+    return mix(rgb * 12.92,
+               1.055 * pow(max(rgb, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055,
+               step(vec3(0.0031308), rgb));
+}
+
+// HSL / HSV conversions — ported from RLHD utils/color_utils.glsl.
+// Used for saturation and contrast adjustment in perceptual colour space.
+vec3 srgbToHsl(vec3 srgb) {
+    float V    = max(max(srgb.r, srgb.g), srgb.b);
+    float Xmin = min(min(srgb.r, srgb.g), srgb.b);
+    float C    = V - Xmin;
+    float H    = 0.0;
+    if (C > 0.0) {
+        if      (V == srgb.r) H = mod((srgb.g - srgb.b) / C, 6.0);
+        else if (V == srgb.g) H = (srgb.b - srgb.r) / C + 2.0;
+        else                  H = (srgb.r - srgb.g) / C + 4.0;
+    }
+    float L     = (V + Xmin) * 0.5;
+    float denom = 1.0 - abs(2.0 * L - 1.0);
+    float SL    = abs(denom) < 0.001 ? 0.0 : C / denom;
+    return vec3(H / 6.0, SL, L);
+}
+vec3 hslToSrgb(vec3 hsl) {
+    float C  = (1.0 - abs(2.0 * hsl.z - 1.0)) * hsl.y;
+    float Hp = fract(hsl.x) * 6.0;
+    float m  = hsl.z - C * 0.5;
+    float r  = clamp(abs(Hp - 3.0) - 1.0, 0.0, 1.0);
+    float g  = clamp(2.0 - abs(Hp - 2.0), 0.0, 1.0);
+    float b  = clamp(2.0 - abs(Hp - 4.0), 0.0, 1.0);
+    return vec3(r, g, b) * C + m;
+}
+vec3 srgbToHsv(vec3 rgb) {
+    vec3  hsl = srgbToHsl(rgb);
+    float v   = hsl.z + hsl.y * min(hsl.z, 1.0 - hsl.z);
+    float s   = abs(v) < 0.001 ? 0.0 : 2.0 * (1.0 - hsl.z / v);
+    return vec3(hsl.x, s, v);
+}
+vec3 hsvToSrgb(vec3 hsv) {
+    float l     = hsv.z * (1.0 - hsv.y * 0.5);
+    float denom = min(l, 1.0 - l);
+    float s     = abs(denom) < 0.001 ? 0.0 : (hsv.z - l) / denom;
+    return hslToSrgb(vec3(hsv.x, s, l));
+}
+
 vec3 untexturedTerrainDetail(vec3 colour, float material) {
     vec2 p = v_worldPos.xz / 128.0;
     float broad = noise2(p * 2.1);
@@ -616,10 +758,10 @@ vec3 untexturedTerrainDetail(vec3 colour, float material) {
     float grit = hash21(floor(p * 42.0));
 
     if (material == 9.0 || material == 7.0) {
-        vec3 darkGrass = vec3(0.18, 0.31, 0.12);
-        vec3 lightGrass = vec3(0.46, 0.58, 0.23);
+        vec3 darkGrass  = vec3(0.22, 0.42, 0.13);
+        vec3 lightGrass = vec3(0.52, 0.72, 0.25);
         vec3 grass = mix(darkGrass, lightGrass, broad * 0.72 + fine * 0.28);
-        return mix(colour, grass, material == 7.0 ? 0.38 : 0.52) * (0.88 + fine * 0.22);
+        return mix(colour, grass, material == 7.0 ? 0.38 : 0.52) * (0.92 + fine * 0.22);
     }
 
     if (material == 13.0) {
@@ -663,46 +805,105 @@ bool hdGroundMaterial(float material, bool validCacheTexture) {
 }
 
 vec3 hdMaterialBaseColour(float material) {
-    if (material == 9.0)  { return vec3(0.25, 0.48, 0.16); } // grass
-    if (material == 7.0)  { return vec3(0.22, 0.36, 0.15); } // moss
-    if (material == 13.0) { return vec3(0.42, 0.35, 0.25); } // dirt/path
-    if (material == 14.0) { return vec3(0.42, 0.38, 0.26); } // silt/sand
-    if (material == 8.0)  { return vec3(0.39, 0.38, 0.34); } // gravel
-    if (material == 4.0)  { return vec3(0.45, 0.44, 0.40); } // stone
+    // Natural, less neon base tones for 2004 terrain. These are used both as
+    // fallback colours and as a colour-correction target for the 117/OSRS ground atlas.
+    if (material == 9.0)  { return vec3(0.30, 0.58, 0.15); } // grass
+    if (material == 7.0)  { return vec3(0.22, 0.38, 0.12); } // moss
+    if (material == 13.0) { return vec3(0.43, 0.37, 0.27); } // dirt/path
+    if (material == 14.0) { return vec3(0.46, 0.41, 0.29); } // silt/sand
+    if (material == 8.0)  { return vec3(0.36, 0.35, 0.31); } // gravel
+    if (material == 4.0)  { return vec3(0.46, 0.45, 0.40); } // stone
     return vec3(0.38, 0.36, 0.32);
 }
 
 
 
 float hdGroundAtlasSlot(float material) {
+    // osrs_ground_atlas.png layout is 4x2:
+    // 0 grass, 1 dirt, 2 sand/bank, 3 road/path tile,
+    // 4 cobble/gravel, 5 grey stone, 6 rock, 7 moss.
     if (material == 9.0)  { return 0.0; } // grass / foliage terrain
-    if (material == 7.0)  { return 1.0; } // moss
-    if (material == 13.0) { return 2.0; } // dirt / path
-    if (material == 14.0) { return 3.0; } // sand / seabed
+    if (material == 7.0)  { return 7.0; } // moss / darker foliage ground
+    if (material == 13.0) { return 3.0; } // road/path tile
+    if (material == 14.0) { return 2.0; } // sand / river bank / seabed
     if (material == 8.0)  { return 4.0; } // gravel / pebbles
     if (material == 4.0)  { return 5.0; } // stone
     return 6.0;
 }
 
-vec3 hdGroundAtlasAlbedo(float material, vec2 uv) {
-    float slot = hdGroundAtlasSlot(material);
+vec3 hdGroundAtlasSample(float slot, vec2 localUv) {
     vec2 grid = vec2(4.0, 2.0);
     vec2 cell = vec2(mod(slot, grid.x), floor(slot / grid.x));
-    // Slight per-material scale offsets reduce the obvious repeating pattern.
-    vec2 localUv = fract(uv * (material == 13.0 ? 0.75 : (material == 9.0 ? 1.15 : 1.0)));
-    // Clamp half a texel away from cell edges to prevent linear sampler bleeding
-    // into adjacent atlas cells, which produces black/wrong-colour seam lines.
     const float HALF_TEXEL = 0.5 / 128.0;
-    localUv = clamp(localUv, HALF_TEXEL, 1.0 - HALF_TEXEL);
+    localUv = clamp(fract(localUv), HALF_TEXEL, 1.0 - HALF_TEXEL);
     vec2 atlasUv = (cell + localUv) / grid;
-    vec3 tex = texture(u_hdGroundAtlas, atlasUv).rgb;
+    return texture(u_hdGroundAtlas, atlasUv).rgb;
+}
 
-    // The OSRS cache textures are object/material textures, not perfect 117HD floor
-    // albedos.  Gently remap them toward the material colour so they blend with
-    // 2004 floor vertex colours instead of looking pasted on top.
-    vec3 target = hdMaterialBaseColour(material);
-    tex = mix(tex, target, material == 9.0 ? 0.18 : 0.10);
-    return tex;
+vec3 hdGroundAtlasAlbedo(float material, vec2 uv) {
+    float slot = hdGroundAtlasSlot(material);
+
+    // Keep world-space ground detail smaller than before. The asset atlas is very
+    // high-contrast, so oversampling it made river banks/roads look like hay and
+    // blocky checkerboards.
+    float scale = 1.0;
+    if (material == 9.0) {
+        scale = 1.65;
+    } else if (material == 7.0) {
+        scale = 1.50;
+    } else if (material == 13.0) {
+        scale = 1.65;
+    } else if (material == 14.0) {
+        scale = 1.35;
+    } else if (material == 4.0 || material == 8.0) {
+        scale = 1.35;
+    }
+
+    vec2 localUv = uv * scale;
+    vec3 tex = hdGroundAtlasSample(slot, localUv);
+
+    // Dirt road/path: choose between true path tiles and dirt from the original
+    // 2004 floor colour. Dark/grey road overlays get the path tile; warmer/yellower
+    // river banks and dirt patches keep the dirt sample. This avoids paving whole
+    // hillsides while fixing the flat muddy road strips.
+    if (material == 13.0) {
+        vec3 dirtTex = hdGroundAtlasSample(1.0, localUv * 1.20 + vec2(0.23, 0.41));
+        // Castle/city roads should read like pale packed gravel/cobbled dirt, not sand slabs.
+        // Use the dedicated road slot strongly and at a higher frequency so the path looks
+        // like the OSRS HD reference: small stones, soft beige-grey colour, no big blocks.
+        vec3 pathTex = hdGroundAtlasSample(3.0, localUv * 2.65);
+        float srcMax = max(max(v_colour.r, v_colour.g), v_colour.b);
+        float srcMin = min(min(v_colour.r, v_colour.g), v_colour.b);
+        float srcSat = srcMax - srcMin;
+        float srcLum = dot(v_colour, vec3(0.299, 0.587, 0.114));
+        float greenBias = max(v_colour.g - max(v_colour.r, v_colour.b), 0.0);
+        float roadMask = clamp((1.0 - srcSat * 3.0) + (0.62 - srcLum) * 1.2 - greenBias * 4.0, 0.0, 1.0);
+        roadMask = max(roadMask, 0.72);
+        tex = mix(dirtTex, pathTex, roadMask);
+        tex = mix(tex, vec3(0.58, 0.54, 0.43), 0.16);
+        tex *= 0.98;
+    }
+
+    // Grass/moss: the source grass is very saturated under HD lighting. Pull it
+    // down to a darker OldSchool/RLHD green and reduce contrast.
+    if (material == 9.0) {
+        float grain = noise2(uv * 12.0);
+        float luma = dot(tex, vec3(0.299, 0.587, 0.114));
+        tex = mix(vec3(luma), tex, 0.55);
+        tex = mix(tex, vec3(0.30, 0.62, 0.14), 0.55);
+        tex *= 0.88 + grain * 0.12;
+    } else if (material == 7.0) {
+        tex = mix(tex, vec3(0.18, 0.35, 0.10), 0.55);
+        tex *= 0.88;
+    } else if (material == 14.0) {
+        tex = mix(tex, vec3(0.46, 0.39, 0.27), 0.58);
+        tex *= 0.90;
+    } else if (material == 4.0 || material == 8.0) {
+        tex = mix(tex, hdMaterialBaseColour(material), 0.42);
+        tex *= 0.92;
+    }
+
+    return clamp(tex, 0.0, 1.0);
 }
 
 float hdGroundHeight(float material, vec2 uv) {
@@ -747,41 +948,41 @@ vec3 hdGroundAlbedo(float material, vec2 uv) {
     float grit = hash21(floor(uv * 26.0));
 
     if (material == 9.0) {
-        vec3 darkGrass = vec3(0.15, 0.32, 0.09);
-        vec3 midGrass  = vec3(0.30, 0.52, 0.14);
-        vec3 lightGrass = vec3(0.44, 0.62, 0.22);
-        vec3 grass = mix(darkGrass, lightGrass, broad * 0.68 + fine * 0.32);
-        grass = mix(grass, midGrass, 0.25);
-        return grass * (0.86 + fine * 0.24);
+        vec3 darkGrass  = vec3(0.18, 0.40, 0.10);
+        vec3 midGrass   = vec3(0.30, 0.58, 0.16);
+        vec3 lightGrass = vec3(0.45, 0.72, 0.22);
+        vec3 grass = mix(darkGrass, lightGrass, broad * 0.62 + fine * 0.38);
+        grass = mix(grass, midGrass, 0.32);
+        return grass * (0.90 + fine * 0.16);
     }
 
     if (material == 7.0) {
-        vec3 mossDark = vec3(0.12, 0.24, 0.09);
-        vec3 mossLight = vec3(0.34, 0.44, 0.17);
-        return mix(mossDark, mossLight, broad * 0.70 + fine * 0.30) * (0.88 + fine * 0.20);
+        vec3 mossDark  = vec3(0.15, 0.32, 0.09);
+        vec3 mossLight = vec3(0.32, 0.48, 0.16);
+        return mix(mossDark, mossLight, broad * 0.70 + fine * 0.30) * (0.92 + fine * 0.18);
     }
 
     if (material == 13.0) {
-        vec3 dirtDark = vec3(0.27, 0.23, 0.17);
-        vec3 dirtLight = vec3(0.55, 0.49, 0.38);
+        vec3 dirtDark = vec3(0.29, 0.25, 0.18);
+        vec3 dirtLight = vec3(0.51, 0.44, 0.32);
         vec3 dirt = mix(dirtDark, dirtLight, broad * 0.55 + fine * 0.45);
-        dirt += (grit > 0.84 ? vec3(0.10, 0.09, 0.07) : vec3(0.0));
+        dirt += (grit > 0.84 ? vec3(0.07, 0.06, 0.045) : vec3(0.0));
         return dirt;
     }
 
     if (material == 14.0) {
-        vec3 sandDark = vec3(0.25, 0.22, 0.15);
-        vec3 sandLight = vec3(0.55, 0.50, 0.34);
+        vec3 sandDark = vec3(0.27, 0.23, 0.15);
+        vec3 sandLight = vec3(0.52, 0.45, 0.30);
         return mix(sandDark, sandLight, broad * 0.64 + fine * 0.36);
     }
 
     if (material == 4.0 || material == 8.0) {
         vec3 stoneDark = material == 8.0 ? vec3(0.25, 0.25, 0.23) : vec3(0.30, 0.30, 0.28);
-        vec3 stoneLight = material == 8.0 ? vec3(0.56, 0.54, 0.48) : vec3(0.62, 0.61, 0.56);
+        vec3 stoneLight = material == 8.0 ? vec3(0.52, 0.50, 0.44) : vec3(0.59, 0.58, 0.53);
         vec3 stone = mix(stoneDark, stoneLight, broad * 0.56 + fine * 0.44);
         float crack = smoothstep(0.78, 0.98, noise2(uv * 4.4));
-        stone = mix(stone, vec3(0.10), crack * 0.24);
-        stone += (grit > 0.88 ? vec3(0.07) : vec3(0.0));
+        stone = mix(stone, vec3(0.10), crack * 0.22);
+        stone += (grit > 0.88 ? vec3(0.06) : vec3(0.0));
         return stone;
     }
 
@@ -801,10 +1002,23 @@ vec3 applyHdGroundMaterial(vec3 colour, float material, bool validCacheTexture) 
     float macro = noise2(v_worldPos.xz / 1024.0);
     hd *= 1.0 + (macro - 0.5) * u_hdGroundMacroStrength;
 
-    // Keep original 2004 hue/shading, but replace the blurry enlarged cache detail.
-    vec3 sourceTint = mix(vec3(1.0), max(colour, vec3(0.035)) / max(vec3(dot(colour, vec3(0.333))), vec3(0.08)), 0.35);
+    // Keep only a light amount of the old 2004 vertex hue. Too much tinting was
+    // turning grass neon and washing roads out.
+    vec3 sourceTint = mix(vec3(1.0), max(colour, vec3(0.035)) / max(vec3(dot(colour, vec3(0.333))), vec3(0.08)), 0.12);
     vec3 hdTinted = hd * sourceTint;
-    return mix(colour, hdTinted, clamp(u_hdGroundTextureStrength, 0.0, 1.0));
+
+    float strength = clamp(u_hdGroundTextureStrength, 0.0, 1.0);
+    if (material == 9.0 || material == 7.0) {
+        strength = max(strength, 0.54);
+    } else if (material == 13.0) {
+        strength = max(strength, 0.72);
+    } else if (material == 14.0) {
+        strength = max(strength, 0.44);
+    } else if (material == 4.0 || material == 8.0) {
+        strength = max(strength, 0.50);
+    }
+
+    return mix(colour, hdTinted, clamp(strength, 0.0, 0.68));
 }
 
 vec3 applyHdGroundNormal(vec3 normal, float material, bool validCacheTexture) {
@@ -1036,13 +1250,13 @@ if (u_textureDebugMode == 0 && !validCacheTexture) {
 
         float lightDotN = max(dot(waterNormal, sunDir), 0.0);
         float viewDotN  = clamp(dot(viewDir, waterNormal), 0.0, 1.0);
-        float baseOpacity  = 0.40;
+        float baseOpacity  = 0.68;
         float fresnel      = 1.0 - viewDotN;
         float finalFresnel = clamp(mix(baseOpacity, 1.0, fresnel * 1.2 * max(u_waterFresnelStrength, 0.0)), 0.0, 1.0);
 
-        vec3 waterColorDark  = vec3(0.035, 0.105, 0.245);
-        vec3 waterColorMid   = vec3(0.160, 0.360, 0.590);
-        vec3 waterColorLight = vec3(0.520, 0.760, 0.910);
+        vec3 waterColorDark  = vec3(0.020, 0.105, 0.240);
+        vec3 waterColorMid   = vec3(0.060, 0.255, 0.520);
+        vec3 waterColorLight = vec3(0.250, 0.560, 0.820);
         vec3 surfaceColor = finalFresnel < 0.5
             ? mix(waterColorDark, waterColorMid, finalFresnel * 2.0)
             : mix(waterColorMid, waterColorLight, (finalFresnel - 0.5) * 2.0);
@@ -1057,8 +1271,8 @@ if (u_textureDebugMode == 0 && !validCacheTexture) {
         vec3 skyLightOut     = u_hdFogColour * max(-waterNormal.y, 0.0) * u_hdSkyStrength;
         vec3 compositeLight  = ambientLightOut + lightOut + lightSpecOut + skyLightOut + surfaceColor * 0.80;
 
-        vec3 waterSurfaceColor = vec3(0.412, 0.502, 0.612);
-        vec3 baseColor = mix(waterSurfaceColor * compositeLight, surfaceColor, 0.85);
+        vec3 waterSurfaceColor = vec3(0.045, 0.190, 0.410);
+        vec3 baseColor = mix(waterSurfaceColor * compositeLight, surfaceColor, 0.96);
 
         float proceduralFoam = pow(max(noise2(uv1 * 12.0 + uv2 * 8.0 + vec2(t * 0.008, 0.0)) - 0.72, 0.0) / 0.28, 3.0);
         float mappedFoam = waterFoamMap(uv1 * 0.75 + uv2 * 0.25 + flowOff * 2.0);
@@ -1070,18 +1284,18 @@ if (u_textureDebugMode == 0 && !validCacheTexture) {
         float shoreBand = 1.0 - smoothstep(0.020, 0.135, edgeDistance);
         shoreBand *= smoothstep(0.18, 0.85, noise2(v_worldPos.xz / 92.0 + vec2(t * 0.015, -t * 0.012)));
 
-        float foamAmount = clamp((mix(proceduralFoam, mappedFoam, mapsReady) * 0.50 + shoreBand * 0.42) * max(u_waterFoamStrength, 0.0), 0.0, 0.88);
+        float foamAmount = clamp((mix(proceduralFoam, mappedFoam, mapsReady) * 0.38 + shoreBand * 0.30) * max(u_waterFoamStrength, 0.0), 0.0, 0.62);
         vec3 foamColor = vec3(0.93, 0.97, 1.0) * (ambientLightOut + lightOut + vec3(0.18));
         baseColor = mix(baseColor, foamColor, foamAmount);
 
         // Underwater/seabed tint: water gets deeper and more blue with alpha-depth.
         float depthHint = clamp(v_alpha, 0.0, 1.0);
         vec3 seabedTint = vec3(0.035, 0.105, 0.210);
-        baseColor = mix(baseColor, seabedTint, depthHint * 0.18);
+        baseColor = mix(baseColor, seabedTint, depthHint * 0.22);
 
         baseColor += lightSpecOut / 3.0;
         if (validCacheTexture) {
-            baseColor = mix(baseColor, baseColour, u_waterTextureDiffuse);
+            baseColor = mix(baseColor, baseColour, min(u_waterTextureDiffuse, 0.02));
         }
 
         alpha      = max(baseOpacity, max(foamAmount, max(finalFresnel, length(lightSpecOut / 3.0))));
@@ -1123,8 +1337,8 @@ if (u_textureDebugMode == 0 && !validCacheTexture) {
         light *= 1.04;
     } else if (material == 7.0 || material == 9.0) {
         // Moss / Foliage
-        baseColour *= vec3(0.82, 1.08, 0.72);
-        light *= 0.96;
+        baseColour *= vec3(0.90, 1.15, 0.80);
+        light *= 0.97;
     } else if (material == 10.0) {
         // Metal: Blinn-Phong specular using actual view direction (RLHD uses specularStrength/Gloss per material)
         baseColour = mix(baseColour, vec3(0.62, 0.62, 0.58), 0.25);
@@ -1143,27 +1357,65 @@ if (u_textureDebugMode == 0 && !validCacheTexture) {
         alpha = 1.0;
     }
 
-    // RLHD-style environment lighting: cool ambient/sky + warmer sun.
-    // Water is already composited in its own branch above, so avoid double-lighting it here.
-    // In RS coordinate space, "up" = negative Y direction, so normal.y < 0 = facing sky.
+    // RLHD-style environment lighting with sRGB/linear colour-space workflow.
+    // Vertex colours are gamma-encoded (sRGB). Converting to linear before the
+    // light accumulation and back to sRGB afterwards is how RLHD achieves its
+    // characteristic look: shadows open up, highlights stay controlled, and
+    // midtones are physically accurate rather than gamma-crushed.
     float skyFacing = max(-normal.y, 0.0);
     vec3 colour;
     if (material == 1.0 || material == 12.0) {
+        // Water and unlit surfaces bypass lighting entirely.
         colour = baseColour;
     } else {
-        vec3 envAmbient = baseColour * u_hdAmbientColour * u_ambient * (1.0 - shadowFactor * 0.35);
-        vec3 envSun     = baseColour * u_hdSunColour * diffuse * u_diffuseStrength * (1.0 - shadowFactor);
-        vec3 envSky     = baseColour * u_hdFogColour * skyFacing * u_hdSkyStrength;
-        colour = envAmbient + envSun + envSky;
+        vec3 baseLinear = srgbToLinear(baseColour);
+        vec3 envAmbient = baseLinear * u_hdAmbientColour * u_ambient * (1.0 - shadowFactor * 0.65);
+        vec3 envSun     = baseLinear * u_hdSunColour * diffuse * u_diffuseStrength * (1.0 - shadowFactor);
+        vec3 envSky     = baseLinear * u_hdFogColour * skyFacing * u_hdSkyStrength;
+        colour = linearToSrgb(max(envAmbient + envSun + envSky, vec3(0.0)));
     }
 
     colour = max(colour * u_hdExposure, vec3(0.0));
-    colour = (colour - 0.5) * u_hdContrast + 0.5;
-    colour = clamp(colour, 0.0, 1.6);
+    colour = clamp(colour, 0.0, 1.0);
 
+    // HSV saturation + contrast — matches RLHD scene_frag.glsl post-processing.
+    // Operating in HSV preserves hue and handles dark/light regions symmetrically,
+    // unlike a raw linear contrast which crushes darks too aggressively.
+    if (u_hdSaturation != 1.0 || u_hdContrast != 1.0) {
+        vec3 hsv = srgbToHsv(colour);
+        hsv.y *= u_hdSaturation;
+        if (hsv.z > 0.5) {
+            hsv.z = 0.5 + (hsv.z - 0.5) * u_hdContrast;
+        } else {
+            hsv.z = 0.5 - (0.5 - hsv.z) * u_hdContrast;
+        }
+        colour = clamp(hsvToSrgb(hsv), 0.0, 1.0);
+    }
+
+    // Distance fog
     float fogLinear = clamp((v_distance - u_fogStart) / max(u_fogDistance - u_fogStart, 1.0), 0.0, 1.0);
     float fog = smoothstep(0.0, 1.0, fogLinear);
-    colour = mix(colour, u_hdFogColour, fog * 0.95);
+
+    // Ground fog — height-based atmospheric haze (from RLHD scene_frag.glsl).
+    // Disabled by default (u_groundFogOpacity == 0). Enable via:
+    //   window.HD_GROUND_FOG_START = <worldY>; window.HD_GROUND_FOG_END = <worldY-200>;
+    //   window.HD_GROUND_FOG_OPACITY = 0.6;
+    float groundFog = 0.0;
+    if (u_groundFogOpacity > 0.0) {
+        float gf = 1.0 - clamp(
+            (v_worldPos.y - u_groundFogStart) / max(u_groundFogEnd - u_groundFogStart, 1.0),
+            0.0, 1.0);
+        groundFog = mix(0.0, u_groundFogOpacity, gf) * clamp(v_distance / 1500.0, 0.0, 1.0);
+    }
+
+    float combinedFog = 1.0 - (1.0 - fog) * (1.0 - groundFog);
+    colour = mix(colour, u_hdFogColour, combinedFog * 0.95);
+
+    // Gamma correction — from RLHD scene_frag.glsl final pass.
+    // Default 1.0 is neutral. Raise slightly (e.g. 1.1) to brighten;
+    // lower (e.g. 0.9) to darken. Tune via: window.HD_GAMMA_CORRECTION = 1.05;
+    colour = pow(max(colour, vec3(0.0)), vec3(u_gammaCorrection));
+    colour = clamp(colour, 0.0, 1.0);
 
     outColour = vec4(colour, alpha);
 }
@@ -1418,6 +1670,17 @@ export default class HDRenderer {
     private static shadowDepthTexture: WebGLTexture | null = null;
     private static shadowUniformMatrix: WebGLUniformLocation | null = null;
     private static lightSpaceMatrix: Float32Array = new Float32Array(16);
+    private static skyboxProgram: WebGLProgram | null = null;
+    private static skyboxBuffer: WebGLBuffer | null = null;
+    private static skyboxVao: WebGLVertexArrayObject | null = null;
+    private static skyboxUniSinPitch: WebGLUniformLocation | null = null;
+    private static skyboxUniCosPitch: WebGLUniformLocation | null = null;
+    private static skyboxUniSinYaw: WebGLUniformLocation | null = null;
+    private static skyboxUniCosYaw: WebGLUniformLocation | null = null;
+    private static skyboxUniProjScale: WebGLUniformLocation | null = null;
+    private static skyboxUniZenith: WebGLUniformLocation | null = null;
+    private static skyboxUniHorizon: WebGLUniformLocation | null = null;
+    private static skyboxUniSunDir: WebGLUniformLocation | null = null;
     private static modelUsedKeys: Set<number> = new Set();
     private static queuedModelKeys: Set<string> = new Set();
     private static staticFarTransparentBuffers: Map<number, WebGLBuffer> = new Map();
@@ -2230,10 +2493,8 @@ static queueGroundTile(level: number, x: number, z: number): void {
             this.uploadDynamicModelBuffers();
             this.uploadStaticFarModelBuffers();
 
-            // Keep shadows off by default for now. This keeps HD visibly enabled while
-            // avoiding the extra shadow depth pass that can freeze some WebGL drivers.
-            // DevTools override for testing: window.ENABLE_HD_SHADOWS = true
-            const hdShadowsEnabled = (globalThis as any).ENABLE_HD_SHADOWS === true;
+            // Shadows are enabled by default. Disable via: window.ENABLE_HD_SHADOWS = false
+            const hdShadowsEnabled = (globalThis as any).ENABLE_HD_SHADOWS !== false;
             if (hdShadowsEnabled) {
                 (globalThis as any)._hdPhase = 'renderFrame-shadowPass';
                 this.renderShadowPass();
@@ -2255,6 +2516,8 @@ static queueGroundTile(level: number, x: number, z: number): void {
             gl.disable(gl.CULL_FACE);
             gl.disable(gl.BLEND);
             gl.depthMask(true);
+
+            this.renderSkybox();
 
             gl.useProgram(this.terrainProgram);
             this.setCameraUniforms(viewport.width, viewport.height);
@@ -3480,21 +3743,10 @@ static queueGroundTile(level: number, x: number, z: number): void {
         return this.materialForColour(colour, HDMaterial.Earth);
     }
 
-    private static materialForFloor(tile: HDGroundTileInput, colour: readonly [number, number, number], isOverlayFace: boolean = true): number {
-        const floorId = isOverlayFace
-            ? (tile.overlayId >= 0 ? tile.overlayId : tile.underlayId)
-            : (tile.underlayId >= 0 ? tile.underlayId : tile.overlayId);
-        if (GRASS_FLOOR_IDS.has(floorId)) {
-            return HDMaterial.Foliage;
-        }
-        if (EARTH_FLOOR_IDS.has(floorId)) {
-            return HDMaterial.Earth;
-        }
-        if (STONE_FLOOR_IDS.has(floorId)) {
-            return HDMaterial.Stone;
-        }
-
-        return this.materialForTerrainColour(colour);
+    private static materialForFloor(_tile: HDGroundTileInput, _colour: readonly [number, number, number], _isOverlayFace: boolean = true): number {
+        // Original 254 client uses texture=-1 for untextured terrain (grass, roads, earth).
+        // Render these with vertex colours only — no HD procedural noise overlay.
+        return HDMaterial.Default;
     }
 
     private static countMaterial(material: number): void {
@@ -3751,6 +4003,80 @@ private static showTextureAtlasPreview(): string | null {
         target.HD_RENDERER_STATUS = this.status(false);
         target.HD_TEXTURE_DIAGNOSTICS = () => this.textureDiagnostics();
         target.HD_TEXTURE_ATLAS_PREVIEW = () => this.showTextureAtlasPreview();
+    }
+
+    private static initSkybox(gl: WebGL2RenderingContext): void {
+        if (this.skyboxProgram) {
+            return;
+        }
+
+        const program = this.createProgram(gl, skyboxShader);
+        if (!program) {
+            return;
+        }
+        this.skyboxProgram = program;
+
+        this.skyboxUniSinPitch  = gl.getUniformLocation(program, 'u_sinEyePitch');
+        this.skyboxUniCosPitch  = gl.getUniformLocation(program, 'u_cosEyePitch');
+        this.skyboxUniSinYaw    = gl.getUniformLocation(program, 'u_sinEyeYaw');
+        this.skyboxUniCosYaw    = gl.getUniformLocation(program, 'u_cosEyeYaw');
+        this.skyboxUniProjScale = gl.getUniformLocation(program, 'u_projectionScale');
+        this.skyboxUniZenith    = gl.getUniformLocation(program, 'u_skyZenith');
+        this.skyboxUniHorizon   = gl.getUniformLocation(program, 'u_skyHorizon');
+        this.skyboxUniSunDir    = gl.getUniformLocation(program, 'u_sunDirection');
+
+        // Fullscreen quad in NDC [-1,1] x [-1,1]
+        const verts = new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]);
+        const buf = gl.createBuffer()!;
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+
+        const vao = gl.createVertexArray()!;
+        gl.bindVertexArray(vao);
+        gl.enableVertexAttribArray(0);
+        gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+        gl.bindVertexArray(null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+
+        this.skyboxBuffer = buf;
+        this.skyboxVao = vao;
+    }
+
+    private static renderSkybox(): void {
+        const gl = this.gl;
+        const camera = this.camera;
+        if (!gl || !this.skyboxProgram || !this.skyboxVao || !camera) {
+            return;
+        }
+
+        gl.useProgram(this.skyboxProgram);
+
+        // Camera rotation uniforms (same scaling as setCameraUniforms)
+        gl.uniform1f(this.skyboxUniSinPitch,  camera.sinEyePitch / 65536);
+        gl.uniform1f(this.skyboxUniCosPitch,  camera.cosEyePitch / 65536);
+        gl.uniform1f(this.skyboxUniSinYaw,    camera.sinEyeYaw   / 65536);
+        gl.uniform1f(this.skyboxUniCosYaw,    camera.cosEyeYaw   / 65536);
+
+        const focalLength = 512;
+        gl.uniform2f(this.skyboxUniProjScale,
+            (2 * focalLength) / VIEWPORT_WIDTH,
+            (2 * focalLength) / VIEWPORT_HEIGHT);
+
+        // Sky gradient colours — horizon matches fog colour for seamless distance fade.
+        const skyHorizonR = Number.isFinite(Number((globalThis as any).HD_SKY_HORIZON_R)) ? Number((globalThis as any).HD_SKY_HORIZON_R) : 0.64;
+        const skyHorizonG = Number.isFinite(Number((globalThis as any).HD_SKY_HORIZON_G)) ? Number((globalThis as any).HD_SKY_HORIZON_G) : 0.78;
+        const skyHorizonB = Number.isFinite(Number((globalThis as any).HD_SKY_HORIZON_B)) ? Number((globalThis as any).HD_SKY_HORIZON_B) : 0.92;
+        const skyZenithR  = Number.isFinite(Number((globalThis as any).HD_SKY_ZENITH_R))  ? Number((globalThis as any).HD_SKY_ZENITH_R)  : 0.28;
+        const skyZenithG  = Number.isFinite(Number((globalThis as any).HD_SKY_ZENITH_G))  ? Number((globalThis as any).HD_SKY_ZENITH_G)  : 0.52;
+        const skyZenithB  = Number.isFinite(Number((globalThis as any).HD_SKY_ZENITH_B))  ? Number((globalThis as any).HD_SKY_ZENITH_B)  : 0.82;
+
+        gl.uniform3f(this.skyboxUniHorizon, skyHorizonR, skyHorizonG, skyHorizonB);
+        gl.uniform3f(this.skyboxUniZenith,  skyZenithR,  skyZenithG,  skyZenithB);
+        gl.uniform3f(this.skyboxUniSunDir, -0.45, 0.8, -0.35);
+
+        gl.bindVertexArray(this.skyboxVao);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        gl.bindVertexArray(null);
     }
 
     private static initShadowMap(): void {
@@ -4073,7 +4399,18 @@ private static showTextureAtlasPreview(): string | null {
         const view = this.mat4LookAt(lightEye, center, up);
         const half = 6000;
         const ortho = this.mat4Ortho(-half, half, -half, half, 1, 14000);
-        this.lightSpaceMatrix.set(this.mat4Multiply(ortho, view));
+        const vp = this.mat4Multiply(ortho, view);
+
+        // Shadow map stabilization: snap the world origin's projected position to
+        // the nearest shadow-map texel to prevent sub-texel shimmer when the camera
+        // rotates. For ortho projection vp*[0,0,0,1] = column 3 = vp[12], vp[13].
+        const halfTexels = SHADOW_MAP_SIZE * 0.5;
+        const snapX = (Math.round(vp[12] * halfTexels) - vp[12] * halfTexels) / halfTexels;
+        const snapY = (Math.round(vp[13] * halfTexels) - vp[13] * halfTexels) / halfTexels;
+        vp[12] += snapX;
+        vp[13] += snapY;
+
+        this.lightSpaceMatrix.set(vp);
     }
 
     private static mat4LookAt(
@@ -4163,6 +4500,7 @@ private static showTextureAtlasPreview(): string | null {
         this.terrainProgram = program;
         this.cacheUniforms();
         this.initShadowMap();
+        this.initSkybox(gl);
         this.initNormalAtlas(gl);
         this.initWaterMaps(gl);
         this.initHdGroundAtlas(gl);
@@ -4188,7 +4526,8 @@ private static showTextureAtlasPreview(): string | null {
             'u_waterTextureDiffuse', 'u_waterFresnelStrength', 'u_waterSpecularStrength', 'u_waterFoamStrength',
             'u_waterNormalMap', 'u_waterFlowMap', 'u_waterFoamMap', 'u_waterMapsReady',
             'u_hdAmbientColour', 'u_hdSunColour', 'u_hdFogColour',
-            'u_hdSkyStrength', 'u_hdExposure', 'u_hdContrast',
+            'u_hdSkyStrength', 'u_hdExposure', 'u_hdContrast', 'u_hdSaturation',
+            'u_gammaCorrection', 'u_groundFogStart', 'u_groundFogEnd', 'u_groundFogOpacity',
             'u_hdGroundTextureStrength', 'u_hdGroundNormalStrength',
             'u_hdGroundTextureScale', 'u_hdGroundMacroStrength',
             'u_hdGroundAtlas', 'u_hdGroundMapsReady',
@@ -4291,17 +4630,18 @@ private static showTextureAtlasPreview(): string | null {
 
         // RLHD-style environment lighting controls. These are intentionally simple
         // globals so Wails builds can tune lighting without needing browser DevTools.
-        const hdEnvAmbientR = Number.isFinite(Number((globalThis as any).HD_ENV_AMBIENT_R)) ? Number((globalThis as any).HD_ENV_AMBIENT_R) : 0.72;
-        const hdEnvAmbientG = Number.isFinite(Number((globalThis as any).HD_ENV_AMBIENT_G)) ? Number((globalThis as any).HD_ENV_AMBIENT_G) : 0.76;
-        const hdEnvAmbientB = Number.isFinite(Number((globalThis as any).HD_ENV_AMBIENT_B)) ? Number((globalThis as any).HD_ENV_AMBIENT_B) : 0.82;
+        const hdEnvAmbientR = Number.isFinite(Number((globalThis as any).HD_ENV_AMBIENT_R)) ? Number((globalThis as any).HD_ENV_AMBIENT_R) : 0.78;
+        const hdEnvAmbientG = Number.isFinite(Number((globalThis as any).HD_ENV_AMBIENT_G)) ? Number((globalThis as any).HD_ENV_AMBIENT_G) : 0.82;
+        const hdEnvAmbientB = Number.isFinite(Number((globalThis as any).HD_ENV_AMBIENT_B)) ? Number((globalThis as any).HD_ENV_AMBIENT_B) : 0.92;
         const hdEnvSunR = Number.isFinite(Number((globalThis as any).HD_ENV_SUN_R)) ? Number((globalThis as any).HD_ENV_SUN_R) : 1.00;
-        const hdEnvSunG = Number.isFinite(Number((globalThis as any).HD_ENV_SUN_G)) ? Number((globalThis as any).HD_ENV_SUN_G) : 0.92;
-        const hdEnvSunB = Number.isFinite(Number((globalThis as any).HD_ENV_SUN_B)) ? Number((globalThis as any).HD_ENV_SUN_B) : 0.78;
-        const hdEnvFogR = Number.isFinite(Number((globalThis as any).HD_ENV_FOG_R)) ? Number((globalThis as any).HD_ENV_FOG_R) : 0.46;
-        const hdEnvFogG = Number.isFinite(Number((globalThis as any).HD_ENV_FOG_G)) ? Number((globalThis as any).HD_ENV_FOG_G) : 0.56;
-        const hdEnvFogB = Number.isFinite(Number((globalThis as any).HD_ENV_FOG_B)) ? Number((globalThis as any).HD_ENV_FOG_B) : 0.66;
-        const hdEnvSkyStrength = Number.isFinite(Number((globalThis as any).HD_ENV_SKY_STRENGTH)) ? Number((globalThis as any).HD_ENV_SKY_STRENGTH) : 0.22;
-        const hdEnvExposure = Number.isFinite(Number((globalThis as any).HD_ENV_EXPOSURE)) ? Number((globalThis as any).HD_ENV_EXPOSURE) : 0.92;
+        const hdEnvSunG = Number.isFinite(Number((globalThis as any).HD_ENV_SUN_G)) ? Number((globalThis as any).HD_ENV_SUN_G) : 0.95;
+        const hdEnvSunB = Number.isFinite(Number((globalThis as any).HD_ENV_SUN_B)) ? Number((globalThis as any).HD_ENV_SUN_B) : 0.82;
+        // Fog colour matches the sky horizon for a seamless distance fade.
+        const hdEnvFogR = Number.isFinite(Number((globalThis as any).HD_ENV_FOG_R)) ? Number((globalThis as any).HD_ENV_FOG_R) : 0.58;
+        const hdEnvFogG = Number.isFinite(Number((globalThis as any).HD_ENV_FOG_G)) ? Number((globalThis as any).HD_ENV_FOG_G) : 0.74;
+        const hdEnvFogB = Number.isFinite(Number((globalThis as any).HD_ENV_FOG_B)) ? Number((globalThis as any).HD_ENV_FOG_B) : 0.90;
+        const hdEnvSkyStrength = Number.isFinite(Number((globalThis as any).HD_ENV_SKY_STRENGTH)) ? Number((globalThis as any).HD_ENV_SKY_STRENGTH) : 0.28;
+        const hdEnvExposure = Number.isFinite(Number((globalThis as any).HD_ENV_EXPOSURE)) ? Number((globalThis as any).HD_ENV_EXPOSURE) : 1.20;
         const hdEnvContrast = Number.isFinite(Number((globalThis as any).HD_ENV_CONTRAST)) ? Number((globalThis as any).HD_ENV_CONTRAST) : 1.08;
         gl.uniform3f(u('u_hdAmbientColour'), hdEnvAmbientR, hdEnvAmbientG, hdEnvAmbientB);
         gl.uniform3f(u('u_hdSunColour'), hdEnvSunR, hdEnvSunG, hdEnvSunB);
@@ -4310,20 +4650,29 @@ private static showTextureAtlasPreview(): string | null {
         gl.uniform1f(u('u_hdExposure'), hdEnvExposure);
         gl.uniform1f(u('u_hdContrast'), hdEnvContrast);
 
-        const hdGroundTextureStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_TEXTURE_STRENGTH)) ? Number((globalThis as any).HD_GROUND_TEXTURE_STRENGTH) : 0.55;
+        const hdEnvSaturation = Number.isFinite(Number((globalThis as any).HD_ENV_SATURATION)) ? Number((globalThis as any).HD_ENV_SATURATION) : 1.12;
+        const hdGammaCorrection = Number.isFinite(Number((globalThis as any).HD_GAMMA_CORRECTION)) ? Number((globalThis as any).HD_GAMMA_CORRECTION) : 1.0;
+        const hdGroundFogStart = Number.isFinite(Number((globalThis as any).HD_GROUND_FOG_START)) ? Number((globalThis as any).HD_GROUND_FOG_START) : 0.0;
+        const hdGroundFogEnd = Number.isFinite(Number((globalThis as any).HD_GROUND_FOG_END)) ? Number((globalThis as any).HD_GROUND_FOG_END) : -200.0;
+        const hdGroundFogOpacity = Number.isFinite(Number((globalThis as any).HD_GROUND_FOG_OPACITY)) ? Number((globalThis as any).HD_GROUND_FOG_OPACITY) : 0.0;
+        gl.uniform1f(u('u_hdSaturation'), hdEnvSaturation);
+        gl.uniform1f(u('u_gammaCorrection'), hdGammaCorrection);
+        gl.uniform1f(u('u_groundFogStart'), hdGroundFogStart);
+        gl.uniform1f(u('u_groundFogEnd'), hdGroundFogEnd);
+        gl.uniform1f(u('u_groundFogOpacity'), hdGroundFogOpacity);
+
+        const hdGroundTextureStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_TEXTURE_STRENGTH)) ? Number((globalThis as any).HD_GROUND_TEXTURE_STRENGTH) : 0.42;
         const hdGroundNormalStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_NORMAL_STRENGTH)) ? Number((globalThis as any).HD_GROUND_NORMAL_STRENGTH) : 0.45;
         const hdGroundTextureScale = Number.isFinite(Number((globalThis as any).HD_GROUND_TEXTURE_SCALE)) ? Number((globalThis as any).HD_GROUND_TEXTURE_SCALE) : 384.0;
-        const hdGroundMacroStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_MACRO_STRENGTH)) ? Number((globalThis as any).HD_GROUND_MACRO_STRENGTH) : 0.18;
+        const hdGroundMacroStrength = Number.isFinite(Number((globalThis as any).HD_GROUND_MACRO_STRENGTH)) ? Number((globalThis as any).HD_GROUND_MACRO_STRENGTH) : 0.10;
         gl.uniform1f(u('u_hdGroundTextureStrength'), hdGroundTextureStrength);
         gl.uniform1f(u('u_hdGroundNormalStrength'), hdGroundNormalStrength);
         gl.uniform1f(u('u_hdGroundTextureScale'), hdGroundTextureScale);
         gl.uniform1f(u('u_hdGroundMacroStrength'), hdGroundMacroStrength);
         gl.uniform1f(u('u_hdGroundMapsReady'), this.hdGroundMapsReady ? 1.0 : 0.0);
 
-        // Brighter default lighting for the 2004 scene. Shadows are disabled by
-        // default, so the base scene should not look like a permanent night filter.
-        const hdAmbient = Number.isFinite(Number((globalThis as any).HD_AMBIENT)) ? Number((globalThis as any).HD_AMBIENT) : 0.78;
-        const hdDiffuse = Number.isFinite(Number((globalThis as any).HD_DIFFUSE)) ? Number((globalThis as any).HD_DIFFUSE) : 0.48;
+        const hdAmbient = Number.isFinite(Number((globalThis as any).HD_AMBIENT)) ? Number((globalThis as any).HD_AMBIENT) : 1.00;
+        const hdDiffuse = Number.isFinite(Number((globalThis as any).HD_DIFFUSE)) ? Number((globalThis as any).HD_DIFFUSE) : 0.82;
         const hdFogStart = Number.isFinite(Number((globalThis as any).HD_FOG_START)) ? Number((globalThis as any).HD_FOG_START) : HD_FOG_START;
         const hdFogEnd = Number.isFinite(Number((globalThis as any).HD_FOG_END)) ? Number((globalThis as any).HD_FOG_END) : HD_FOG_END;
         gl.uniform1f(u('u_ambient'), hdAmbient);
@@ -4349,7 +4698,7 @@ private static showTextureAtlasPreview(): string | null {
         gl.activeTexture(gl.TEXTURE2);
         gl.bindTexture(gl.TEXTURE_2D, this.shadowDepthTexture ?? this.textureAtlas);
         gl.uniform1i(u('u_shadowMap'), 2);
-        gl.uniform1f(u('u_shadowStrength'), ((globalThis as any).ENABLE_HD_SHADOWS === true && this.shadowFbo) ? 0.55 : 0.0);
+        gl.uniform1f(u('u_shadowStrength'), ((globalThis as any).ENABLE_HD_SHADOWS !== false && this.shadowFbo) ? 1.0 : 0.0);
     }
 
     private static setupVao(buffer: WebGLBuffer): WebGLVertexArrayObject | null {
@@ -4940,7 +5289,7 @@ private static showTextureAtlasPreview(): string | null {
             }
 
             const slot = id;
-            const url = `/hd/textures/rlhd/${filename}`;
+            const url = filename.startsWith('/') ? filename : `/hd/textures/rlhd/${filename}`;
             fetch(url)
                 .then(r => {
                     if (!r.ok) {
