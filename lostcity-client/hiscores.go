@@ -1,11 +1,12 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
-
-	_ "github.com/glebarez/sqlite"
+	"net/http"
+	"time"
 )
 
 type HiscoreEntry struct {
@@ -17,80 +18,75 @@ type HiscoreEntry struct {
 }
 
 type HiscoreService struct {
-	db *sql.DB
+	baseURL string
+	client  *http.Client
 }
 
 func NewHiscoreService() *HiscoreService {
-	return &HiscoreService{}
+	return &HiscoreService{client: &http.Client{Timeout: 5 * time.Second}}
 }
 
 func (h *HiscoreService) Init() {
-	if cfg.DbPath == "" {
-		return
+	if cfg.HiscoresURL != "" {
+		h.baseURL = cfg.HiscoresURL
+	} else {
+		h.baseURL = fmt.Sprintf("http://%s:%d", cfg.WebHost, cfg.WebPort)
 	}
-	db, err := sql.Open("sqlite", cfg.DbPath)
-	if err != nil {
-		log.Printf("[db] failed to open database: %v", err)
-		return
-	}
-	h.db = db
 }
 
-// GetHiscores returns the overall hiscores (total level) from hiscore_large.
+// GetHiscores returns the overall hiscores (total level) from the configured
+// hiscores webserver.
 func (h *HiscoreService) GetHiscores() string {
-	if h.db == nil {
-		return "[]"
-	}
-	rows, err := h.db.Query(`
-		SELECT a.username, hl.level, hl.value
-		FROM hiscore_large hl
-		JOIN account a ON a.id = hl.account_id
-		WHERE hl.profile = 'main' AND hl.type = 0
-		ORDER BY hl.level DESC, hl.value DESC
-		LIMIT 25
-	`)
-	if err != nil {
-		log.Printf("[hiscores] GetHiscores: %v", err)
-		return "[]"
-	}
-	defer rows.Close()
-	return marshalEntries(rows, 0)
+	return h.fetch("overall", 0)
 }
 
-// GetHiscoresByType returns hiscores for a specific skill type.
+// GetHiscoresByType returns hiscores for a specific skill type from the
+// configured hiscores webserver.
 func (h *HiscoreService) GetHiscoresByType(skillType int) string {
-	if h.db == nil {
-		return "[]"
-	}
-	rows, err := h.db.Query(`
-		SELECT a.username, h.level, h.value
-		FROM hiscore h
-		JOIN account a ON a.id = h.account_id
-		WHERE h.profile = 'main' AND h.type = ?
-		ORDER BY h.level DESC, h.value DESC
-		LIMIT 25
-	`, skillType)
-	if err != nil {
-		log.Printf("[hiscores] GetHiscoresByType(%d): %v", skillType, err)
-		return "[]"
-	}
-	defer rows.Close()
-	return marshalEntries(rows, skillType)
+	return h.fetch(fmt.Sprintf("%d", skillType), skillType)
 }
 
-func marshalEntries(rows *sql.Rows, skillType int) string {
-	var entries []HiscoreEntry
-	rank := 1
-	for rows.Next() {
-		var e HiscoreEntry
-		if err := rows.Scan(&e.Username, &e.Level, &e.XP); err != nil {
-			continue
-		}
-		e.Rank = rank
-		e.Type = skillType
-		entries = append(entries, e)
-		rank++
+func (h *HiscoreService) fetch(skillParam string, skillType int) string {
+	url := fmt.Sprintf("%s/api/hiscores?skill=%s", h.baseURL, skillParam)
+	resp, err := h.client.Get(url)
+	if err != nil {
+		log.Printf("[hiscores] request to %s failed: %v", url, err)
+		return "[]"
 	}
-	data, _ := json.Marshal(entries)
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("[hiscores] reading response from %s failed: %v", url, err)
+		return "[]"
+	}
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[hiscores] %s returned status %d", url, resp.StatusCode)
+		return "[]"
+	}
+
+	return backfillEntries(body, skillType)
+}
+
+// backfillEntries fills in rank/type fields that the remote server may not
+// include, so the frontend table (which expects e.rank/e.type) keeps working
+// regardless of the remote hiscores API's exact response shape.
+func backfillEntries(body []byte, skillType int) string {
+	var entries []HiscoreEntry
+	if err := json.Unmarshal(body, &entries); err != nil {
+		return string(body)
+	}
+	for i := range entries {
+		if entries[i].Rank == 0 {
+			entries[i].Rank = i + 1
+		}
+		if entries[i].Type == 0 {
+			entries[i].Type = skillType
+		}
+	}
+	data, err := json.Marshal(entries)
+	if err != nil {
+		return string(body)
+	}
 	return string(data)
 }
