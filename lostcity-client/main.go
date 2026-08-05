@@ -121,6 +121,7 @@ func (h *assetProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "window.WASM_BASE_URL = '';\n")
 		fmt.Fprintf(w, "window.AUTO_START_CLIENT = true;\n")
 		fmt.Fprintf(w, "window.DISCORD_APP_ID = '%s';\n", cfg.DiscordAppId)
+		fmt.Fprintf(w, "window.__customContent = { clans: true };\n")
 		return
 
 	case "/api/hiscores":

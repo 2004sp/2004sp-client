@@ -64,6 +64,7 @@ export const enum ServerProt {
     LAST_LOGIN_INFO = 146,
     LOGOUT = 21,
     P_COUNTDIALOG = 5,
+    P_NAMEDIALOG = 2, // custom: name input dialog
     SET_MULTIWAY = 75,
     SET_PLAYER_OP = 204,
 

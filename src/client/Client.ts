@@ -81,6 +81,8 @@ const SCROLLBAR_TRACK = 0x23201b;
 const SCROLLBAR_GRIP_FOREGROUND = 0x4d4233;
 const SCROLLBAR_GRIP_HIGHLIGHT = 0x766654;
 const SCROLLBAR_GRIP_LOWLIGHT = 0x332d25;
+const CUSTOM_CONTENT = (globalThis as typeof globalThis & { __customContent?: { clans?: boolean } }).__customContent;
+const CLANS_ENABLED = CUSTOM_CONTENT?.clans === true;
 
 export class Client extends GameShell {
 
@@ -501,6 +503,7 @@ export class Client extends GameShell {
     private chatPublicMode: number = 0;
     private chatPrivateMode: number = 0;
     private chatTradeMode: number = 0;
+    private activeChatChannel: 'world' | 'clan' = 'world';
     private privateMessageIds: Int32Array = new Int32Array(100);
     private privateMessageCount: number = 0;
 
@@ -3159,6 +3162,9 @@ export class Client extends GameShell {
             }
 
             const type: number = this.chatType[i];
+            if (type === 0 && !this.shouldShowPublicFilterLine(this.chatText[i] ?? '')) {
+                continue;
+            }
             const y: number = this.chatScrollPos + 70 + 4 - line * 14;
             if (y < -20) {
                 break;
@@ -3176,7 +3182,7 @@ export class Client extends GameShell {
 
             if (type === 0) {
                 line++;
-            } else if ((type == 1 || type == 2) && (type == 1 || this.chatPublicMode == 0 || (this.chatPublicMode == 1 && this.isFriend(sender)))) {
+            } else if ((type == 1 || type == 2) && (type == 1 || this.chatPublicMode == 0 || (CLANS_ENABLED && this.chatPublicMode === 2) || (this.chatPublicMode == 1 && this.isFriend(sender)))) {
                 if (mouseY > y - 14 && mouseY <= y && this.localPlayer && sender !== this.localPlayer.name) {
                     if (this.staffmodlevel >= 1) {
                         this.menuOption[this.menuNumEntries] = 'Report abuse @whi@' + sender;
@@ -3375,7 +3381,7 @@ export class Client extends GameShell {
         }
 
         if (this.mouseClickX >= 6 && this.mouseClickX <= 106 && this.mouseClickY >= 467 && this.mouseClickY <= 499) {
-            this.chatPublicMode = (this.chatPublicMode + 1) % 4;
+            this.chatPublicMode = (this.chatPublicMode + 1) % (CLANS_ENABLED ? 6 : 3);
             this.redrawPrivacySettings = true;
             this.redrawChatback = true;
 
@@ -3538,6 +3544,12 @@ export class Client extends GameShell {
                                 userhash = JString.toUserhash(this.socialInput);
                                 this.delIgnore(userhash);
                             }
+
+                            if (this.socialInputType === 6 && this.socialInput.trim().length > 0) {
+                                this.out.pIsaac(ClientProt.RESUME_P_NAMEDIALOG);
+                                this.out.p1(this.socialInput.length + 1);
+                                this.out.pjstr(this.socialInput);
+                            }
                         }
                     } else if (this.dialogInputOpen) {
                         if (key >= 48 && key <= 57 && this.dialogInput.length < 10) {
@@ -3608,6 +3620,14 @@ export class Client extends GameShell {
                                 } catch (_e) {
                                     // empty
                                 }
+                            } else if (this.chatInput === '/clan') {
+                                this.out.pIsaac(ClientProt.CLIENT_CHEAT);
+                                this.out.p1('chatclan'.length + 1);
+                                this.out.pjstr('chatclan');
+                            } else if (this.chatInput === '/world') {
+                                this.out.pIsaac(ClientProt.CLIENT_CHEAT);
+                                this.out.p1('chatworld'.length + 1);
+                                this.out.pjstr('chatworld');
                             } else if (this.chatInput.startsWith('::')) {
                                 this.out.pIsaac(ClientProt.CLIENT_CHEAT);
                                 this.out.p1(this.chatInput.length - 2 + 1);
@@ -3662,6 +3682,12 @@ export class Client extends GameShell {
                                     this.chatInput = this.chatInput.substring(7);
                                 }
 
+                                if (this.activeChatChannel === 'clan') {
+                                    const clanMessage: string = 'clanmsg ' + this.chatInput;
+                                    this.out.pIsaac(ClientProt.CLIENT_CHEAT);
+                                    this.out.p1(clanMessage.length + 1);
+                                    this.out.pjstr(clanMessage);
+                                } else {
                                 this.out.pIsaac(ClientProt.MESSAGE_PUBLIC);
                                 this.out.p1(0);
                                 const start: number = this.out.pos;
@@ -3689,15 +3715,7 @@ export class Client extends GameShell {
                                     }
                                 }
 
-                                if (this.chatPublicMode === 2) {
-                                    this.chatPublicMode = 3;
-                                    this.redrawPrivacySettings = true;
-
-                                    this.out.pIsaac(ClientProt.CHAT_SETMODE);
-                                    this.out.p1(this.chatPublicMode);
-                                    this.out.p1(this.chatPrivateMode);
-                                    this.out.p1(this.chatTradeMode);
-                                }
+                            }
                             }
 
                             this.chatInput = '';
@@ -4634,16 +4652,25 @@ export class Client extends GameShell {
 
             this.p12?.centreStringTag('Public chat', 55, 28, Colour.WHITE, true);
             if (this.chatPublicMode === 0) {
-                this.p12?.centreStringTag('On', 55, 41, Colour.GREEN, true);
+                this.p12?.centreStringTag(CLANS_ENABLED ? 'All' : 'On', 55, 41, Colour.GREEN, true);
             }
             if (this.chatPublicMode === 1) {
                 this.p12?.centreStringTag('Friends', 55, 41, Colour.YELLOW, true);
             }
-            if (this.chatPublicMode === 2) {
+            if (this.chatPublicMode === 2 && CLANS_ENABLED) {
+                this.p12?.centreStringTag('World Only', 55, 41, Colour.CYAN, true);
+            }
+            if (this.chatPublicMode === 2 && !CLANS_ENABLED) {
                 this.p12?.centreStringTag('Off', 55, 41, Colour.RED, true);
             }
-            if (this.chatPublicMode === 3) {
+            if (this.chatPublicMode === 3 && CLANS_ENABLED) {
+                this.p12?.centreStringTag('Clan Only', 55, 41, Colour.CYAN, true);
+            }
+            if (this.chatPublicMode === 4 && CLANS_ENABLED) {
                 this.p12?.centreStringTag('Hide', 55, 41, Colour.CYAN, true);
+            }
+            if (this.chatPublicMode === 5 && CLANS_ENABLED) {
+                this.p12?.centreStringTag('Off', 55, 41, Colour.RED, true);
             }
 
             this.p12?.centreStringTag('Private chat', 184, 28, Colour.WHITE, true);
@@ -5140,7 +5167,7 @@ export class Client extends GameShell {
                 }
             }
 
-            if (entity.chatMessage && (index >= this.playerCount || this.chatPublicMode === 0 || this.chatPublicMode === 3 || (this.chatPublicMode === 1 && this.isFriend((entity as ClientPlayer).name)))) {
+            if (entity.chatMessage && (index >= this.playerCount || this.chatPublicMode === 0 || (CLANS_ENABLED && this.chatPublicMode === 2) || (this.chatPublicMode === 1 && this.isFriend((entity as ClientPlayer).name)))) {
                 this.getOverlayPosEntity(entity, entity.height);
 
                 if (this.projectX > -1 && this.chatCount < MAX_CHATS && this.b12) {
@@ -7034,6 +7061,16 @@ export class Client extends GameShell {
             if (this.ptype === ServerProt.MESSAGE_GAME) {
                 const message: string = this.in.gjstr();
 
+                if (message === 'You have entered clan chat') {
+                    this.activeChatChannel = 'clan';
+                    this.redrawPrivacySettings = true;
+                    this.redrawChatback = true;
+                } else if (message === 'You have entered world chat') {
+                    this.activeChatChannel = 'world';
+                    this.redrawPrivacySettings = true;
+                    this.redrawChatback = true;
+                }
+
                 if (message.endsWith(':tradereq:')) {
                     const player: string = message.substring(0, message.indexOf(':'));
                     const username = JString.toUserhash(player);
@@ -7393,6 +7430,22 @@ export class Client extends GameShell {
                 this.socialInputOpen = false;
                 this.dialogInputOpen = true;
                 this.dialogInput = '';
+                this.redrawChatback = true;
+
+                if (this.isMobile) {
+                    MobileKeyboard.show();
+                }
+
+                this.ptype = -1;
+                return true;
+            }
+
+            if (this.ptype === ServerProt.P_NAMEDIALOG) {
+                this.dialogInputOpen = false;
+                this.socialInputOpen = true;
+                this.socialInput = '';
+                this.socialInputType = 6;
+                this.socialInputHeader = 'Enter clan name:';
                 this.redrawChatback = true;
 
                 if (this.isMobile) {
@@ -9049,6 +9102,28 @@ export class Client extends GameShell {
 
             this.b12?.drawStringTag(this.menuOption[i], x + 3, optionY, rgb, true);
         }
+    }
+
+    private shouldShowPublicFilterLine(message: string): boolean {
+        const isWorld = message.startsWith('[World] ');
+        const isClan = /^@\w+@\[[^\]]+\]@\w+@\[[^\]]+\]@\w+@\s/.test(message);
+        if (isClan) {
+            return this.chatPublicMode === 0 || this.chatPublicMode === 3;
+        }
+        if (!isWorld && !isClan) {
+            return true;
+        }
+
+        if (this.chatPublicMode === 2) {
+            return isWorld;
+        }
+        if (this.chatPublicMode === 3) {
+            return false;
+        }
+        if (this.chatPublicMode >= 4) {
+            return false;
+        }
+        return true;
     }
 
     private drawFeedback(): void {
@@ -11812,6 +11887,9 @@ export class Client extends GameShell {
                 }
 
                 const type: number = this.chatType[i];
+                if (type === 0 && !this.shouldShowPublicFilterLine(message)) {
+                    continue;
+                }
                 const y: number = this.chatScrollPos + 70 - line * 14;
 
                 let sender = this.chatUsername[i];
@@ -11830,7 +11908,7 @@ export class Client extends GameShell {
                     }
 
                     line++;
-                } else if ((type === 1 || type === 2) && (type === 1 || this.chatPublicMode === 0 || (this.chatPublicMode === 1 && this.isFriend(sender)))) {
+                } else if ((type === 1 || type === 2) && (type === 1 || this.chatPublicMode === 0 || (CLANS_ENABLED && this.chatPublicMode === 2) || (this.chatPublicMode === 1 && this.isFriend(sender)))) {
                     if (y > 0 && y < 110) {
                         let x = 4;
                         if (modlevel == 1) {

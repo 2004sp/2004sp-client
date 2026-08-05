@@ -57,6 +57,11 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
             nth_identifier: nth_identifier,
             properties: {
                 reserved: [
+                    // custom content flags set via inline (non-bundled) script in main.go's
+                    // /client-config.js — must keep literal name or CUSTOM_CONTENT?.clans lookups
+                    // break after mangling
+                    'clans',
+
                     // xpTrackerData entry fields (read by un-bundled HTML)
                     'skill',
                     'colour',
