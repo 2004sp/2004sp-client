@@ -81,8 +81,10 @@ const SCROLLBAR_TRACK = 0x23201b;
 const SCROLLBAR_GRIP_FOREGROUND = 0x4d4233;
 const SCROLLBAR_GRIP_HIGHLIGHT = 0x766654;
 const SCROLLBAR_GRIP_LOWLIGHT = 0x332d25;
-const CUSTOM_CONTENT = (globalThis as typeof globalThis & { __customContent?: { clans?: boolean } }).__customContent;
+const CUSTOM_CONTENT = (globalThis as typeof globalThis & { __customContent?: { clans?: boolean; middleMouseRotation?: boolean; compassReset?: boolean } }).__customContent;
 const CLANS_ENABLED = CUSTOM_CONTENT?.clans === true;
+const MIDDLE_MOUSE_ROTATION_ENABLED = CUSTOM_CONTENT?.middleMouseRotation === true;
+const COMPASS_RESET_ENABLED = CUSTOM_CONTENT?.compassReset === true;
 
 export class Client extends GameShell {
 
@@ -3245,7 +3247,7 @@ export class Client extends GameShell {
             return;
         }
 
-        if (this.isCompassClick(this.mouseClickX, this.mouseClickY)) {
+        if (COMPASS_RESET_ENABLED && this.isCompassClick(this.mouseClickX, this.mouseClickY)) {
             this.resetCompassAndCamera();
             this.mouseClickButton = 0;
             this.nextMouseClickButton = 0;
@@ -12375,7 +12377,7 @@ export class Client extends GameShell {
 
     override mouseDown(x: number, y: number, e: MouseEvent) {
         this.shiftClick = e.shiftKey;
-        if (e.button === 1) {
+        if (MIDDLE_MOUSE_ROTATION_ENABLED && e.button === 1) {
             // Middle mouse: start camera drag, do not pass to game logic
             this.midDragActive = true;
             this.midDragLastX = x;
@@ -12386,7 +12388,7 @@ export class Client extends GameShell {
     }
 
     override mouseUp(x: number, y: number, e: MouseEvent) {
-        if (e.button === 1) {
+        if (MIDDLE_MOUSE_ROTATION_ENABLED && e.button === 1) {
             // Middle mouse released: stop camera drag and decay velocity
             this.midDragActive = false;
             this.keyHeld[1] = 0;

@@ -61,6 +61,8 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
                     // /client-config.js — must keep literal name or CUSTOM_CONTENT?.clans lookups
                     // break after mangling
                     'clans',
+                    'middleMouseRotation',
+                    'compassReset',
 
                     // xpTrackerData entry fields (read by un-bundled HTML)
                     'skill',

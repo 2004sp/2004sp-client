@@ -4,7 +4,9 @@ import (
 	"context"
 	"embed"
 	_ "embed"
+	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -102,6 +104,36 @@ func startWSProxy() {
 	}
 }
 
+var featureFlagsClient = &http.Client{Timeout: 2 * time.Second}
+
+// fetchFeatureFlags asks the game engine for its current NODE_FEATURE_*/NODE_QOL_*
+// toggles (see /api/features in the engine's web.ts) and returns them as a raw JSON
+// object literal for embedding into window.__customContent. On any failure it
+// returns "{}" so features fail closed rather than silently defaulting to enabled.
+func fetchFeatureFlags() string {
+	url := fmt.Sprintf("http://%s:%d/api/features", cfg.WebHost, cfg.WebPort)
+	resp, err := featureFlagsClient.Get(url)
+	if err != nil {
+		log.Printf("[config] could not fetch feature flags from engine: %v", err)
+		return "{}"
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		log.Printf("[config] bad response fetching feature flags: status=%d err=%v", resp.StatusCode, err)
+		return "{}"
+	}
+
+	// Validate it's well-formed JSON before embedding it verbatim into a script tag.
+	var flags map[string]bool
+	if err := json.Unmarshal(body, &flags); err != nil {
+		log.Printf("[config] invalid feature flags JSON from engine: %v", err)
+		return "{}"
+	}
+	return string(body)
+}
+
 // assetProxyHandler serves embedded frontend files from frontend/dist and proxies
 // all unrecognised paths (game assets like /crc, /title*, /ondemand.zip) to the
 // game web server.
@@ -121,7 +153,7 @@ func (h *assetProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "window.WASM_BASE_URL = '';\n")
 		fmt.Fprintf(w, "window.AUTO_START_CLIENT = true;\n")
 		fmt.Fprintf(w, "window.DISCORD_APP_ID = '%s';\n", cfg.DiscordAppId)
-		fmt.Fprintf(w, "window.__customContent = { clans: true };\n")
+		fmt.Fprintf(w, "window.__customContent = %s;\n", fetchFeatureFlags())
 		return
 
 	case "/api/hiscores":
