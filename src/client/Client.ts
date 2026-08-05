@@ -12721,11 +12721,26 @@ export class Client extends GameShell {
 // Auto-initialize for desktop/browser use
 // Set window.AUTO_START_CLIENT = false to prevent auto-start
 if (typeof window !== 'undefined') {
+    // allow the settings panel to flip low-memory mode on an already-running client
+    window.setClientLowMemoryMode = (enabled: boolean) => {
+        if (enabled) {
+            Client.setLowMem();
+        } else {
+            Client.setHighMem();
+        }
+    };
+
     const shouldAutoStart = typeof window.AUTO_START_CLIENT !== 'undefined' ? window.AUTO_START_CLIENT : true;
     if (shouldAutoStart) {
         setTimeout(() => {
             try {
-                new Client(10, false, true);
+                let lowMem = false;
+                if (typeof window.CLIENT_LOW_MEMORY !== 'undefined') {
+                    lowMem = !!window.CLIENT_LOW_MEMORY;
+                } else if (typeof localStorage !== 'undefined') {
+                    lowMem = localStorage.getItem('clientLowMemoryMode') === 'true';
+                }
+                new Client(10, lowMem, true);
             } catch (e) {
                 console.error('Auto-start failed:', e);
             }
