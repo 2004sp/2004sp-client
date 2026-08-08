@@ -9,6 +9,7 @@ out/
 lostcity-client/*.exe
 lostcity-client/lostcity-client
 lostcity-client/config.json
+lostcity-client/resource.syso
 
 # IDE
 .vscode/
