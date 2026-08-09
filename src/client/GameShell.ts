@@ -23,13 +23,13 @@ export default abstract class GameShell {
     public mouseButton: number = 0;
     public mouseX: number = -1;
     public mouseY: number = -1;
-    protected nextMouseClickButton: number = 0;
-    protected nextMouseClickX: number = -1;
-    protected nextMouseClickY: number = -1;
+    public nextMouseClickButton: number = 0;
+    public nextMouseClickX: number = -1;
+    public nextMouseClickY: number = -1;
     public mouseClickButton: number = 0;
     public mouseClickX: number = -1;
     public mouseClickY: number = -1;
-    protected nextMouseClickTime: number = 0;
+    public nextMouseClickTime: number = 0;
     public mouseClickTime: number = 0;
 
     public keyHeld: number[] = [];

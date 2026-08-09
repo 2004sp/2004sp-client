@@ -626,6 +626,104 @@
                 border: none;
             }
 
+            /* ── Controller settings panel ── */
+            #controller-panel { width: 260px; }
+            #controller-panel.open { max-width: 260px; }
+
+            .cp-header {
+                display: flex;
+                align-items: center;
+                padding: 11px 12px 10px;
+                border-bottom: 1px solid #1e1e1e;
+                flex-shrink: 0;
+            }
+
+            .cp-title {
+                font-size: 11px;
+                font-weight: bold;
+                color: #ffd700;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+            }
+
+            .cp-body {
+                flex: 1 1 0;
+                min-height: 0;
+                overflow-y: auto;
+                padding: 12px;
+                scrollbar-width: thin;
+                scrollbar-color: #2a2a2a #0c0c0c;
+            }
+
+            .cp-section { margin-bottom: 18px; }
+
+            .cp-section-title {
+                font-size: 10px;
+                font-weight: bold;
+                color: #888;
+                letter-spacing: 1px;
+                text-transform: uppercase;
+                margin-bottom: 8px;
+            }
+
+            .cp-field { margin-bottom: 10px; }
+
+            .cp-field-label {
+                display: flex;
+                justify-content: space-between;
+                font-size: 10px;
+                color: #666;
+                margin-bottom: 4px;
+            }
+
+            .cp-field-label span { color: #aaa; }
+
+            .cp-slider {
+                width: 100%;
+                accent-color: #ffd700;
+                cursor: pointer;
+            }
+
+            .cp-check-row {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 4px 0;
+                font-size: 11px;
+                color: #aaa;
+                cursor: pointer;
+            }
+
+            .cp-check-row input[type="checkbox"] {
+                accent-color: #ffd700;
+                width: 13px;
+                height: 13px;
+                cursor: pointer;
+                flex-shrink: 0;
+            }
+
+            .cp-check-row:hover { color: #ccc; }
+
+            .cp-status {
+                font-size: 10px;
+                padding: 5px 8px;
+                border-radius: 3px;
+                text-align: center;
+                margin-bottom: 10px;
+            }
+
+            .cp-status.connected {
+                background: #0a1a0a;
+                border: 1px solid #2a5a2a;
+                color: #4caf50;
+            }
+
+            .cp-status.disconnected {
+                background: #1a0a0a;
+                border: 1px solid #5a2a2a;
+                color: #888;
+            }
+
             /* Debug console */
             #debug-console {
                 display: none;
@@ -771,12 +869,58 @@
                 </div>
             </div>
 
+            <div id="controller-panel" class="side-panel">
+                <div class="cp-header"><span class="cp-title">Controller</span></div>
+                <div class="cp-body">
+                    <div id="cp-status" class="cp-status disconnected">No controller detected</div>
+                    <div class="cp-section">
+                        <div class="cp-section-title">General</div>
+                        <label class="cp-check-row">
+                            <input type="checkbox" id="cp-enabled" checked> Enable controller input
+                        </label>
+                    </div>
+                    <div class="cp-section">
+                        <div class="cp-section-title">Cursor</div>
+                        <div class="cp-field">
+                            <div class="cp-field-label">Sensitivity <span id="cp-sens-val">1.0</span></div>
+                            <input type="range" id="cp-sensitivity" class="cp-slider" min="0.2" max="3.0" step="0.1" value="1.0">
+                        </div>
+                    </div>
+                    <div class="cp-section">
+                        <div class="cp-section-title">Camera</div>
+                        <div class="cp-field">
+                            <div class="cp-field-label">Camera Sensitivity <span id="cp-camsens-val">1.0</span></div>
+                            <input type="range" id="cp-camsensitivity" class="cp-slider" min="0.2" max="3.0" step="0.1" value="1.0">
+                        </div>
+                        <label class="cp-check-row">
+                            <input type="checkbox" id="cp-invert-y"> Invert Camera Y
+                        </label>
+                    </div>
+                    <div class="cp-section">
+                        <div class="cp-section-title">Quick Reference</div>
+                        <table style="width:100%;border-collapse:collapse;font-size:10px;color:#888">
+                            <tr><td style="padding:2px 0;color:#666">Left Stick</td><td>Cursor</td></tr>
+                            <tr><td style="padding:2px 0;color:#666">A / RT</td><td>Click</td></tr>
+                            <tr><td style="padding:2px 0;color:#666">B</td><td>Right-click</td></tr>
+                            <tr><td style="padding:2px 0;color:#666">Right Stick</td><td>Camera</td></tr>
+                            <tr><td style="padding:2px 0;color:#666">LB / RB</td><td>Cycle tabs</td></tr>
+                            <tr><td style="padding:2px 0;color:#666">D-Pad</td><td>Menu nav / cursor</td></tr>
+                            <tr><td style="padding:2px 0;color:#666">LT</td><td>Precision cursor</td></tr>
+                            <tr><td style="padding:2px 0;color:#666">Start</td><td>Escape</td></tr>
+                            <tr><td style="padding:2px 0;color:#666">Back</td><td>Bindings overlay</td></tr>
+                            <tr><td style="padding:2px 0;color:#666">L3</td><td>Center cursor</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <div id="toolbar">
                 <div class="tool-btn" id="btn-hiscores" title="Hiscores">&#9813;</div>
                 <div class="tool-btn" id="btn-xpdrops" title="XP Drops">XP</div>
                 <div class="tool-btn" id="btn-xptracker" title="XP Tracker">&#128200;</div>
                 <div class="tool-btn" id="btn-worldmap" title="World Map">&#128506;</div>
                 <div class="tool-btn" id="btn-losthq" title="LostHQ Wiki">&#128212;</div>
+                <div class="tool-btn" id="btn-controller" title="Controller">&#127918;</div>
                 <div class="tool-btn" id="btn-settings" title="Settings">&#9881;</div>
             </div>
         </div>
@@ -1308,6 +1452,96 @@
                     if (ml !== lastMl) { lastMl = ml; console.log('[_ml]', JSON.stringify(ml)); }
                     if (sd !== lastSd) { lastSd = sd; console.log('[_sd]', JSON.stringify(sd)); }
                 }, 200);
+            })();
+        </script>
+
+        <!-- Controller settings panel -->
+        <script>
+            (function () {
+                var btn        = document.getElementById('btn-controller');
+                var panel      = document.getElementById('controller-panel');
+                var statusEl   = document.getElementById('cp-status');
+                var enabledChk = document.getElementById('cp-enabled');
+                var sensSl     = document.getElementById('cp-sensitivity');
+                var sensVal    = document.getElementById('cp-sens-val');
+                var camSl      = document.getElementById('cp-camsensitivity');
+                var camVal     = document.getElementById('cp-camsens-val');
+                var invertChk  = document.getElementById('cp-invert-y');
+                var isOpen     = false;
+
+                // Safely get the gamepadInput singleton (may not exist yet if client.js
+                // hasn't finished loading — the interval below handles that case)
+                function gp() { return (window).gamepadInput || null; }
+
+                // Push all panel values into the singleton
+                function applyAll() {
+                    var g = gp(); if (!g) return;
+                    g.enabled           = enabledChk.checked;
+                    g.sensitivity       = parseFloat(sensSl.value);
+                    g.cameraSensitivity = parseFloat(camSl.value);
+                    g.invertCameraY     = invertChk.checked;
+                    g.savePrefs();
+                }
+
+                // Pull current values from the singleton into the panel UI
+                function syncFromSingleton() {
+                    var g = gp(); if (!g) return;
+                    enabledChk.checked = g.enabled;
+                    sensSl.value = String(g.sensitivity);
+                    sensVal.textContent = Number(g.sensitivity).toFixed(1);
+                    camSl.value = String(g.cameraSensitivity);
+                    camVal.textContent = Number(g.cameraSensitivity).toFixed(1);
+                    invertChk.checked = g.invertCameraY;
+                }
+
+                // Update the connection status badge
+                function updateStatus() {
+                    var pads = navigator.getGamepads ? navigator.getGamepads() : [];
+                    var found = false;
+                    for (var i = 0; i < pads.length; i++) {
+                        if (pads[i] && pads[i].connected) { found = true; break; }
+                    }
+                    if (found) {
+                        statusEl.textContent = 'Controller connected';
+                        statusEl.className = 'cp-status connected';
+                    } else {
+                        statusEl.textContent = 'No controller detected';
+                        statusEl.className = 'cp-status disconnected';
+                    }
+                }
+
+                // Periodically sync status and pull prefs (handles late client.js load)
+                var synced = false;
+                setInterval(function () {
+                    updateStatus();
+                    if (!synced && gp()) { syncFromSingleton(); synced = true; }
+                }, 500);
+
+                // Panel toggle
+                btn.addEventListener('click', function () {
+                    isOpen = !isOpen;
+                    btn.classList.toggle('active', isOpen);
+                    panel.classList.toggle('open', isOpen);
+                    if (isOpen) { syncFromSingleton(); updateStatus(); }
+                });
+
+                // Gamepad connect/disconnect events update status immediately
+                window.addEventListener('gamepadconnected',    updateStatus);
+                window.addEventListener('gamepaddisconnected', updateStatus);
+
+                // Slider + checkbox listeners
+                enabledChk.addEventListener('change', applyAll);
+                invertChk.addEventListener('change',  applyAll);
+
+                sensSl.addEventListener('input', function () {
+                    sensVal.textContent = Number(sensSl.value).toFixed(1);
+                    applyAll();
+                });
+
+                camSl.addEventListener('input', function () {
+                    camVal.textContent = Number(camSl.value).toFixed(1);
+                    applyAll();
+                });
             })();
         </script>
 

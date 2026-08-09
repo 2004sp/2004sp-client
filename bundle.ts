@@ -64,6 +64,14 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
                     'middleMouseRotation',
                     'compassReset',
 
+                    // gamepadInput singleton — accessed by name from the non-bundled HTML panel
+                    'gamepadInput',
+                    'enabled',
+                    'sensitivity',
+                    'cameraSensitivity',
+                    'invertCameraY',
+                    'savePrefs',
+
                     // xpTrackerData entry fields (read by un-bundled HTML)
                     'skill',
                     'colour',

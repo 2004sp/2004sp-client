@@ -3,10 +3,14 @@ import { stopMidi, setMidiVolume, playMidi } from '#3rdparty/tinymidipcm.js';
 
 import { ClientCode } from '#/client/ClientCode.js';
 import GameShell from '#/client/GameShell.js';
+import { gamepadInput } from '#/client/input/GamepadInput.js';
 import InputTracking from '#/client/InputTracking.js';
 import { MiniMenuAction } from '#/client/MiniMenuAction.js';
 import MobileKeyboard from '#/client/MobileKeyboard.js';
 import MouseTracking from '#/client/MouseTracking.js';
+
+// Expose singleton for the controller settings panel in index.html
+(window as Window & { gamepadInput?: typeof gamepadInput }).gamepadInput = gamepadInput;
 
 import FloType from '#/config/FloType.js';
 import SeqType, { PostanimMove, PreanimMove, RestartMode } from '#/config/SeqType.js';
@@ -1262,6 +1266,10 @@ export class Client extends GameShell {
             return;
         }
 
+        // Process controller input before game logic so injected clicks/keys
+        // are available to mouseLoop(), tabLoop(), followCamera() etc. this tick.
+        gamepadInput.update(this);
+
         this.loopCycle++;
 
         if (this.ingame && (window as any).DISCORD_RPC_ENABLED && this.localPlayer) {
@@ -1309,6 +1317,9 @@ export class Client extends GameShell {
         if (this.isMobile) {
             MobileKeyboard.draw();
         }
+
+        // Keep controller cursor DOM element aligned with current canvas position/scale
+        gamepadInput.refreshCursor();
 
         this.scrollCycle = 0;
     }
@@ -3375,6 +3386,46 @@ export class Client extends GameShell {
             this.redrawSideicons = true;
         }
     }
+
+    // ─── Controller host methods ──────────────────────────────────────────────
+
+    // Advance the sidebar to the next (delta=+1) or previous (delta=-1) available tab.
+    public cycleTab(delta: number): void {
+        const TOTAL = 14;
+        let next = this.sideTab;
+        for (let attempt = 0; attempt < TOTAL; attempt++) {
+            next = ((next + delta) % TOTAL + TOTAL) % TOTAL;
+            if (this.sideOverlayId[next] !== -1) {
+                this.sideTab = next;
+                this.redrawSidebar = true;
+                this.redrawSideicons = true;
+                return;
+            }
+        }
+    }
+
+    // Execute the menu entry at the given index and close the menu.
+    public executeMenuEntry(index: number): void {
+        if (!this.isMenuOpen || index < 0 || index >= this.menuNumEntries) return;
+        this.isMenuOpen = false;
+        this.doAction(index);
+    }
+
+    // Close the context menu without executing any entry.
+    public closeMenu(): void {
+        this.isMenuOpen = false;
+    }
+
+    // Return a snapshot of the current context-menu state for the controller layer.
+    public getMenuState(): { open: boolean; count: number; options: string[] } {
+        return {
+            open:    this.isMenuOpen,
+            count:   this.menuNumEntries,
+            options: Array.from({ length: this.menuNumEntries }, (_, i) => this.menuOption[i] ?? ''),
+        };
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     // todo: order
     private chatModeLoop(): void {
@@ -12542,6 +12593,9 @@ export class Client extends GameShell {
 
     override pointerMove(x: number, y: number, e: PointerEvent) {
         if (e.pointerType === 'mouse') {
+            // Sync controller cursor to mouse position and hide it while mouse is driving
+            gamepadInput.onMouseMove(x, y);
+
             this.idleTimer = performance.now();
             this.mouseX = x;
             this.mouseY = y;
