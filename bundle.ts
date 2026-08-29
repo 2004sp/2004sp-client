@@ -63,6 +63,8 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
                     'clans',
                     'middleMouseRotation',
                     'compassReset',
+                    'antiMacroRotation',
+                    'scrollwheelZoom',
 
                     // gamepadInput singleton — accessed by name from the non-bundled HTML panel
                     'gamepadInput',

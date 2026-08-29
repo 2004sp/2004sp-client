@@ -85,10 +85,24 @@ const SCROLLBAR_TRACK = 0x23201b;
 const SCROLLBAR_GRIP_FOREGROUND = 0x4d4233;
 const SCROLLBAR_GRIP_HIGHLIGHT = 0x766654;
 const SCROLLBAR_GRIP_LOWLIGHT = 0x332d25;
-const CUSTOM_CONTENT = (globalThis as typeof globalThis & { __customContent?: { clans?: boolean; middleMouseRotation?: boolean; compassReset?: boolean } }).__customContent;
+const CUSTOM_CONTENT = (globalThis as typeof globalThis & {
+    __customContent?: {
+        clans?: boolean;
+        middleMouseRotation?: boolean;
+        compassReset?: boolean;
+        antiMacroRotation?: boolean;
+        scrollwheelZoom?: boolean;
+    };
+}).__customContent;
 const CLANS_ENABLED = CUSTOM_CONTENT?.clans === true;
 const MIDDLE_MOUSE_ROTATION_ENABLED = CUSTOM_CONTENT?.middleMouseRotation === true;
 const COMPASS_RESET_ENABLED = CUSTOM_CONTENT?.compassReset === true;
+// The plugin's true value suppresses vanilla anti-macro camera movement.
+const ANTI_MACRO_ROTATION_SUPPRESSED = CUSTOM_CONTENT?.antiMacroRotation === true;
+const SCROLLWHEEL_ZOOM_ENABLED = CUSTOM_CONTENT?.scrollwheelZoom === true;
+const SCROLLWHEEL_ZOOM_MIN_DISTANCE = 768;
+const SCROLLWHEEL_ZOOM_MAX_DISTANCE = 2048;
+const SCROLLWHEEL_ZOOM_STEP = 64;
 
 export class Client extends GameShell {
 
@@ -246,6 +260,12 @@ export class Client extends GameShell {
     private macroMinimapZoom: number = 0;
     private macroMinimapZoomModifier: number = 1;
     private macroMinimapCycle: number = 0;
+
+    // Scrollwheel zoom is deliberately independent from camera pitch and
+    // scripted cameras. It remains inactive until the first wheel input.
+    private scrollwheelZoomActive: boolean = false;
+    private scrollwheelZoomBaseDistance: number = 0;
+    private scrollwheelZoomOffset: number = 0;
 
     private worldUpdateNum: number = 0;
 
@@ -2140,9 +2160,16 @@ export class Client extends GameShell {
                 this.sceneState = 0;
                 this.waveCount = 0;
 
-                this.macroCameraX = ((Math.random() * 100.0) | 0) - 50;
-                this.macroCameraZ = ((Math.random() * 110.0) | 0) - 55;
-                this.macroCameraAngle = ((Math.random() * 80.0) | 0) - 40;
+                if (ANTI_MACRO_ROTATION_SUPPRESSED) {
+                    this.macroCameraX = 0;
+                    this.macroCameraZ = 0;
+                    this.macroCameraAngle = 0;
+                    this.macroCameraCycle = 0;
+                } else {
+                    this.macroCameraX = ((Math.random() * 100.0) | 0) - 50;
+                    this.macroCameraZ = ((Math.random() * 110.0) | 0) - 55;
+                    this.macroCameraAngle = ((Math.random() * 80.0) | 0) - 40;
+                }
                 this.macroMinimapAngle = ((Math.random() * 120.0) | 0) - 60;
                 this.macroMinimapZoom = ((Math.random() * 30.0) | 0) - 20;
                 this.orbitCameraYaw = (((Math.random() * 20.0) | 0) - 10) & 0x7ff;
@@ -2706,41 +2733,43 @@ export class Client extends GameShell {
             this.out.pIsaac(ClientProt.IDLE_TIMER);
         }
 
-        this.macroCameraCycle++;
-        if (this.macroCameraCycle > 500) {
-            this.macroCameraCycle = 0;
+        if (!ANTI_MACRO_ROTATION_SUPPRESSED) {
+            this.macroCameraCycle++;
+            if (this.macroCameraCycle > 500) {
+                this.macroCameraCycle = 0;
 
-            const rand: number = (Math.random() * 8.0) | 0;
-            if ((rand & 0x1) === 1) {
-                this.macroCameraX += this.macroCameraXModifier;
+                const rand: number = (Math.random() * 8.0) | 0;
+                if ((rand & 0x1) === 1) {
+                    this.macroCameraX += this.macroCameraXModifier;
+                }
+                if ((rand & 0x2) === 2) {
+                    this.macroCameraZ += this.macroCameraZModifier;
+                }
+                if ((rand & 0x4) === 4) {
+                    this.macroCameraAngle += this.macroCameraAngleModifier;
+                }
             }
-            if ((rand & 0x2) === 2) {
-                this.macroCameraZ += this.macroCameraZModifier;
+
+            if (this.macroCameraX < -50) {
+                this.macroCameraXModifier = 2;
             }
-            if ((rand & 0x4) === 4) {
-                this.macroCameraAngle += this.macroCameraAngleModifier;
+            if (this.macroCameraX > 50) {
+                this.macroCameraXModifier = -2;
             }
-        }
 
-        if (this.macroCameraX < -50) {
-            this.macroCameraXModifier = 2;
-        }
-        if (this.macroCameraX > 50) {
-            this.macroCameraXModifier = -2;
-        }
+            if (this.macroCameraZ < -55) {
+                this.macroCameraZModifier = 2;
+            }
+            if (this.macroCameraZ > 55) {
+                this.macroCameraZModifier = -2;
+            }
 
-        if (this.macroCameraZ < -55) {
-            this.macroCameraZModifier = 2;
-        }
-        if (this.macroCameraZ > 55) {
-            this.macroCameraZModifier = -2;
-        }
-
-        if (this.macroCameraAngle < -40) {
-            this.macroCameraAngleModifier = 1;
-        }
-        if (this.macroCameraAngle > 40) {
-            this.macroCameraAngleModifier = -1;
+            if (this.macroCameraAngle < -40) {
+                this.macroCameraAngleModifier = 1;
+            }
+            if (this.macroCameraAngle > 40) {
+                this.macroCameraAngleModifier = -1;
+            }
         }
 
         this.macroMinimapCycle++;
@@ -3804,8 +3833,8 @@ export class Client extends GameShell {
             return; // custom
         }
 
-        const orbitX: number = this.localPlayer.x + this.macroCameraX;
-        const orbitZ: number = this.localPlayer.z + this.macroCameraZ;
+        const orbitX: number = this.localPlayer.x + (ANTI_MACRO_ROTATION_SUPPRESSED ? 0 : this.macroCameraX);
+        const orbitZ: number = this.localPlayer.z + (ANTI_MACRO_ROTATION_SUPPRESSED ? 0 : this.macroCameraZ);
 
         if (this.orbitCameraX - orbitX < -500 || this.orbitCameraX - orbitX > 500 || this.orbitCameraZ - orbitZ < -500 || this.orbitCameraZ - orbitZ > 500) {
             this.orbitCameraX = orbitX;
@@ -4777,10 +4806,15 @@ export class Client extends GameShell {
                 pitch = this.camShakeRan[4] + 128;
             }
 
-            const yaw: number = (this.orbitCameraYaw + this.macroCameraAngle) & 0x7ff;
+            const yaw: number = (this.orbitCameraYaw + (ANTI_MACRO_ROTATION_SUPPRESSED ? 0 : this.macroCameraAngle)) & 0x7ff;
 
             if (this.localPlayer) {
-                this.camFollow(pitch, yaw, this.orbitCameraX, this.getAvH(this.localPlayer.x, this.localPlayer.z, this.minusedlevel) - 50, this.orbitCameraZ, pitch * 3 + 600 * Client.cameraZoom);
+                const baseDistance = pitch * 3 + 600 * Client.cameraZoom;
+                this.scrollwheelZoomBaseDistance = baseDistance;
+                const distance = this.scrollwheelZoomActive
+                    ? this.clampScrollwheelZoomDistance(baseDistance + this.scrollwheelZoomOffset)
+                    : baseDistance;
+                this.camFollow(pitch, yaw, this.orbitCameraX, this.getAvH(this.localPlayer.x, this.localPlayer.z, this.minusedlevel) - 50, this.orbitCameraZ, distance);
             }
         }
 
@@ -12436,6 +12470,35 @@ export class Client extends GameShell {
             return;
         }
         super.mouseDown(x, y, e);
+    }
+
+    protected override onwheel(event: WheelEvent): void {
+        if (
+            !SCROLLWHEEL_ZOOM_ENABLED ||
+            event.deltaY === 0 ||
+            !this.ingame ||
+            this.sceneState !== 2 ||
+            this.cinemaCam ||
+            this.scrollwheelZoomBaseDistance === 0
+        ) {
+            return;
+        }
+
+        const currentDistance = this.clampScrollwheelZoomDistance(
+            this.scrollwheelZoomActive
+                ? this.scrollwheelZoomBaseDistance + this.scrollwheelZoomOffset
+                : this.scrollwheelZoomBaseDistance
+        );
+        const step = event.deltaY < 0 ? -SCROLLWHEEL_ZOOM_STEP : SCROLLWHEEL_ZOOM_STEP;
+        const nextDistance = this.clampScrollwheelZoomDistance(currentDistance + step);
+
+        this.scrollwheelZoomOffset = nextDistance - this.scrollwheelZoomBaseDistance;
+        this.scrollwheelZoomActive = true;
+        event.preventDefault();
+    }
+
+    private clampScrollwheelZoomDistance(distance: number): number {
+        return Math.max(SCROLLWHEEL_ZOOM_MIN_DISTANCE, Math.min(SCROLLWHEEL_ZOOM_MAX_DISTANCE, distance));
     }
 
     override mouseUp(x: number, y: number, e: MouseEvent) {

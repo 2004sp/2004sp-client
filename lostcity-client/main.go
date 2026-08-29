@@ -40,8 +40,8 @@ func init() {
 // from the browser and bridges them to the game server.
 // Running as a separate localhost server sidesteps any WebView2 origin restrictions.
 func startWSProxy() {
-	gameWSURL  := fmt.Sprintf("ws://%s:%d", cfg.WebHost, cfg.WebPort)
-	proxyAddr  := fmt.Sprintf(":%d", cfg.ProxyPort)
+	gameWSURL := fmt.Sprintf("ws://%s:%d", cfg.WebHost, cfg.WebPort)
+	proxyAddr := fmt.Sprintf(":%d", cfg.ProxyPort)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -153,6 +153,7 @@ func (h *assetProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "window.WASM_BASE_URL = '';\n")
 		fmt.Fprintf(w, "window.AUTO_START_CLIENT = true;\n")
 		fmt.Fprintf(w, "window.DISCORD_APP_ID = '%s';\n", cfg.DiscordAppId)
+		fmt.Fprintf(w, "window.AUTO_OPEN_HISCORES = %t;\n", autoOpenHiscoresEnabled())
 		fmt.Fprintf(w, "window.__customContent = %s;\n", fetchFeatureFlags())
 		return
 
