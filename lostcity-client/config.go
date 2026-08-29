@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 // AppConfig holds all user-configurable settings, persisted in config.json
@@ -33,6 +34,10 @@ type AppConfig struct {
 	// Create one at https://discord.com/developers/applications and paste it here.
 	// Leave empty to disable Discord Rich Presence entirely.
 	DiscordAppId string `json:"discord_app_id,omitempty"`
+
+	// AutoOpenHiscores opens the built-in hiscores panel when the desktop client
+	// starts. It is the Wails equivalent of NODE_QOL_AUTO_OPEN_HISCORES.
+	AutoOpenHiscores bool `json:"auto_open_hiscores"`
 }
 
 var cfg AppConfig
@@ -98,6 +103,23 @@ func saveConfig() {
 	if err := os.WriteFile(configPath, data, 0644); err != nil {
 		log.Printf("[config] could not save config.json: %v", err)
 	}
+}
+
+// autoOpenHiscoresEnabled lets a launcher-provided NODE_QOL_AUTO_OPEN_HISCORES
+// override the saved desktop preference. The config field is the persistent
+// option for users who launch the Wails app directly.
+func autoOpenHiscoresEnabled() bool {
+	value, exists := os.LookupEnv("NODE_QOL_AUTO_OPEN_HISCORES")
+	if !exists {
+		return cfg.AutoOpenHiscores
+	}
+
+	enabled, err := strconv.ParseBool(value)
+	if err != nil {
+		log.Printf("[config] invalid NODE_QOL_AUTO_OPEN_HISCORES value %q; using config.json", value)
+		return cfg.AutoOpenHiscores
+	}
+	return enabled
 }
 
 // exeDir returns the directory containing the running executable.

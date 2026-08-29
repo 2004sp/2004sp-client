@@ -297,18 +297,9 @@ export default abstract class GameShell {
         this.mouseDown(x, y, e);
     }
 
-    private onwheel(e: WheelEvent) {
-
-const ZOOM_STEP = 0.5;
-const MIN_ZOOM = 0;
-const MAX_ZOOM = 3.0;
-
-if (e.deltaY > 0) {
-    GameShell.cameraZoom = Math.min(MAX_ZOOM, GameShell.cameraZoom + ZOOM_STEP);
-} else {
-    GameShell.cameraZoom = Math.max(MIN_ZOOM, GameShell.cameraZoom - ZOOM_STEP);
-}
-}
+    // Client subclasses opt in to wheel behaviour.  Keeping the base shell
+    // passive preserves normal WebView scrolling when no QOL plugin is active.
+    protected onwheel(_e: WheelEvent): void {}
 
 
     protected mouseDown(x: number, y: number, e: MouseEvent) {

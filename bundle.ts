@@ -63,6 +63,8 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
                     'clans',
                     'middleMouseRotation',
                     'compassReset',
+                    'antiMacroRotation',
+                    'scrollwheelZoom',
 
                     // xpTrackerData entry fields (read by un-bundled HTML)
                     'skill',

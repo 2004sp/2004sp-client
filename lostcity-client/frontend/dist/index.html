@@ -407,8 +407,8 @@
             }
 
             /* LostHQ wiki panel */
-            #losthq-panel { width: 400px; }
-            #losthq-panel.open { max-width: 400px; }
+            #losthq-panel { width: 860px; }
+            #losthq-panel.open { max-width: 860px; }
             #losthq-panel.maximized {
                 position: fixed;
                 top: 0; left: 0; right: 0; bottom: 0;
@@ -890,12 +890,21 @@
                     tabsEl.appendChild(tab);
                 });
 
-                btnEl.addEventListener('click', function () {
-                    isOpen = !isOpen;
+                function setOpen(open) {
+                    isOpen = open;
                     btnEl.classList.toggle('active', isOpen);
                     panelEl.classList.toggle('open', isOpen);
                     if (isOpen) loadSkill(activeId);
+                }
+
+                btnEl.addEventListener('click', function () {
+                    setOpen(!isOpen);
                 });
+
+                // Runtime configuration loads after this inline script. Keep a
+                // public opener so the Wails bootstrap can honor its desktop
+                // equivalent of NODE_QOL_AUTO_OPEN_HISCORES.
+                window.openHiscoresPanel = function () { setOpen(true); };
             })();
 
             // XP Drops toggle
@@ -1315,6 +1324,9 @@
         <script src="/client-config.js"></script>
         <script>
             (function () {
+                if (window.AUTO_OPEN_HISCORES && window.openHiscoresPanel) {
+                    window.openHiscoresPanel();
+                }
                 var s = document.createElement('script');
                 s.type = 'module';
                 s.src = 'client.js';
