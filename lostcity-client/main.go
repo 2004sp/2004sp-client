@@ -253,7 +253,7 @@ func main() {
 	}
 
 	app := application.New(application.Options{
-		Name:        "2004 Singleplayer Progressive",
+		Name:        "RS2004 Singleplayer Progressive",
 		Description: "Lost City MMO Client",
 		Icon:        appIcon,
 		Services: []application.Service{
