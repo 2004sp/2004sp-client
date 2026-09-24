@@ -1,7 +1,10 @@
 @echo off
-cd /d E:\Client-TS-254\Client-TS-254
+setlocal
 
-echo [JS] Building client.js...
+for %%I in ("%~dp0..") do set "ROOT=%%~fI"
+cd /d "%ROOT%"
+
+echo [JS] Building client.js from %ROOT%...
 bun run build
 
 if %ERRORLEVEL% neq 0 (

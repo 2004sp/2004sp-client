@@ -95,6 +95,13 @@ export default class IfType {
     modelZoom: number = 0;
     modelXAn: number = 0;
     modelYAn: number = 0;
+    // Runtime-only object presentation fields. These are populated for compatibility
+    // widgets that need the item's native 2D inventory framing; they are not part
+    // of the r254 IF1 interface binary format.
+    modelZAn: number = 0;
+    modelXOf: number = 0;
+    modelYOf: number = 0;
+    modelUseObj2dPresentation: boolean = false;
     targetVerb: string | null = null;
     targetBase: string | null = null;
     targetMask: number = -1;
