@@ -94,6 +94,12 @@ const GRAND_EXCHANGE_SEARCH_PROMPT_COMPONENT_ID = 9192;
 const GRAND_EXCHANGE_SEARCH_ICON_COMPONENT_ID = 9195;
 const GRAND_EXCHANGE_SEARCH_GLOW_PERIOD_MS = 2000;
 const GRAND_EXCHANGE_OVERVIEW_ROOT_COMPONENT_ID = 8990;
+const GRAND_EXCHANGE_ITEM_SEARCH_ROOT_COMPONENT_ID = 8989;
+const GRAND_EXCHANGE_ITEM_SEARCH_CONTEXT_ROOT_IDS = new Set<number>([
+    GRAND_EXCHANGE_OVERVIEW_ROOT_COMPONENT_ID,
+    GRAND_EXCHANGE_ITEM_SEARCH_ROOT_COMPONENT_ID,
+]);
+const GRAND_EXCHANGE_BANK_BOOTH_NAME = 'bank booth';
 const GRAND_EXCHANGE_ITEM_MODEL_COMPONENT_IDS = new Set<number>([9138, 9033, 9049, 9065, 9084, 9103, 9122, 9209, 9211]);
 const GRAND_EXCHANGE_ITEM_SEARCH_HEADER = 'Grand Exchange Item Search';
 const GRAND_EXCHANGE_ITEM_SELECTION_PREFIX = '__ge_select__:';
@@ -119,6 +125,7 @@ const CUSTOM_CONTENT = (globalThis as typeof globalThis & {
         compassReset?: boolean;
         antiMacroRotation?: boolean;
         scrollwheelZoom?: boolean;
+        grandExchange?: boolean;
     };
 }).__customContent;
 const CLANS_ENABLED = CUSTOM_CONTENT?.clans === true;
@@ -127,9 +134,28 @@ const COMPASS_RESET_ENABLED = CUSTOM_CONTENT?.compassReset === true;
 // The plugin's true value suppresses vanilla anti-macro camera movement.
 const ANTI_MACRO_ROTATION_SUPPRESSED = CUSTOM_CONTENT?.antiMacroRotation === true;
 const SCROLLWHEEL_ZOOM_ENABLED = CUSTOM_CONTENT?.scrollwheelZoom === true;
+const GRAND_EXCHANGE_ENABLED = CUSTOM_CONTENT?.grandExchange === true;
 const SCROLLWHEEL_ZOOM_MIN_DISTANCE = 768;
 const SCROLLWHEEL_ZOOM_MAX_DISTANCE = 2048;
 const SCROLLWHEEL_ZOOM_STEP = 64;
+const MIDDLE_MOUSE_YAW_SENSITIVITY = 2;
+const MIDDLE_MOUSE_PITCH_SENSITIVITY = 1;
+
+if (GRAND_EXCHANGE_ENABLED) {
+    const originalLocList = LocType.list.bind(LocType);
+    LocType.list = (id: number): LocType => {
+        const loc = originalLocList(id);
+        if (
+            IfType.list[GRAND_EXCHANGE_OVERVIEW_ROOT_COMPONENT_ID] &&
+            loc.name?.toLowerCase() === GRAND_EXCHANGE_BANK_BOOTH_NAME &&
+            loc.op &&
+            !loc.op[2]
+        ) {
+            loc.op[2] = 'Collect';
+        }
+        return loc;
+    };
+}
 
 export class Client extends GameShell {
 
@@ -3173,10 +3199,13 @@ export class Client extends GameShell {
         this.grandExchangeQuantityPendingAcks = 0;
     }
 
+    private isGrandExchangeItemSearchContext(): boolean {
+        return GRAND_EXCHANGE_ITEM_SEARCH_CONTEXT_ROOT_IDS.has(this.mainModalId) ||
+            GRAND_EXCHANGE_ITEM_SEARCH_CONTEXT_ROOT_IDS.has(this.mainOverlayId);
+    }
+
     private closeGrandExchangeItemSearch(): void {
-        const grandExchangeOpen =
-            this.mainModalId === GRAND_EXCHANGE_OVERVIEW_ROOT_COMPONENT_ID ||
-            this.mainOverlayId === GRAND_EXCHANGE_OVERVIEW_ROOT_COMPONENT_ID;
+        const grandExchangeOpen = this.isGrandExchangeItemSearchContext();
         if (
             !this.socialInputOpen ||
             this.socialInputType !== 6 ||
@@ -3200,8 +3229,7 @@ export class Client extends GameShell {
             return false;
         }
 
-        return this.mainModalId === GRAND_EXCHANGE_OVERVIEW_ROOT_COMPONENT_ID ||
-            this.mainOverlayId === GRAND_EXCHANGE_OVERVIEW_ROOT_COMPONENT_ID;
+        return this.isGrandExchangeItemSearchContext();
     }
 
     private isGrandExchangeHoverGraphic(x: number, y: number, width: number, height: number): boolean {
@@ -7901,11 +7929,9 @@ export class Client extends GameShell {
                 this.socialInputOpen = true;
                 this.socialInput = '';
                 this.socialInputType = 6;
-                this.socialInputHeader =
-                    this.mainModalId === GRAND_EXCHANGE_OVERVIEW_ROOT_COMPONENT_ID ||
-                    this.mainOverlayId === GRAND_EXCHANGE_OVERVIEW_ROOT_COMPONENT_ID
-                        ? GRAND_EXCHANGE_ITEM_SEARCH_HEADER
-                        : 'Enter clan name:';
+                this.socialInputHeader = this.isGrandExchangeItemSearchContext()
+                    ? GRAND_EXCHANGE_ITEM_SEARCH_HEADER
+                    : 'Enter clan name:';
                 this.redrawChatback = true;
 
                 if (this.isMobile) {
@@ -11128,7 +11154,11 @@ export class Client extends GameShell {
             const child: IfType = IfType.list[com.children[i]];
             // Runtime IF_SETHIDE must also hide leaf widgets; vanilla only used
             // the flag while traversing layer components.
-            const hiddenHoverLayer = child.hide && child.type === ComponentType.TYPE_LAYER && child.overLayerId !== -1;
+            const hiddenHoverLayer =
+                child.type === ComponentType.TYPE_LAYER &&
+                (this.overMainComId === child.id ||
+                    this.overSideComId === child.id ||
+                    this.overChatComId === child.id);
             if (child.hide && !hiddenHoverLayer) {
                 continue;
             }
@@ -13073,6 +13103,7 @@ export class Client extends GameShell {
             this.nextMouseClickY = -1;
             this.nextMouseClickButton = 0;
             this.mouseButton = 0;
+            this.midDragActive = false;
         } else {
             // custom: touchscreen support
             this.idleTimer = performance.now();
@@ -13105,10 +13136,10 @@ export class Client extends GameShell {
                 this.midDragLastX = x;
                 this.midDragLastY = y;
                 if (dx !== 0) {
-                    this.orbitCameraYaw = ((this.orbitCameraYaw - dx * 3) | 0) & 0x7ff;
+                    this.orbitCameraYaw = ((this.orbitCameraYaw - dx * MIDDLE_MOUSE_YAW_SENSITIVITY) | 0) & 0x7ff;
                 }
                 if (dy !== 0) {
-                    this.orbitCameraPitch = Math.max(128, Math.min(383, this.orbitCameraPitch + dy * 2));
+                    this.orbitCameraPitch = Math.max(128, Math.min(383, this.orbitCameraPitch + dy * MIDDLE_MOUSE_PITCH_SENSITIVITY));
                 }
             }
         } else {
