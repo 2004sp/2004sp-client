@@ -150,7 +150,7 @@ async function bunBuild(entry: string, external: string[] = [], minify = true, d
 
     if (!build.success) {
         build.logs.forEach((x: any) => console.log(x));
-        process.exit(1);
+        throw new Error(`Bun build failed for ${entry}`);
     }
 
     return {
@@ -251,7 +251,7 @@ async function applyTerser(script: BunOutput): Promise<boolean> {
                     '_tsf_set_output',
                     'tsf_set_output',
                     '_tsf_channel_set_bank_preset',
-                    '_tsf_channel_set_bank_preset',
+                    'tsf_channel_set_bank_preset',
                     '_tml_load_memory',
                     'tml_load_memory',
                     '_midi_render',
